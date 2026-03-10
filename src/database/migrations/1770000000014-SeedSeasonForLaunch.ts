@@ -3,17 +3,20 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 export class SeedSeasonForLaunch1770000000014 implements MigrationInterface {
   name = 'SeedSeasonForLaunch1770000000014';
 
-  private readonly launchId = '4c88a392-6e6f-417e-822a-5be7221900fd';
+  private readonly launchName = 'oro';
   private readonly seasonName = 'nov26';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       INSERT INTO "season" ("name", "active", "launch_id")
-      SELECT '${this.seasonName}', true, '${this.launchId}'::uuid
-      WHERE NOT EXISTS (
+      SELECT '${this.seasonName}', true, l."id"
+      FROM "launch" l
+      WHERE LOWER(l."name") = LOWER('${this.launchName}')
+        AND NOT EXISTS (
         SELECT 1
         FROM "season" s
-        WHERE s."launch_id" = '${this.launchId}'::uuid
+        INNER JOIN "launch" l2 ON l2."id" = s."launch_id"
+        WHERE LOWER(l2."name") = LOWER('${this.launchName}')
           AND LOWER(s."name") = LOWER('${this.seasonName}')
       )
     `);
@@ -21,8 +24,10 @@ export class SeedSeasonForLaunch1770000000014 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      DELETE FROM "season"
-      WHERE "launch_id" = '${this.launchId}'::uuid
+      DELETE FROM "season" s
+      USING "launch" l
+      WHERE s."launch_id" = l."id"
+        AND LOWER(l."name") = LOWER('${this.launchName}')
         AND LOWER("name") = LOWER('${this.seasonName}')
     `);
   }

@@ -1,6 +1,8 @@
-import 'dotenv/config';
+import { config as loadEnv } from 'dotenv';
 import { DataSource } from 'typeorm';
 import { ENTITIES } from './entities';
+
+loadEnv({ path: ['.env.local', '.env'] });
 
 export const AppDataSource = new DataSource({
   type: 'postgres',

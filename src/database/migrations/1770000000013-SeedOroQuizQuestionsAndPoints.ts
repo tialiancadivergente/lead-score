@@ -12,7 +12,13 @@ export class SeedOroQuizQuestionsAndPoints1770000000013
           fv.id AS form_version_id,
           fv.form_id AS form_id
         FROM "form_version" fv
-        WHERE fv.id = '2f76bc57-57a2-41fd-9c2c-18a726dd4fe0'::uuid
+        INNER JOIN "form" f ON f."id" = fv."form_id"
+        INNER JOIN "launch" l ON l."id" = f."launch_id"
+        INNER JOIN "season" s ON s."id" = f."season_id"
+        WHERE LOWER(f."name") = LOWER('O Resgate dos Otimistas')
+          AND LOWER(l."name") = 'oro'
+          AND LOWER(s."name") = 'nov25'
+          AND fv."version_number" = 1
       ),
       data AS (
         SELECT * FROM (
@@ -54,7 +60,13 @@ export class SeedOroQuizQuestionsAndPoints1770000000013
           fv.id AS form_version_id,
           fv.form_id AS form_id
         FROM "form_version" fv
-        WHERE fv.id = '2f76bc57-57a2-41fd-9c2c-18a726dd4fe0'::uuid
+        INNER JOIN "form" f ON f."id" = fv."form_id"
+        INNER JOIN "launch" l ON l."id" = f."launch_id"
+        INNER JOIN "season" s ON s."id" = f."season_id"
+        WHERE LOWER(f."name") = LOWER('O Resgate dos Otimistas')
+          AND LOWER(l."name") = 'oro'
+          AND LOWER(s."name") = 'nov25'
+          AND fv."version_number" = 1
       ),
       data AS (
         SELECT * FROM (
@@ -89,7 +101,13 @@ export class SeedOroQuizQuestionsAndPoints1770000000013
           fv.id AS form_version_id,
           fv.form_id AS form_id
         FROM "form_version" fv
-        WHERE fv.id = '2f76bc57-57a2-41fd-9c2c-18a726dd4fe0'::uuid
+        INNER JOIN "form" f ON f."id" = fv."form_id"
+        INNER JOIN "launch" l ON l."id" = f."launch_id"
+        INNER JOIN "season" s ON s."id" = f."season_id"
+        WHERE LOWER(f."name") = LOWER('O Resgate dos Otimistas')
+          AND LOWER(l."name") = 'oro'
+          AND LOWER(s."name") = 'nov25'
+          AND fv."version_number" = 1
       ),
       data AS (
         SELECT * FROM (
@@ -134,7 +152,13 @@ export class SeedOroQuizQuestionsAndPoints1770000000013
           fv.id AS form_version_id,
           fv.form_id AS form_id
         FROM "form_version" fv
-        WHERE fv.id = '2f76bc57-57a2-41fd-9c2c-18a726dd4fe0'::uuid
+        INNER JOIN "form" f ON f."id" = fv."form_id"
+        INNER JOIN "launch" l ON l."id" = f."launch_id"
+        INNER JOIN "season" s ON s."id" = f."season_id"
+        WHERE LOWER(f."name") = LOWER('O Resgate dos Otimistas')
+          AND LOWER(l."name") = 'oro'
+          AND LOWER(s."name") = 'nov25'
+          AND fv."version_number" = 1
       ),
       data AS (
         SELECT * FROM (
@@ -171,7 +195,13 @@ export class SeedOroQuizQuestionsAndPoints1770000000013
       WITH fv AS (
         SELECT fv.form_id AS form_id
         FROM "form_version" fv
-        WHERE fv.id = '2f76bc57-57a2-41fd-9c2c-18a726dd4fe0'::uuid
+        INNER JOIN "form" f ON f."id" = fv."form_id"
+        INNER JOIN "launch" l ON l."id" = f."launch_id"
+        INNER JOIN "season" s ON s."id" = f."season_id"
+        WHERE LOWER(f."name") = LOWER('O Resgate dos Otimistas')
+          AND LOWER(l."name") = 'oro'
+          AND LOWER(s."name") = 'nov25'
+          AND fv."version_number" = 1
       ),
       data AS (
         SELECT * FROM (
@@ -250,7 +280,13 @@ export class SeedOroQuizQuestionsAndPoints1770000000013
       WITH fv AS (
         SELECT fv.form_id AS form_id
         FROM "form_version" fv
-        WHERE fv.id = '2f76bc57-57a2-41fd-9c2c-18a726dd4fe0'::uuid
+        INNER JOIN "form" f ON f."id" = fv."form_id"
+        INNER JOIN "launch" l ON l."id" = f."launch_id"
+        INNER JOIN "season" s ON s."id" = f."season_id"
+        WHERE LOWER(f."name") = LOWER('O Resgate dos Otimistas')
+          AND LOWER(l."name") = 'oro'
+          AND LOWER(s."name") = 'nov25'
+          AND fv."version_number" = 1
       ),
       data AS (
         SELECT * FROM (
@@ -323,7 +359,13 @@ export class SeedOroQuizQuestionsAndPoints1770000000013
       WITH fv AS (
         SELECT fv.form_id AS form_id
         FROM "form_version" fv
-        WHERE fv.id = '2f76bc57-57a2-41fd-9c2c-18a726dd4fe0'::uuid
+        INNER JOIN "form" f ON f."id" = fv."form_id"
+        INNER JOIN "launch" l ON l."id" = f."launch_id"
+        INNER JOIN "season" s ON s."id" = f."season_id"
+        WHERE LOWER(f."name") = LOWER('O Resgate dos Otimistas')
+          AND LOWER(l."name") = 'oro'
+          AND LOWER(s."name") = 'nov25'
+          AND fv."version_number" = 1
       ),
       data AS (
         SELECT * FROM (
@@ -381,7 +423,19 @@ export class SeedOroQuizQuestionsAndPoints1770000000013
       )
       INSERT INTO "leadscore_option_points" ("leadscore_id", "question_id", "option_id", "points")
       SELECT
-        '7c9e8ea7-90c7-4d2c-b723-78a5bc4276c1'::uuid,
+        (
+          SELECT ls."id"
+          FROM "leadscore" ls
+          INNER JOIN "form_version" fv2 ON fv2."id" = ls."form_version_id"
+          INNER JOIN "form" f2 ON f2."id" = fv2."form_id"
+          INNER JOIN "launch" l2 ON l2."id" = f2."launch_id"
+          INNER JOIN "season" s2 ON s2."id" = f2."season_id"
+          WHERE LOWER(ls."name") = LOWER('leadscore oro')
+            AND LOWER(f2."name") = LOWER('O Resgate dos Otimistas')
+            AND LOWER(l2."name") = 'oro'
+            AND LOWER(s2."name") = 'nov25'
+            AND fv2."version_number" = 1
+        ),
         q.id,
         qo.id,
         d.points
@@ -396,7 +450,19 @@ export class SeedOroQuizQuestionsAndPoints1770000000013
       WHERE NOT EXISTS (
         SELECT 1
         FROM "leadscore_option_points" lop
-        WHERE lop."leadscore_id" = '7c9e8ea7-90c7-4d2c-b723-78a5bc4276c1'::uuid
+        WHERE lop."leadscore_id" = (
+          SELECT ls."id"
+          FROM "leadscore" ls
+          INNER JOIN "form_version" fv2 ON fv2."id" = ls."form_version_id"
+          INNER JOIN "form" f2 ON f2."id" = fv2."form_id"
+          INNER JOIN "launch" l2 ON l2."id" = f2."launch_id"
+          INNER JOIN "season" s2 ON s2."id" = f2."season_id"
+          WHERE LOWER(ls."name") = LOWER('leadscore oro')
+            AND LOWER(f2."name") = LOWER('O Resgate dos Otimistas')
+            AND LOWER(l2."name") = 'oro'
+            AND LOWER(s2."name") = 'nov25'
+            AND fv2."version_number" = 1
+        )
           AND lop."question_id" = q.id
           AND lop."option_id" = qo.id
       )
@@ -406,7 +472,13 @@ export class SeedOroQuizQuestionsAndPoints1770000000013
       WITH fv AS (
         SELECT fv.form_id AS form_id
         FROM "form_version" fv
-        WHERE fv.id = '2f76bc57-57a2-41fd-9c2c-18a726dd4fe0'::uuid
+        INNER JOIN "form" f ON f."id" = fv."form_id"
+        INNER JOIN "launch" l ON l."id" = f."launch_id"
+        INNER JOIN "season" s ON s."id" = f."season_id"
+        WHERE LOWER(f."name") = LOWER('O Resgate dos Otimistas')
+          AND LOWER(l."name") = 'oro'
+          AND LOWER(s."name") = 'nov25'
+          AND fv."version_number" = 1
       ),
       data AS (
         SELECT * FROM (
@@ -473,7 +545,19 @@ export class SeedOroQuizQuestionsAndPoints1770000000013
       INNER JOIN "question_option" qo
         ON qo."question_id" = q.id
        AND qo."option_key" = d.option_key
-      WHERE lop."leadscore_id" = '7c9e8ea7-90c7-4d2c-b723-78a5bc4276c1'::uuid
+      WHERE lop."leadscore_id" = (
+          SELECT ls."id"
+          FROM "leadscore" ls
+          INNER JOIN "form_version" fv2 ON fv2."id" = ls."form_version_id"
+          INNER JOIN "form" f2 ON f2."id" = fv2."form_id"
+          INNER JOIN "launch" l2 ON l2."id" = f2."launch_id"
+          INNER JOIN "season" s2 ON s2."id" = f2."season_id"
+          WHERE LOWER(ls."name") = LOWER('leadscore oro')
+            AND LOWER(f2."name") = LOWER('O Resgate dos Otimistas')
+            AND LOWER(l2."name") = 'oro'
+            AND LOWER(s2."name") = 'nov25'
+            AND fv2."version_number" = 1
+        )
         AND lop."question_id" = q.id
         AND lop."option_id" = qo.id
     `);
@@ -482,28 +566,52 @@ export class SeedOroQuizQuestionsAndPoints1770000000013
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       DELETE FROM "leadscore_option_points" lop
-      USING "question" q, "form_version" fv
+      USING "question" q, "form_version" fv, "form" f, "launch" l, "season" s
       WHERE lop."question_id" = q."id"
         AND q."form_id" = fv."form_id"
-        AND fv."id" = '2f76bc57-57a2-41fd-9c2c-18a726dd4fe0'::uuid
-        AND lop."leadscore_id" = '7c9e8ea7-90c7-4d2c-b723-78a5bc4276c1'::uuid
+        AND f."id" = fv."form_id"
+        AND l."id" = f."launch_id"
+        AND s."id" = f."season_id"
+        AND LOWER(f."name") = LOWER('O Resgate dos Otimistas')
+        AND LOWER(l."name") = 'oro'
+        AND LOWER(s."name") = 'nov25'
+        AND fv."version_number" = 1
+        AND lop."leadscore_id" = (
+          SELECT ls."id"
+          FROM "leadscore" ls
+          WHERE ls."form_version_id" = fv."id"
+            AND LOWER(ls."name") = LOWER('leadscore oro')
+        )
         AND q."question_key" IN ('q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10', 'q11', 'q12')
     `);
 
     await queryRunner.query(`
       DELETE FROM "form_version_question" fvq
-      USING "question" q
+      USING "question" q, "form_version" fv, "form" f, "launch" l, "season" s
       WHERE fvq."question_id" = q."id"
-        AND fvq."form_version_id" = '2f76bc57-57a2-41fd-9c2c-18a726dd4fe0'::uuid
+        AND fvq."form_version_id" = fv."id"
+        AND f."id" = fv."form_id"
+        AND l."id" = f."launch_id"
+        AND s."id" = f."season_id"
+        AND LOWER(f."name") = LOWER('O Resgate dos Otimistas')
+        AND LOWER(l."name") = 'oro'
+        AND LOWER(s."name") = 'nov25'
+        AND fv."version_number" = 1
         AND q."question_key" IN ('q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10', 'q11', 'q12', 'q13')
     `);
 
     await queryRunner.query(`
       DELETE FROM "question_option" qo
-      USING "question" q, "form_version" fv
+      USING "question" q, "form_version" fv, "form" f, "launch" l, "season" s
       WHERE qo."question_id" = q."id"
         AND q."form_id" = fv."form_id"
-        AND fv."id" = '2f76bc57-57a2-41fd-9c2c-18a726dd4fe0'::uuid
+        AND f."id" = fv."form_id"
+        AND l."id" = f."launch_id"
+        AND s."id" = f."season_id"
+        AND LOWER(f."name") = LOWER('O Resgate dos Otimistas')
+        AND LOWER(l."name") = 'oro'
+        AND LOWER(s."name") = 'nov25'
+        AND fv."version_number" = 1
         AND q."question_key" IN ('q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10', 'q11', 'q12')
         AND NOT EXISTS (
           SELECT 1 FROM "form_answer" fa WHERE fa."option_id" = qo."id"
@@ -515,9 +623,15 @@ export class SeedOroQuizQuestionsAndPoints1770000000013
 
     await queryRunner.query(`
       DELETE FROM "question" q
-      USING "form_version" fv
+      USING "form_version" fv, "form" f, "launch" l, "season" s
       WHERE q."form_id" = fv."form_id"
-        AND fv."id" = '2f76bc57-57a2-41fd-9c2c-18a726dd4fe0'::uuid
+        AND f."id" = fv."form_id"
+        AND l."id" = f."launch_id"
+        AND s."id" = f."season_id"
+        AND LOWER(f."name") = LOWER('O Resgate dos Otimistas')
+        AND LOWER(l."name") = 'oro'
+        AND LOWER(s."name") = 'nov25'
+        AND fv."version_number" = 1
         AND q."question_key" IN ('q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10', 'q11', 'q12', 'q13')
         AND NOT EXISTS (
           SELECT 1 FROM "question_option" qo WHERE qo."question_id" = q."id"
