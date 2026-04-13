@@ -131,6 +131,10 @@ O que a pagina faz:
 - consulta `GET /oauth/connections?provider=google_ads`
 - consulta `GET /oauth/google-ads/connections/:connectionId/accounts`
 - permite chamar `POST /oauth/google-ads/connections/:connectionId/select-account`
+- permite informar `x-api-key` para testar os endpoints internos de sincronizacao e extracao
+- permite sincronizar contas em `marketing-sync`
+- permite marcar contas para extracao
+- permite criar e listar jobs diarios
 
 Exemplo:
 
@@ -144,6 +148,8 @@ Uso esperado:
 - clicar em `Conectar Google Ads`
 - concluir o login
 - selecionar a conta Google Ads final
+- informar a `x-api-key` interna para testar `marketing-sync`
+- sincronizar contas e criar jobs pela mesma pagina
 
 ### 1. Iniciar autorizacao
 
@@ -432,6 +438,14 @@ Para MVP imediato, essa mesma experiencia ja existe no backend em:
 
 Essa pagina pode ser usada como referencia funcional para o frontend.
 
+No estado atual, ela tambem serve como painel tecnico de backoffice para:
+
+- sincronizar contas da conexao
+- marcar contas para extracao
+- criar jobs diarios
+- listar e processar jobs
+- visualizar payload bruto e performance consolidada da extracao
+
 Informacoes minimas que a tela deve mostrar:
 
 - provider conectado
@@ -441,6 +455,31 @@ Informacoes minimas que a tela deve mostrar:
 - se existe `refresh_token`
 - lista de contas Google Ads acessiveis
 - conta Google Ads selecionada
+- lista de contas sincronizadas para extracao
+- lista de jobs de extracao
+
+## Como levar para o backoffice depois
+
+O fluxo recomendado no backoffice e:
+
+1. tela de conexoes:
+   mostrar conexoes OAuth e status
+2. tela de contas por conexao:
+   listar contas acessiveis e contas sincronizadas
+3. acao de sincronizacao:
+   chamar `POST /marketing-sync/connections/:connectionId/accounts/refresh`
+4. acao de selecao operacional:
+   chamar `PATCH /marketing-sync/accounts/:accountId/selection`
+5. acao de extracao manual:
+   chamar `POST /marketing-sync/jobs/daily`
+6. monitoramento:
+   chamar `GET /marketing-sync/jobs`
+
+Para o backoffice real, o ideal e:
+
+- nao expor `x-api-key` no browser
+- usar sessao/autenticacao interna de admin
+- fazer o frontend chamar um backend autenticado da propria aplicacao
 
 ## Debitos tecnicos
 

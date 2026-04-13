@@ -191,6 +191,30 @@ export class GoogleAdsOAuthService {
     };
   }
 
+  async getAuthorizedAccessTokenForConnection(
+    connectionId: string,
+  ): Promise<string> {
+    const connection = await this.oauthConnectionRepository.findOne({
+      where: { id: connectionId, provider: this.provider },
+    });
+
+    if (!connection) {
+      throw new NotFoundException('Conexao OAuth nao encontrada.');
+    }
+
+    return this.getUsableAccessToken(connection);
+  }
+
+  getConfiguredLoginCustomerId(): string | null {
+    return this.normalizeOptionalCustomerId(
+      this.configService.get<string>('GOOGLE_ADS_LOGIN_CUSTOMER_ID'),
+    );
+  }
+
+  getGoogleAdsBaseUrl(): string {
+    return this.getGoogleAdsApiBaseUrl();
+  }
+
   async selectAccount(params: {
     connectionId: string;
     customerId: string;

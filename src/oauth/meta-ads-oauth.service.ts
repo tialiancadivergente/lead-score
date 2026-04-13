@@ -133,6 +133,24 @@ export class MetaAdsOAuthService {
     };
   }
 
+  async getAuthorizedAccessTokenForConnection(
+    connectionId: string,
+  ): Promise<string> {
+    const connection = await this.oauthConnectionRepository.findOne({
+      where: { id: connectionId, provider: this.provider },
+    });
+
+    if (!connection) {
+      throw new NotFoundException('Conexao OAuth nao encontrada.');
+    }
+
+    return this.getUsableAccessToken(connection);
+  }
+
+  getGraphBaseUrl(): string {
+    return this.getMetaGraphBaseUrl();
+  }
+
   async selectAccount(params: {
     connectionId: string;
     accountId: string;

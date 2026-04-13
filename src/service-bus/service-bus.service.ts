@@ -24,6 +24,10 @@ export class ServiceBusService implements OnApplicationShutdown {
     @Inject(ServiceBusClient) private readonly client: ServiceBusClient | null,
   ) {}
 
+  isEnabled(): boolean {
+    return Boolean(this.client);
+  }
+
   private getSender(queueOrTopicName: string): ServiceBusSender {
     if (!this.client) {
       throw new Error(
