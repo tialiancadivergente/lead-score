@@ -1,0 +1,42 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
+
+export class MarketingDashboardFiltersQueryDto {
+  @ApiPropertyOptional({ example: 'meta_ads' })
+  provider?: string;
+
+  @ApiPropertyOptional({ example: '123456789' })
+  externalAccountId?: string;
+
+  @ApiPropertyOptional({ example: '987654321' })
+  externalCampaignId?: string;
+
+  @ApiPropertyOptional({ example: '555555' })
+  externalAdsetId?: string;
+
+  @ApiPropertyOptional({ example: '999999' })
+  externalAdId?: string;
+
+  @ApiPropertyOptional({
+    example: '2026-04-01',
+    description:
+      'Data inicial opcional no formato YYYY-MM-DD. Se informada, dateTo tambem deve ser informada.',
+  })
+  dateFrom?: string;
+
+  @ApiPropertyOptional({
+    example: '2026-04-16',
+    description:
+      'Data final opcional no formato YYYY-MM-DD. Se informada, dateFrom tambem deve ser informada.',
+  })
+  dateTo?: string;
+
+  @ApiPropertyOptional({
+    example: '12345678-1234-4567-890a-bcdef1234567',
+  })
+  launchId?: string;
+
+  @ApiPropertyOptional({
+    example: '12345678-1234-4567-890a-bcdef1234568',
+  })
+  seasonId?: string;
+}

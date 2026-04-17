@@ -13,10 +13,13 @@ import { MarketingConnectionAccount } from '../database/entities/marketing-sync/
 import { MarketingExtractJob } from '../database/entities/marketing-sync/marketing-extract-job.entity';
 import { MarketingExtractRaw } from '../database/entities/marketing-sync/marketing-extract-raw.entity';
 import { MarketingCampaignDailyPerformance } from '../database/entities/marketing-sync/marketing-campaign-daily-performance.entity';
+import { MarketingSyncConfiguration } from '../database/entities/marketing-sync/marketing-sync-configuration.entity';
 import { GoogleAdsOAuthService } from '../oauth/google-ads-oauth.service';
 import { MetaAdsOAuthService } from '../oauth/meta-ads-oauth.service';
 import { ServiceBusService } from '../service-bus/service-bus.service';
 import { MarketingExtractProcessorService } from './marketing-extract-processor.service';
+import { MarketingSyncConfigurationsQueryDto } from './dto/marketing-sync-configurations-query.dto';
+import { UpsertMarketingSyncConfigurationDto } from './dto/upsert-marketing-sync-configuration.dto';
 
 export type MarketingExtractQueueMessage = {
   jobId: string;
@@ -29,6 +32,15 @@ type RefreshAccountsResult = {
   provider: string;
   connectionId: string;
   refreshedAccounts: number;
+};
+
+type MarketingExtractScheduleConfiguration = {
+  source: 'database' | 'env';
+  enabled: boolean;
+  scheduleEnabled: boolean;
+  intervalMinutes: number;
+  provider?: string;
+  syncKey: string;
 };
 
 @Injectable()
@@ -46,6 +58,8 @@ export class MarketingSyncService {
     private readonly rawRepository: Repository<MarketingExtractRaw>,
     @InjectRepository(MarketingCampaignDailyPerformance)
     private readonly performanceRepository: Repository<MarketingCampaignDailyPerformance>,
+    @InjectRepository(MarketingSyncConfiguration)
+    private readonly configurationRepository: Repository<MarketingSyncConfiguration>,
     private readonly googleAdsOAuthService: GoogleAdsOAuthService,
     private readonly metaAdsOAuthService: MetaAdsOAuthService,
     private readonly serviceBus: ServiceBusService,
@@ -129,6 +143,140 @@ export class MarketingSyncService {
       provider: provider ?? 'all',
       refreshedConnections: results.length,
       results,
+    };
+  }
+
+  async listConfigurations(params?: MarketingSyncConfigurationsQueryDto) {
+    const queryBuilder = this.configurationRepository
+      .createQueryBuilder('configuration')
+      .orderBy('configuration.sync_key', 'ASC')
+      .addOrderBy('configuration.provider', 'ASC', 'NULLS FIRST');
+
+    if (params?.syncKey) {
+      queryBuilder.andWhere('configuration.sync_key = :syncKey', {
+        syncKey: params.syncKey,
+      });
+    }
+
+    if (params?.provider) {
+      queryBuilder.andWhere('configuration.provider = :provider', {
+        provider: params.provider,
+      });
+    }
+
+    const configurations = await queryBuilder.getMany();
+    return configurations.map((configuration) =>
+      this.serializeConfiguration(configuration),
+    );
+  }
+
+  async upsertConfiguration(body: UpsertMarketingSyncConfigurationDto) {
+    const syncKey = body.syncKey?.trim();
+    const provider = body.provider?.trim() || null;
+
+    if (!syncKey) {
+      throw new BadRequestException('syncKey e obrigatorio.');
+    }
+
+    if (
+      body.scheduleIntervalMinutes != null &&
+      (!Number.isInteger(body.scheduleIntervalMinutes) ||
+        body.scheduleIntervalMinutes <= 0)
+    ) {
+      throw new BadRequestException(
+        'scheduleIntervalMinutes deve ser um inteiro > 0 quando informado.',
+      );
+    }
+
+    const existingQuery = this.configurationRepository
+      .createQueryBuilder('configuration')
+      .where('configuration.sync_key = :syncKey', { syncKey });
+
+    if (provider == null) {
+      existingQuery.andWhere('configuration.provider IS NULL');
+    } else {
+      existingQuery.andWhere('configuration.provider = :provider', { provider });
+    }
+
+    const existing = await existingQuery.getOne();
+
+    const configuration =
+      existing ??
+      this.configurationRepository.create({
+        sync_key: syncKey,
+        provider,
+        enabled: true,
+        schedule_enabled: false,
+      });
+
+    if (body.enabled !== undefined) {
+      configuration.enabled = Boolean(body.enabled);
+    }
+
+    if (body.scheduleEnabled !== undefined) {
+      configuration.schedule_enabled = Boolean(body.scheduleEnabled);
+    }
+
+    if (body.scheduleIntervalMinutes !== undefined) {
+      configuration.schedule_interval_minutes = body.scheduleIntervalMinutes;
+    }
+
+    if (body.config !== undefined) {
+      configuration.config = body.config;
+    }
+
+    if (body.metadata !== undefined) {
+      configuration.metadata = body.metadata;
+    }
+
+    const saved = await this.configurationRepository.save(configuration);
+    return this.serializeConfiguration(saved);
+  }
+
+  async getEffectiveMarketingExtractScheduleConfiguration(): Promise<MarketingExtractScheduleConfiguration> {
+    const configuration = await this.configurationRepository
+      .createQueryBuilder('configuration')
+      .where('configuration.sync_key = :syncKey', {
+        syncKey: 'marketing_extract',
+      })
+      .andWhere('configuration.provider IS NULL')
+      .getOne();
+
+    if (configuration) {
+      const config = this.asObject(configuration.config);
+      const configuredProvider =
+        typeof config.provider === 'string' && config.provider.trim().length > 0
+          ? config.provider.trim()
+          : undefined;
+
+      return {
+        source: 'database',
+        enabled: configuration.enabled,
+        scheduleEnabled: configuration.schedule_enabled,
+        intervalMinutes: this.normalizeScheduleInterval(
+          configuration.schedule_interval_minutes,
+        ),
+        provider: configuredProvider,
+        syncKey: configuration.sync_key,
+      };
+    }
+
+    return {
+      source: 'env',
+      enabled: this.config.get<string>('MARKETING_DASHBOARD_SCHEDULER_ENABLED', 'false') ===
+        'true',
+      scheduleEnabled:
+        this.config.get<string>('MARKETING_DASHBOARD_SCHEDULER_ENABLED', 'false') ===
+        'true',
+      intervalMinutes: this.normalizeScheduleInterval(
+        Number(
+          this.config.get<string>(
+            'MARKETING_DASHBOARD_SCHEDULER_INTERVAL_MINUTES',
+            '60',
+          ),
+        ),
+      ),
+      syncKey: 'marketing_extract',
     };
   }
 
@@ -282,6 +430,96 @@ export class MarketingSyncService {
 
     return {
       createdJobs: jobs.length,
+      jobs,
+    };
+  }
+
+  async scheduleHourlyTodayJobs(params?: { provider?: string }) {
+    const selectedAccounts = await this.accountRepository.find({
+      where: {
+        selected: true,
+        status: 'active',
+        ...(params?.provider ? { provider: params.provider } : {}),
+      },
+      relations: { oauth_connection: true },
+    });
+
+    const today = this.formatDate(new Date());
+    const jobs: Array<Record<string, unknown>> = [];
+    let enqueuedJobs = 0;
+    let skippedJobs = 0;
+
+    for (const account of selectedAccounts) {
+      const existing = await this.jobRepository.findOne({
+        where: {
+          oauth_connection: { id: account.oauth_connection.id },
+          provider: account.provider,
+          external_account_id: account.external_account_id,
+          date_from: today,
+          date_to: today,
+        },
+        relations: { oauth_connection: true },
+      });
+
+      let finalJob = existing;
+
+      if (!existing) {
+        finalJob = await this.jobRepository.save(
+          this.jobRepository.create({
+            oauth_connection: account.oauth_connection,
+            provider: account.provider,
+            external_account_id: account.external_account_id,
+            date_from: today,
+            date_to: today,
+            preset: 'today',
+            status: 'pending',
+            requested_at: new Date(),
+            metadata: {
+              accountName: account.external_account_name ?? null,
+              scheduler: 'hourly',
+            },
+          }),
+        );
+
+        await this.enqueueJob(finalJob.id, 'scheduler:hourly');
+        enqueuedJobs += 1;
+      } else if (existing.status === 'failed' || existing.status === 'completed') {
+        existing.status = 'pending';
+        existing.started_at = undefined;
+        existing.completed_at = undefined;
+        existing.error_message = undefined;
+        existing.requested_at = new Date();
+        existing.metadata = {
+          ...(existing.metadata ?? {}),
+          scheduler: 'hourly',
+        };
+        finalJob = await this.jobRepository.save(existing);
+        await this.enqueueJob(finalJob.id, 'scheduler:hourly');
+        enqueuedJobs += 1;
+      } else {
+        skippedJobs += 1;
+      }
+
+      if (!finalJob) {
+        skippedJobs += 1;
+        continue;
+      }
+
+      jobs.push({
+        id: finalJob.id,
+        provider: finalJob.provider,
+        externalAccountId: finalJob.external_account_id,
+        dateFrom: finalJob.date_from,
+        dateTo: finalJob.date_to,
+        status: finalJob.status,
+      });
+    }
+
+    return {
+      targetDate: today,
+      selectedAccounts: selectedAccounts.length,
+      enqueuedJobs,
+      skippedJobs,
       jobs,
     };
   }
@@ -517,5 +755,35 @@ export class MarketingSyncService {
 
   private formatDate(date: Date): string {
     return date.toISOString().slice(0, 10);
+  }
+
+  private normalizeScheduleInterval(value?: number | null): number {
+    if (!Number.isFinite(value) || !value || value <= 0) {
+      return 60;
+    }
+
+    return Math.floor(value);
+  }
+
+  private asObject(
+    value?: Record<string, unknown> | null,
+  ): Record<string, unknown> {
+    return value && typeof value === 'object' ? value : {};
+  }
+
+  private serializeConfiguration(configuration: MarketingSyncConfiguration) {
+    return {
+      id: configuration.id,
+      syncKey: configuration.sync_key,
+      provider: configuration.provider ?? null,
+      enabled: configuration.enabled,
+      scheduleEnabled: configuration.schedule_enabled,
+      scheduleIntervalMinutes:
+        configuration.schedule_interval_minutes ?? null,
+      config: configuration.config ?? null,
+      metadata: configuration.metadata ?? null,
+      createdAt: configuration.created_at.toISOString(),
+      updatedAt: configuration.updated_at.toISOString(),
+    };
   }
 }

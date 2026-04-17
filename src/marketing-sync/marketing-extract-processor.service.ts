@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { MarketingAdDailyPerformance } from '../database/entities/marketing-sync/marketing-ad-daily-performance.entity';
 import { MarketingCampaignDailyPerformance } from '../database/entities/marketing-sync/marketing-campaign-daily-performance.entity';
 import { MarketingExtractJob } from '../database/entities/marketing-sync/marketing-extract-job.entity';
 import { MarketingExtractRaw } from '../database/entities/marketing-sync/marketing-extract-raw.entity';
@@ -18,6 +19,16 @@ type GoogleSearchStreamChunk = {
     campaign?: {
       id?: string;
       name?: string;
+    };
+    adGroup?: {
+      id?: string;
+      name?: string;
+    };
+    adGroupAd?: {
+      ad?: {
+        id?: string;
+        name?: string;
+      };
     };
     metrics?: {
       impressions?: string;
@@ -35,6 +46,11 @@ type MetaInsightsResponse = {
   data?: Array<{
     campaign_id?: string;
     campaign_name?: string;
+    account_name?: string;
+    adset_id?: string;
+    adset_name?: string;
+    ad_id?: string;
+    ad_name?: string;
     date_start?: string;
     impressions?: string;
     clicks?: string;
@@ -56,6 +72,8 @@ export class MarketingExtractProcessorService {
     private readonly jobRepository: Repository<MarketingExtractJob>,
     @InjectRepository(MarketingExtractRaw)
     private readonly rawRepository: Repository<MarketingExtractRaw>,
+    @InjectRepository(MarketingAdDailyPerformance)
+    private readonly adPerformanceRepository: Repository<MarketingAdDailyPerformance>,
     @InjectRepository(MarketingCampaignDailyPerformance)
     private readonly performanceRepository: Repository<MarketingCampaignDailyPerformance>,
     private readonly googleAdsOAuthService: GoogleAdsOAuthService,
@@ -166,6 +184,7 @@ export class MarketingExtractProcessorService {
     const rows = payload.flatMap((chunk) => chunk.results ?? []);
     let rawInserted = 0;
     let performanceUpserted = 0;
+    let adPerformanceUpserted = 0;
 
     for (const row of rows) {
       const reportDate = row.segments?.date ?? job.date_from;
@@ -215,11 +234,21 @@ export class MarketingExtractProcessorService {
 
       await this.performanceRepository.save(entity);
       performanceUpserted += 1;
+
+      const adDailyPersisted = await this.persistGoogleAdDailyPerformance({
+        job,
+        reportDate,
+        row,
+      });
+      if (adDailyPersisted) {
+        adPerformanceUpserted += 1;
+      }
     }
 
     return {
       rawInserted,
       performanceUpserted,
+      adPerformanceUpserted,
       providerRows: rows.length,
     };
   }
@@ -256,6 +285,7 @@ export class MarketingExtractProcessorService {
     const rows = payload.data ?? [];
     let rawInserted = 0;
     let performanceUpserted = 0;
+    let adPerformanceUpserted = 0;
 
     for (const row of rows) {
       const reportDate = row.date_start ?? job.date_from;
@@ -301,13 +331,114 @@ export class MarketingExtractProcessorService {
 
       await this.performanceRepository.save(entity);
       performanceUpserted += 1;
+
+      const adDailyPersisted = await this.persistMetaAdDailyPerformance({
+        job,
+        reportDate,
+        row,
+      });
+      if (adDailyPersisted) {
+        adPerformanceUpserted += 1;
+      }
     }
 
     return {
       rawInserted,
       performanceUpserted,
+      adPerformanceUpserted,
       providerRows: rows.length,
     };
+  }
+
+  private async persistMetaAdDailyPerformance(params: {
+    job: MarketingExtractJob;
+    reportDate: string;
+    row: NonNullable<MetaInsightsResponse['data']>[number];
+  }): Promise<boolean> {
+    const { job, reportDate, row } = params;
+    if (!row.ad_id) {
+      return false;
+    }
+
+    const performance = await this.adPerformanceRepository.findOne({
+      where: {
+        provider: job.provider,
+        external_account_id: job.external_account_id,
+        external_ad_id: row.ad_id,
+        report_date: reportDate,
+      },
+    });
+
+    const entity =
+      performance ??
+      this.adPerformanceRepository.create({
+        provider: job.provider,
+        external_account_id: job.external_account_id,
+        external_ad_id: row.ad_id,
+        report_date: reportDate,
+      });
+
+    entity.account_name = row.account_name ?? undefined;
+    entity.external_campaign_id = row.campaign_id ?? undefined;
+    entity.campaign_name = row.campaign_name ?? undefined;
+    entity.external_adset_id = row.adset_id ?? undefined;
+    entity.adset_name = row.adset_name ?? undefined;
+    entity.ad_name = row.ad_name ?? undefined;
+    entity.impressions = String(row.impressions ?? '0');
+    entity.clicks = String(row.clicks ?? '0');
+    entity.spend = String(row.spend ?? '0');
+    entity.conversions = this.extractMetaConversions(row.actions);
+    entity.metadata = row as unknown as Record<string, unknown>;
+
+    await this.adPerformanceRepository.save(entity);
+    return true;
+  }
+
+  private async persistGoogleAdDailyPerformance(params: {
+    job: MarketingExtractJob;
+    reportDate: string;
+    row: NonNullable<GoogleSearchStreamChunk['results']>[number];
+  }): Promise<boolean> {
+    const { job, reportDate, row } = params;
+    const externalAdId = row.adGroupAd?.ad?.id;
+    if (!externalAdId) {
+      return false;
+    }
+
+    const performance = await this.adPerformanceRepository.findOne({
+      where: {
+        provider: job.provider,
+        external_account_id: job.external_account_id,
+        external_ad_id: externalAdId,
+        report_date: reportDate,
+      },
+    });
+
+    const entity =
+      performance ??
+      this.adPerformanceRepository.create({
+        provider: job.provider,
+        external_account_id: job.external_account_id,
+        external_ad_id: externalAdId,
+        report_date: reportDate,
+      });
+
+    entity.external_campaign_id = row.campaign?.id ?? undefined;
+    entity.campaign_name = row.campaign?.name ?? undefined;
+    entity.external_adset_id = row.adGroup?.id ?? undefined;
+    entity.adset_name = row.adGroup?.name ?? undefined;
+    entity.ad_name = row.adGroupAd?.ad?.name ?? undefined;
+    entity.impressions = String(row.metrics?.impressions ?? '0');
+    entity.clicks = String(row.metrics?.clicks ?? '0');
+    entity.spend = this.microsToDecimalString(row.metrics?.costMicros);
+    entity.conversions =
+      row.metrics?.conversions !== undefined
+        ? String(row.metrics.conversions)
+        : undefined;
+    entity.metadata = row as unknown as Record<string, unknown>;
+
+    await this.adPerformanceRepository.save(entity);
+    return true;
   }
 
   private microsToDecimalString(costMicros?: string): string {

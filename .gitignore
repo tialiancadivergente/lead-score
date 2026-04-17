@@ -46,3 +46,7 @@ docker-compose.override.yml
 # Kubernetes
 k8s/overlays/
 *.kubeconfig
+
+# Seed files (large, not committed)
+docs/*-seed*.sql
+scripts/generate-*-seed*.js

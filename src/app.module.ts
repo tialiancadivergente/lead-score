@@ -13,6 +13,7 @@ import { SeasonModule } from './season/season.module';
 import { VotingModule } from './voting/voting.module';
 import { FormModule } from './form/form.module';
 import { OauthModule } from './oauth/oauth.module';
+import { MarketingDashboardModule } from './marketing-dashboard/marketing-dashboard.module';
 import { MarketingSyncModule } from './marketing-sync/marketing-sync.module';
 
 @Module({
@@ -34,6 +35,7 @@ import { MarketingSyncModule } from './marketing-sync/marketing-sync.module';
     VotingModule,
     OauthModule,
     MarketingSyncModule,
+    MarketingDashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],

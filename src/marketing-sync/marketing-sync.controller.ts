@@ -17,6 +17,8 @@ import {
 } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { MarketingExtractProcessorService } from './marketing-extract-processor.service';
+import { MarketingSyncConfigurationsQueryDto } from './dto/marketing-sync-configurations-query.dto';
+import { UpsertMarketingSyncConfigurationDto } from './dto/upsert-marketing-sync-configuration.dto';
 import { MarketingSyncService } from './marketing-sync.service';
 
 @ApiTags('marketing-sync')
@@ -27,6 +29,38 @@ export class MarketingSyncController {
     private readonly marketingSyncService: MarketingSyncService,
     private readonly marketingExtractProcessor: MarketingExtractProcessorService,
   ) {}
+
+  @ApiOperation({
+    summary: 'Lista configuracoes persistidas de sync de marketing',
+  })
+  @ApiQuery({
+    name: 'syncKey',
+    required: false,
+    description: 'Filtra por chave do sync, ex.: marketing_extract.',
+  })
+  @ApiQuery({
+    name: 'provider',
+    required: false,
+    description: 'Filtra por provider, ex.: google_ads ou meta_ads.',
+  })
+  @ApiOkResponse({ description: 'Configuracoes retornadas com sucesso.' })
+  @Get('configurations')
+  listConfigurations(@Query() query: MarketingSyncConfigurationsQueryDto) {
+    return this.marketingSyncService.listConfigurations(query);
+  }
+
+  @ApiOperation({
+    summary: 'Cria ou atualiza configuracao persistida de sync de marketing',
+  })
+  @ApiOkResponse({ description: 'Configuracao persistida com sucesso.' })
+  @ApiBadRequestResponse({
+    description:
+      'Payload invalido. syncKey e obrigatorio e scheduleIntervalMinutes deve ser inteiro > 0.',
+  })
+  @Post('configurations')
+  upsertConfiguration(@Body() body: UpsertMarketingSyncConfigurationDto) {
+    return this.marketingSyncService.upsertConfiguration(body);
+  }
 
   @ApiOperation({
     summary: 'Sincroniza contas acessiveis por provider',
