@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # Aplicação NestJS
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lead-score-app
+    ports:
+      - "3000:3000"
+    environment:
+      # Application
+      PORT: ${PORT:-3000}
+      NODE_ENV: ${NODE_ENV:-production}
+      
+      # Database - Azure PostgreSQL (gerenciado)
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_SSL: ${DB_SSL:-true}
+      TYPEORM_SYNC: ${TYPEORM_SYNC:-false}
+      TYPEORM_LOGGING: ${TYPEORM_LOGGING:-false}
+      
+      # Azure Service Bus
+      SERVICE_BUS_CONNECTION_STRING: ${SERVICE_BUS_CONNECTION_STRING}
+      SERVICE_BUS_ENABLED: ${SERVICE_BUS_ENABLED:-true}
+      SERVICE_BUS_LEAD_SCORE_QUEUE: ${SERVICE_BUS_LEAD_SCORE_QUEUE:-lead-score}
+      SERVICE_BUS_CONSUMER_ENABLED: ${SERVICE_BUS_CONSUMER_ENABLED:-false}
+      SERVICE_BUS_MAX_RETRIES: ${SERVICE_BUS_MAX_RETRIES:-5}
+      SERVICE_BUS_RETRY_DELAY_MS: ${SERVICE_BUS_RETRY_DELAY_MS:-200}
+      SERVICE_BUS_MAX_RETRY_DELAY_MS: ${SERVICE_BUS_MAX_RETRY_DELAY_MS:-5000}
+      
+      # Fila: cadastro de leads
+      SERVICE_BUS_LEAD_REGISTRATION_QUEUE: ${SERVICE_BUS_LEAD_REGISTRATION_QUEUE:-lead-registration}
+      SERVICE_BUS_LEAD_REGISTRATION_CONSUMER_ENABLED: ${SERVICE_BUS_LEAD_REGISTRATION_CONSUMER_ENABLED:-true}
+      SERVICE_BUS_LEAD_REGISTRATION_MAX_CONCURRENCY: ${SERVICE_BUS_LEAD_REGISTRATION_MAX_CONCURRENCY:-5}
+      
+      # ActiveCampaign
+      ACTIVECAMPAIGN_BASE_URL: ${ACTIVECAMPAIGN_BASE_URL}
+      ACTIVECAMPAIGN_API_TOKEN: ${ACTIVECAMPAIGN_API_TOKEN}
+      ACTIVECAMPAIGN_CREATE_CONTACT_PATH: ${ACTIVECAMPAIGN_CREATE_CONTACT_PATH:-/api/3/contacts}
+    restart: unless-stopped
+    networks:
+      - lead-score-network
+
+networks:
+  lead-score-network:
+    driver: bridge
+

@@ -1,0 +1,182 @@
+name: Deploy to AKS
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+
+env:
+  ACR_NAME: ${{ secrets.ACR_NAME }}
+  RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
+  AKS_CLUSTER_NAME: ${{ secrets.AKS_CLUSTER_NAME }}
+  IMAGE_NAME: lead-score
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Lint
+      run: npm run lint
+    
+    - name: Build
+      run: npm run build
+    
+    # Descomentar quando houver testes
+    # - name: Run tests
+    #   run: npm test
+
+  build-and-push-image:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Build and push image to ACR
+      run: |
+        # Get short SHA
+        SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+        
+        # Determine tag based on branch
+        if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+          TAGS="latest,${SHORT_SHA},production-${SHORT_SHA}"
+        else
+          TAGS="${SHORT_SHA},develop-${SHORT_SHA}"
+        fi
+        
+        # Build and push
+        az acr build \
+          --registry ${{ env.ACR_NAME }} \
+          --image ${{ env.IMAGE_NAME }}:latest \
+          --image ${{ env.IMAGE_NAME }}:${SHORT_SHA} \
+          --file Dockerfile \
+          .
+    
+    outputs:
+      image-tag: ${{ github.sha }}
+
+  deploy-to-aks:
+    needs: build-and-push-image
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Set AKS context
+      uses: azure/aks-set-context@v3
+      with:
+        resource-group: ${{ env.RESOURCE_GROUP }}
+        cluster-name: ${{ env.AKS_CLUSTER_NAME }}
+    
+    - name: Create namespace if not exists
+      run: |
+        kubectl get namespace lead-score || kubectl create namespace lead-score
+    
+    - name: Deploy to AKS
+      run: |
+        SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+        
+        # Update image in deployment
+        sed -i "s|<YOUR_ACR_NAME>|${{ env.ACR_NAME }}|g" k8s/03-deployment.yaml
+        
+        # Apply all manifests
+        kubectl apply -f k8s/00-namespace.yaml
+        kubectl apply -f k8s/01-configmap.yaml
+        # kubectl apply -f k8s/02-secret.yaml  # Usar Key Vault em produção
+        kubectl apply -f k8s/03-deployment.yaml
+        kubectl apply -f k8s/04-service.yaml
+        kubectl apply -f k8s/05-ingress.yaml
+        kubectl apply -f k8s/06-hpa.yaml
+        kubectl apply -f k8s/07-pdb.yaml
+        
+        # Update image
+        kubectl set image deployment/lead-score-app \
+          lead-score=${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${SHORT_SHA} \
+          -n lead-score
+        
+        # Wait for rollout
+        kubectl rollout status deployment/lead-score-app -n lead-score --timeout=5m
+    
+    - name: Verify deployment
+      run: |
+        kubectl get pods -n lead-score
+        kubectl get svc -n lead-score
+        kubectl get ingress -n lead-score
+    
+    - name: Run database migrations
+      run: |
+        POD=$(kubectl get pods -n lead-score -l app=lead-score -o jsonpath='{.items[0].metadata.name}')
+        kubectl exec $POD -n lead-score -- npm run migration:run
+      continue-on-error: true
+
+  deploy-to-aks-staging:
+    needs: build-and-push-image
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Set AKS context
+      uses: azure/aks-set-context@v3
+      with:
+        resource-group: ${{ env.RESOURCE_GROUP }}
+        cluster-name: ${{ env.AKS_CLUSTER_NAME }}
+    
+    - name: Deploy to staging namespace
+      run: |
+        SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+        
+        # Create staging namespace
+        kubectl get namespace lead-score-staging || kubectl create namespace lead-score-staging
+        
+        # Update image in deployment
+        sed -i "s|<YOUR_ACR_NAME>|${{ env.ACR_NAME }}|g" k8s/03-deployment.yaml
+        sed -i "s|namespace: lead-score|namespace: lead-score-staging|g" k8s/*.yaml
+        
+        # Apply manifests to staging
+        kubectl apply -f k8s/ -n lead-score-staging
+        
+        # Update image
+        kubectl set image deployment/lead-score-app \
+          lead-score=${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${SHORT_SHA} \
+          -n lead-score-staging
+        
+        kubectl rollout status deployment/lead-score-app -n lead-score-staging --timeout=5m

@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: lead-score-service
+  namespace: lead-score
+  labels:
+    app: lead-score
+    component: api
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app: lead-score
+    component: api
+  sessionAffinity: None

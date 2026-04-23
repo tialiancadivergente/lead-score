@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- 00-namespace.yaml
+- 01-configmap.yaml
+- 02-secret.yaml
+- 03-deployment.yaml
+- 04-service.yaml
+- 05-ingress.yaml
+- 06-hpa.yaml
+- 07-pdb.yaml
+
+# Namespace comum
+namespace: lead-score
+
+# Labels comuns
+commonLabels:
+  app: lead-score
+  managed-by: kustomize
+
+# Annotations comuns
+commonAnnotations:
+  contact: "devops@yourcompany.com"

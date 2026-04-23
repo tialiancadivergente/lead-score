@@ -1,0 +1,30 @@
+[
+  {
+    "op": "replace",
+    "path": "/spec/template/spec/affinity/nodeAffinity",
+    "value": {
+      "preferredDuringSchedulingIgnoredDuringExecution": [
+        {
+          "weight": 100,
+          "preference": {
+            "matchExpressions": [
+              { "key": "kubernetes.azure.com/cluster", "operator": "Exists" },
+              { "key": "kubernetes.azure.com/ebpf-dataplane", "operator": "NotIn", "values": ["cilium"] },
+              { "key": "type", "operator": "NotIn", "values": ["virtual-kubelet"] },
+              { "key": "kubernetes.io/os", "operator": "In", "values": ["linux"] },
+              { "key": "networking.azure.com/node-network-metrics", "operator": "NotIn", "values": ["disabled"] }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "op": "replace",
+    "path": "/spec/template/spec/containers/0/resources",
+    "value": {
+      "requests": { "cpu": "10m", "memory": "128Mi" },
+      "limits": { "cpu": "200m", "memory": "256Mi" }
+    }
+  }
+]

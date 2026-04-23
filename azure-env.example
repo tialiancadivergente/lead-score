@@ -1,0 +1,31 @@
+# Lead Score - Azure AKS Environment Variables Template
+# 
+# Copie este arquivo e preencha com os valores reais do Azure
+
+# Azure Container Registry
+export ACR_NAME=your-acr-name
+
+# Azure Resource Group
+export RESOURCE_GROUP=your-resource-group-name
+
+# Azure Kubernetes Service Cluster
+export AKS_CLUSTER_NAME=your-aks-cluster-name
+
+# Azure Subscription (opcional)
+# export AZURE_SUBSCRIPTION_ID=your-subscription-id
+
+# Imagem Docker
+export IMAGE_NAME=lead-score
+export IMAGE_TAG=latest
+
+# Namespace Kubernetes
+export K8S_NAMESPACE=lead-score
+
+# Domain para Ingress (opcional)
+# export DOMAIN=lead-score.yourdomain.com
+
+# Uso:
+# 1. Copie este arquivo: cp azure-env.example azure-env.sh
+# 2. Preencha os valores reais
+# 3. Source o arquivo: source azure-env.sh
+# 4. Execute o deploy: ./deploy.sh production v1.0.0

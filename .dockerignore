@@ -1,0 +1,49 @@
+# Node modules
+node_modules/
+npm-debug.log*
+
+# Build output
+dist/
+coverage/
+
+# Tests
+test/
+**/*.spec.ts
+**/*.test.ts
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Documentation
+*.md
+!README.md
+
+# Misc
+.DS_Store
+Thumbs.db
+.eslintcache
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Kubernetes
+k8s/
+kubernetes/
+*.yaml
+*.yml
+!nest-cli.json
+
+# Scripts
+scripts/
