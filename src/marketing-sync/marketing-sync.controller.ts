@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -6,15 +7,23 @@ import {
   Patch,
   Post,
   Query,
+  Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
+  ApiBody,
   ApiBadRequestResponse,
+  ApiConsumes,
   ApiOkResponse,
   ApiOperation,
+  ApiProduces,
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { MarketingExtractProcessorService } from './marketing-extract-processor.service';
 import { MarketingSyncConfigurationsQueryDto } from './dto/marketing-sync-configurations-query.dto';
@@ -132,6 +141,33 @@ export class MarketingSyncController {
   }
 
   @ApiOperation({
+    summary: 'Cria jobs manuais para um intervalo customizado',
+  })
+  @ApiBadRequestResponse({
+    description:
+      'Payload invalido. dateFrom/dateTo sao obrigatorios no formato YYYY-MM-DD.',
+  })
+  @Post('jobs/manual')
+  createManualJobs(
+    @Body()
+    body: {
+      provider?: string;
+      accountId?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      enqueue?: boolean;
+    },
+  ) {
+    return this.marketingSyncService.createManualJobs({
+      provider: body.provider,
+      accountId: body.accountId,
+      dateFrom: body.dateFrom ?? '',
+      dateTo: body.dateTo ?? '',
+      enqueue: body.enqueue,
+    });
+  }
+
+  @ApiOperation({
     summary: 'Lista jobs de extracao',
   })
   @Get('jobs')
@@ -182,6 +218,76 @@ export class MarketingSyncController {
       accountId,
       reportDate,
       limit,
+    });
+  }
+
+  @ApiOperation({
+    summary: 'Exporta performance por anuncio em CSV',
+  })
+  @ApiQuery({ name: 'provider', required: false })
+  @ApiQuery({ name: 'accountId', required: false })
+  @ApiQuery({ name: 'dateFrom', required: false, example: '2026-01-01' })
+  @ApiQuery({ name: 'dateTo', required: false, example: '2026-04-27' })
+  @ApiQuery({ name: 'limit', required: false, example: '5000' })
+  @ApiProduces('text/csv')
+  @Get('ad-performance/export/csv')
+  async exportAdPerformanceCsv(
+    @Query('provider') provider: string | undefined,
+    @Query('accountId') accountId: string | undefined,
+    @Query('dateFrom') dateFrom: string | undefined,
+    @Query('dateTo') dateTo: string | undefined,
+    @Query('limit') limit: string | undefined,
+    @Res() res: Response,
+  ) {
+    const csv = await this.marketingSyncService.exportAdPerformanceCsv({
+      provider,
+      accountId,
+      dateFrom,
+      dateTo,
+      limit,
+    });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="marketing-ad-performance.csv"',
+    );
+    res.send(csv);
+  }
+
+  @ApiOperation({
+    summary: 'Importa performance por anuncio via CSV para teste operacional',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        provider: { type: 'string', example: 'google_ads' },
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+      required: ['file'],
+    },
+  })
+  @ApiBadRequestResponse({
+    description: 'CSV invalido ou arquivo ausente.',
+  })
+  @Post('ad-performance/import/csv')
+  @UseInterceptors(FileInterceptor('file'))
+  async importAdPerformanceCsv(
+    @UploadedFile() file: any,
+    @Body('provider') provider: string | undefined,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Arquivo CSV nao enviado.');
+    }
+
+    return this.marketingSyncService.importAdPerformanceCsv({
+      csvContent: file.buffer.toString('utf-8'),
+      providerOverride: provider?.trim() || undefined,
     });
   }
 

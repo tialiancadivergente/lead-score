@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { OAuthConnection } from '../database/entities/integrations/oauth-connection.entity';
+import { MarketingAdDailyPerformance } from '../database/entities/marketing-sync/marketing-ad-daily-performance.entity';
 import { MarketingConnectionAccount } from '../database/entities/marketing-sync/marketing-connection-account.entity';
 import { MarketingExtractJob } from '../database/entities/marketing-sync/marketing-extract-job.entity';
 import { MarketingExtractRaw } from '../database/entities/marketing-sync/marketing-extract-raw.entity';
@@ -43,6 +44,24 @@ type MarketingExtractScheduleConfiguration = {
   syncKey: string;
 };
 
+type AdPerformanceCsvRow = {
+  provider: string;
+  external_account_id: string;
+  account_name?: string;
+  external_campaign_id?: string;
+  campaign_name?: string;
+  external_adset_id?: string;
+  adset_name?: string;
+  external_ad_id: string;
+  ad_name?: string;
+  report_date: string;
+  impressions: string;
+  clicks: string;
+  spend: string;
+  conversions?: string;
+  metadata_json?: string;
+};
+
 @Injectable()
 export class MarketingSyncService {
   private readonly logger = new Logger(MarketingSyncService.name);
@@ -56,6 +75,8 @@ export class MarketingSyncService {
     private readonly jobRepository: Repository<MarketingExtractJob>,
     @InjectRepository(MarketingExtractRaw)
     private readonly rawRepository: Repository<MarketingExtractRaw>,
+    @InjectRepository(MarketingAdDailyPerformance)
+    private readonly adPerformanceRepository: Repository<MarketingAdDailyPerformance>,
     @InjectRepository(MarketingCampaignDailyPerformance)
     private readonly performanceRepository: Repository<MarketingCampaignDailyPerformance>,
     @InjectRepository(MarketingSyncConfiguration)
@@ -434,6 +455,143 @@ export class MarketingSyncService {
     };
   }
 
+  async createManualJobs(params: {
+    provider?: string;
+    accountId?: string;
+    dateFrom: string;
+    dateTo: string;
+    enqueue?: boolean;
+  }) {
+    const dateFrom = params.dateFrom?.trim();
+    const dateTo = params.dateTo?.trim();
+
+    if (!dateFrom || !dateTo) {
+      throw new BadRequestException('dateFrom e dateTo sao obrigatorios.');
+    }
+
+    if (!this.isIsoDate(dateFrom) || !this.isIsoDate(dateTo)) {
+      throw new BadRequestException(
+        'dateFrom e dateTo devem estar no formato YYYY-MM-DD.',
+      );
+    }
+
+    if (dateFrom > dateTo) {
+      throw new BadRequestException('dateFrom nao pode ser maior que dateTo.');
+    }
+
+    let accounts: MarketingConnectionAccount[] = [];
+
+    if (params.accountId?.trim()) {
+      const account = await this.accountRepository.findOne({
+        where: { id: params.accountId.trim() },
+        relations: { oauth_connection: true },
+      });
+
+      if (!account) {
+        throw new NotFoundException('Conta sincronizada nao encontrada.');
+      }
+
+      if (account.status !== 'active') {
+        throw new BadRequestException(
+          'A conta informada nao esta ativa para extracao manual.',
+        );
+      }
+
+      if (params.provider && account.provider !== params.provider) {
+        throw new BadRequestException(
+          'A conta informada nao pertence ao provider solicitado.',
+        );
+      }
+
+      accounts = [account];
+    } else {
+      accounts = await this.accountRepository.find({
+        where: {
+          status: 'active',
+          selected: true,
+          ...(params.provider ? { provider: params.provider } : {}),
+        },
+        relations: { oauth_connection: true },
+      });
+    }
+
+    const jobs: Array<Record<string, unknown>> = [];
+
+    for (const account of accounts) {
+      const existing = await this.jobRepository.findOne({
+        where: {
+          oauth_connection: { id: account.oauth_connection.id },
+          provider: account.provider,
+          external_account_id: account.external_account_id,
+          date_from: dateFrom,
+          date_to: dateTo,
+        },
+        relations: { oauth_connection: true },
+      });
+
+      let finalJob = existing;
+
+      if (!existing) {
+        finalJob = await this.jobRepository.save(
+          this.jobRepository.create({
+            oauth_connection: account.oauth_connection,
+            provider: account.provider,
+            external_account_id: account.external_account_id,
+            date_from: dateFrom,
+            date_to: dateTo,
+            preset: 'manual',
+            status: 'pending',
+            requested_at: new Date(),
+            metadata: {
+              accountName: account.external_account_name ?? null,
+              source: 'manual',
+            },
+          }),
+        );
+      } else if (
+        existing.status === 'failed' ||
+        existing.status === 'completed'
+      ) {
+        existing.status = 'pending';
+        existing.started_at = undefined;
+        existing.completed_at = undefined;
+        existing.error_message = undefined;
+        existing.requested_at = new Date();
+        existing.preset = 'manual';
+        existing.metadata = {
+          ...(existing.metadata ?? {}),
+          accountName: account.external_account_name ?? null,
+          source: 'manual',
+        };
+        finalJob = await this.jobRepository.save(existing);
+      }
+
+      if (!finalJob) {
+        continue;
+      }
+
+      if (params.enqueue !== false) {
+        await this.enqueueJob(finalJob.id, 'manual:range');
+      }
+
+      jobs.push({
+        id: finalJob.id,
+        provider: finalJob.provider,
+        externalAccountId: finalJob.external_account_id,
+        dateFrom: finalJob.date_from,
+        dateTo: finalJob.date_to,
+        status: finalJob.status,
+      });
+    }
+
+    return {
+      createdJobs: jobs.length,
+      jobs,
+      dateFrom,
+      dateTo,
+    };
+  }
+
   async scheduleHourlyTodayJobs(params?: { provider?: string }) {
     const selectedAccounts = await this.accountRepository.find({
       where: {
@@ -671,6 +829,185 @@ export class MarketingSyncService {
     }));
   }
 
+  async exportAdPerformanceCsv(params?: {
+    provider?: string;
+    accountId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    limit?: string;
+  }): Promise<string> {
+    const queryBuilder = this.adPerformanceRepository
+      .createQueryBuilder('performance')
+      .orderBy('performance.report_date', 'DESC')
+      .addOrderBy('performance.updated_at', 'DESC');
+
+    if (params?.provider) {
+      queryBuilder.andWhere('performance.provider = :provider', {
+        provider: params.provider,
+      });
+    }
+
+    if (params?.accountId) {
+      queryBuilder.andWhere('performance.external_account_id = :accountId', {
+        accountId: params.accountId,
+      });
+    }
+
+    if (params?.dateFrom) {
+      queryBuilder.andWhere('performance.report_date >= :dateFrom', {
+        dateFrom: params.dateFrom,
+      });
+    }
+
+    if (params?.dateTo) {
+      queryBuilder.andWhere('performance.report_date <= :dateTo', {
+        dateTo: params.dateTo,
+      });
+    }
+
+    queryBuilder.limit(Number(params?.limit ?? '5000'));
+
+    const rows = await queryBuilder.getMany();
+    const headers = [
+      'provider',
+      'external_account_id',
+      'account_name',
+      'external_campaign_id',
+      'campaign_name',
+      'external_adset_id',
+      'adset_name',
+      'external_ad_id',
+      'ad_name',
+      'report_date',
+      'impressions',
+      'clicks',
+      'spend',
+      'conversions',
+      'metadata_json',
+    ];
+
+    const csv = [headers, ...rows.map((row) => [
+      row.provider,
+      row.external_account_id,
+      row.account_name ?? '',
+      row.external_campaign_id ?? '',
+      row.campaign_name ?? '',
+      row.external_adset_id ?? '',
+      row.adset_name ?? '',
+      row.external_ad_id,
+      row.ad_name ?? '',
+      row.report_date,
+      row.impressions,
+      row.clicks,
+      row.spend,
+      row.conversions ?? '',
+      row.metadata ? JSON.stringify(row.metadata) : '',
+    ])]
+      .map((row) => row.map((value) => this.escapeCsv(String(value ?? ''))).join(','))
+      .join('\r\n');
+
+    return `\uFEFF${csv}`;
+  }
+
+  async importAdPerformanceCsv(params: {
+    csvContent: string;
+    providerOverride?: string;
+  }) {
+    const rows = this.parseCsv(params.csvContent);
+    if (!rows.length) {
+      throw new BadRequestException('CSV vazio.');
+    }
+
+    const [headerRow, ...dataRows] = rows;
+    const headers = headerRow.map((value) => value.trim());
+    const requiredHeaders = [
+      'provider',
+      'external_account_id',
+      'external_ad_id',
+      'report_date',
+      'impressions',
+      'clicks',
+      'spend',
+    ];
+
+    for (const header of requiredHeaders) {
+      if (!headers.includes(header)) {
+        throw new BadRequestException(
+          `CSV invalido. Coluna obrigatoria ausente: ${header}.`,
+        );
+      }
+    }
+
+    const parsedRows: AdPerformanceCsvRow[] = dataRows
+      .filter((row) => row.some((value) => value.trim().length > 0))
+      .map((row, index) =>
+        this.mapCsvRow(headers, row, index + 2, params.providerOverride),
+      );
+
+    if (!parsedRows.length) {
+      throw new BadRequestException('CSV sem linhas de dados.');
+    }
+
+    const affectedKeys = new Set<string>();
+    let inserted = 0;
+    let updated = 0;
+
+    for (const row of parsedRows) {
+      const existing = await this.adPerformanceRepository.findOne({
+        where: {
+          provider: row.provider,
+          external_account_id: row.external_account_id,
+          external_ad_id: row.external_ad_id,
+          report_date: row.report_date,
+        },
+      });
+
+      const entity =
+        existing ??
+        this.adPerformanceRepository.create({
+          provider: row.provider,
+          external_account_id: row.external_account_id,
+          external_ad_id: row.external_ad_id,
+          report_date: row.report_date,
+        });
+
+      entity.account_name = row.account_name?.trim() || undefined;
+      entity.external_campaign_id = row.external_campaign_id?.trim() || undefined;
+      entity.campaign_name = row.campaign_name?.trim() || undefined;
+      entity.external_adset_id = row.external_adset_id?.trim() || undefined;
+      entity.adset_name = row.adset_name?.trim() || undefined;
+      entity.ad_name = row.ad_name?.trim() || undefined;
+      entity.impressions = row.impressions;
+      entity.clicks = row.clicks;
+      entity.spend = row.spend;
+      entity.conversions = row.conversions?.trim() ? row.conversions : undefined;
+      entity.metadata = row.metadata_json?.trim()
+        ? this.safeParseJson(row.metadata_json)
+        : undefined;
+
+      await this.adPerformanceRepository.save(entity);
+
+      if (existing) {
+        updated += 1;
+      } else {
+        inserted += 1;
+      }
+
+      affectedKeys.add(
+        `${row.provider}|${row.external_account_id}|${row.report_date}`,
+      );
+    }
+
+    await this.rebuildCampaignPerformanceFromAdRows(affectedKeys);
+
+    return {
+      importedRows: parsedRows.length,
+      inserted,
+      updated,
+      affectedGroups: affectedKeys.size,
+    };
+  }
+
   async enqueueJob(jobId: string, source?: string) {
     if (!this.serviceBus.isEnabled()) {
       this.logger.warn(
@@ -755,6 +1092,224 @@ export class MarketingSyncService {
 
   private formatDate(date: Date): string {
     return date.toISOString().slice(0, 10);
+  }
+
+  private isIsoDate(value: string): boolean {
+    return /^\d{4}-\d{2}-\d{2}$/.test(value);
+  }
+
+  private escapeCsv(value: string): string {
+    if (/[",\r\n]/.test(value)) {
+      return `"${value.replace(/"/g, '""')}"`;
+    }
+
+    return value;
+  }
+
+  private parseCsv(content: string): string[][] {
+    const rows: string[][] = [];
+    let currentRow: string[] = [];
+    let currentValue = '';
+    let inQuotes = false;
+    const normalized = content.replace(/^\uFEFF/, '');
+
+    for (let index = 0; index < normalized.length; index += 1) {
+      const char = normalized[index];
+      const next = normalized[index + 1];
+
+      if (char === '"') {
+        if (inQuotes && next === '"') {
+          currentValue += '"';
+          index += 1;
+          continue;
+        }
+
+        inQuotes = !inQuotes;
+        continue;
+      }
+
+      if (char === ',' && !inQuotes) {
+        currentRow.push(currentValue);
+        currentValue = '';
+        continue;
+      }
+
+      if ((char === '\n' || char === '\r') && !inQuotes) {
+        if (char === '\r' && next === '\n') {
+          index += 1;
+        }
+
+        currentRow.push(currentValue);
+        rows.push(currentRow);
+        currentRow = [];
+        currentValue = '';
+        continue;
+      }
+
+      currentValue += char;
+    }
+
+    if (currentValue.length > 0 || currentRow.length > 0) {
+      currentRow.push(currentValue);
+      rows.push(currentRow);
+    }
+
+    return rows;
+  }
+
+  private mapCsvRow(
+    headers: string[],
+    row: string[],
+    lineNumber: number,
+    providerOverride?: string,
+  ): AdPerformanceCsvRow {
+    const get = (header: string) => row[headers.indexOf(header)] ?? '';
+    const provider = (providerOverride ?? get('provider')).trim();
+    const externalAccountId = get('external_account_id').trim();
+    const externalAdId = get('external_ad_id').trim();
+    const reportDate = get('report_date').trim();
+
+    if (!provider || !externalAccountId || !externalAdId || !reportDate) {
+      throw new BadRequestException(
+        `CSV invalido na linha ${lineNumber}. provider, external_account_id, external_ad_id e report_date sao obrigatorios.`,
+      );
+    }
+
+    if (!this.isIsoDate(reportDate)) {
+      throw new BadRequestException(
+        `CSV invalido na linha ${lineNumber}. report_date deve estar no formato YYYY-MM-DD.`,
+      );
+    }
+
+    return {
+      provider,
+      external_account_id: externalAccountId,
+      account_name: get('account_name').trim() || undefined,
+      external_campaign_id: get('external_campaign_id').trim() || undefined,
+      campaign_name: get('campaign_name').trim() || undefined,
+      external_adset_id: get('external_adset_id').trim() || undefined,
+      adset_name: get('adset_name').trim() || undefined,
+      external_ad_id: externalAdId,
+      ad_name: get('ad_name').trim() || undefined,
+      report_date: reportDate,
+      impressions: this.normalizeIntegerString(
+        get('impressions'),
+        lineNumber,
+        'impressions',
+      ),
+      clicks: this.normalizeIntegerString(get('clicks'), lineNumber, 'clicks'),
+      spend: this.normalizeDecimalString(get('spend'), lineNumber, 'spend'),
+      conversions: get('conversions').trim()
+        ? this.normalizeDecimalString(
+            get('conversions'),
+            lineNumber,
+            'conversions',
+          )
+        : undefined,
+      metadata_json: get('metadata_json').trim() || undefined,
+    };
+  }
+
+  private normalizeIntegerString(
+    value: string,
+    lineNumber: number,
+    field: string,
+  ): string {
+    const normalized = value.trim();
+    if (!/^\d+$/.test(normalized)) {
+      throw new BadRequestException(
+        `CSV invalido na linha ${lineNumber}. ${field} deve ser inteiro >= 0.`,
+      );
+    }
+
+    return normalized;
+  }
+
+  private normalizeDecimalString(
+    value: string,
+    lineNumber: number,
+    field: string,
+  ): string {
+    const normalized = value.trim();
+    if (!/^\d+(\.\d+)?$/.test(normalized)) {
+      throw new BadRequestException(
+        `CSV invalido na linha ${lineNumber}. ${field} deve ser numero decimal >= 0.`,
+      );
+    }
+
+    return normalized;
+  }
+
+  private safeParseJson(value: string): Record<string, unknown> | undefined {
+    try {
+      const parsed = JSON.parse(value) as Record<string, unknown>;
+      return parsed && typeof parsed === 'object' ? parsed : undefined;
+    } catch {
+      throw new BadRequestException('metadata_json invalido no CSV.');
+    }
+  }
+
+  private async rebuildCampaignPerformanceFromAdRows(affectedKeys: Set<string>) {
+    for (const key of affectedKeys) {
+      const [provider, externalAccountId, reportDate] = key.split('|');
+
+      await this.performanceRepository
+        .createQueryBuilder()
+        .delete()
+        .from(MarketingCampaignDailyPerformance)
+        .where('provider = :provider', { provider })
+        .andWhere('external_account_id = :externalAccountId', {
+          externalAccountId,
+        })
+        .andWhere('report_date = :reportDate', { reportDate })
+        .execute();
+
+      const rows = await this.adPerformanceRepository
+        .createQueryBuilder('ad')
+        .select('ad.external_campaign_id', 'external_campaign_id')
+        .addSelect('MAX(ad.campaign_name)', 'campaign_name')
+        .addSelect('COALESCE(SUM(ad.impressions), 0)', 'impressions')
+        .addSelect('COALESCE(SUM(ad.clicks), 0)', 'clicks')
+        .addSelect('COALESCE(SUM(ad.spend), 0)', 'spend')
+        .addSelect('COALESCE(SUM(ad.conversions), 0)', 'conversions')
+        .where('ad.provider = :provider', { provider })
+        .andWhere('ad.external_account_id = :externalAccountId', {
+          externalAccountId,
+        })
+        .andWhere('ad.report_date = :reportDate', { reportDate })
+        .andWhere('ad.external_campaign_id IS NOT NULL')
+        .groupBy('ad.external_campaign_id')
+        .getRawMany<{
+          external_campaign_id: string;
+          campaign_name: string | null;
+          impressions: string;
+          clicks: string;
+          spend: string;
+          conversions: string;
+        }>();
+
+      for (const row of rows) {
+        await this.performanceRepository.save(
+          this.performanceRepository.create({
+            provider,
+            external_account_id: externalAccountId,
+            external_campaign_id: row.external_campaign_id,
+            campaign_name: row.campaign_name ?? undefined,
+            report_date: reportDate,
+            impressions: row.impressions,
+            clicks: row.clicks,
+            spend: row.spend,
+            conversions:
+              row.conversions && row.conversions !== '0'
+                ? row.conversions
+                : undefined,
+            metadata: {
+              source: 'csv_import',
+            },
+          }),
+        );
+      }
+    }
   }
 
   private normalizeScheduleInterval(value?: number | null): number {

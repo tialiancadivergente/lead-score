@@ -65,6 +65,8 @@ type MetaInsightsResponse = {
 @Injectable()
 export class MarketingExtractProcessorService {
   private readonly logger = new Logger(MarketingExtractProcessorService.name);
+  private readonly numericScale = 6n;
+  private readonly numericMultiplier = 10n ** this.numericScale;
 
   constructor(
     private readonly config: ConfigService,
@@ -95,6 +97,17 @@ export class MarketingExtractProcessorService {
     job.error_message = undefined;
     await this.jobRepository.save(job);
 
+    this.logger.log(
+      [
+        '[MARKETING_EXTRACT_START]',
+        `jobId=${job.id}`,
+        `provider=${job.provider}`,
+        `account=${job.external_account_id}`,
+        `dateFrom=${job.date_from}`,
+        `dateTo=${job.date_to}`,
+      ].join(' '),
+    );
+
     try {
       let processingSummary: Record<string, unknown> = {};
       if (job.provider === 'google_ads') {
@@ -114,6 +127,21 @@ export class MarketingExtractProcessorService {
         processingSummary,
       };
       await this.jobRepository.save(job);
+
+      this.logger.log(
+        [
+          '[MARKETING_EXTRACT_DONE]',
+          `jobId=${job.id}`,
+          `provider=${job.provider}`,
+          `account=${job.external_account_id}`,
+          `dateFrom=${job.date_from}`,
+          `dateTo=${job.date_to}`,
+          `rawInserted=${String(processingSummary.rawInserted ?? 0)}`,
+          `providerRows=${String(processingSummary.providerRows ?? 0)}`,
+          `performanceUpserted=${String(processingSummary.performanceUpserted ?? 0)}`,
+          `adPerformanceUpserted=${String(processingSummary.adPerformanceUpserted ?? 0)}`,
+        ].join(' '),
+      );
 
       return {
         id: job.id,
@@ -161,12 +189,16 @@ export class MarketingExtractProcessorService {
             'SELECT',
             'campaign.id,',
             'campaign.name,',
+            'ad_group.id,',
+            'ad_group.name,',
+            'ad_group_ad.ad.id,',
+            'ad_group_ad.ad.name,',
             'segments.date,',
             'metrics.impressions,',
             'metrics.clicks,',
             'metrics.cost_micros,',
             'metrics.conversions',
-            'FROM campaign',
+            'FROM ad_group_ad',
             `WHERE segments.date BETWEEN '${job.date_from}' AND '${job.date_to}'`,
           ].join(' '),
         }),
@@ -175,6 +207,16 @@ export class MarketingExtractProcessorService {
 
     if (!response.ok) {
       const body = await response.text();
+      this.logger.error(
+        [
+          '[GOOGLE_EXTRACT_ERROR]',
+          `jobId=${job.id}`,
+          `account=${job.external_account_id}`,
+          `dateFrom=${job.date_from}`,
+          `dateTo=${job.date_to}`,
+          `body=${body}`,
+        ].join(' '),
+      );
       throw new InternalServerErrorException(
         `Falha ao extrair campanhas Google Ads: ${body}`,
       );
@@ -182,9 +224,41 @@ export class MarketingExtractProcessorService {
 
     const payload = (await response.json()) as GoogleSearchStreamChunk[];
     const rows = payload.flatMap((chunk) => chunk.results ?? []);
+    this.logProviderPreview('google_ads', job, rows);
+    await this.deleteExistingConsolidatedRows(job);
+
     let rawInserted = 0;
     let performanceUpserted = 0;
     let adPerformanceUpserted = 0;
+    const campaignAggregates = new Map<
+      string,
+      {
+        reportDate: string;
+        externalCampaignId: string;
+        campaignName?: string;
+        impressions: bigint;
+        clicks: bigint;
+        spendMicros: bigint;
+        conversionsScaled: bigint;
+      }
+    >();
+    const adRows = new Map<
+      string,
+      {
+        reportDate: string;
+        externalAdId: string;
+        externalCampaignId?: string;
+        campaignName?: string;
+        externalAdsetId?: string;
+        adsetName?: string;
+        adName?: string;
+        impressions: string;
+        clicks: string;
+        spend: string;
+        conversions?: string;
+        metadata: Record<string, unknown>;
+      }
+    >();
 
     for (const row of rows) {
       const reportDate = row.segments?.date ?? job.date_from;
@@ -204,45 +278,91 @@ export class MarketingExtractProcessorService {
         continue;
       }
 
-      const performance = await this.performanceRepository.findOne({
-        where: {
-          provider: job.provider,
-          external_account_id: job.external_account_id,
-          external_campaign_id: campaignId,
-          report_date: reportDate,
-        },
-      });
+      const campaignKey = `${campaignId}:${reportDate}`;
+      const campaignAggregate = campaignAggregates.get(campaignKey) ?? {
+        reportDate,
+        externalCampaignId: campaignId,
+        campaignName: row.campaign?.name ?? undefined,
+        impressions: 0n,
+        clicks: 0n,
+        spendMicros: 0n,
+        conversionsScaled: 0n,
+      };
 
-      const entity =
-        performance ??
-        this.performanceRepository.create({
-          provider: job.provider,
-          external_account_id: job.external_account_id,
-          external_campaign_id: campaignId,
-          report_date: reportDate,
-        });
-
-      entity.campaign_name = row.campaign?.name ?? undefined;
-      entity.impressions = String(row.metrics?.impressions ?? '0');
-      entity.clicks = String(row.metrics?.clicks ?? '0');
-      entity.spend = this.microsToDecimalString(row.metrics?.costMicros);
-      entity.conversions =
+      campaignAggregate.campaignName ??= row.campaign?.name ?? undefined;
+      campaignAggregate.impressions += BigInt(row.metrics?.impressions ?? '0');
+      campaignAggregate.clicks += BigInt(row.metrics?.clicks ?? '0');
+      campaignAggregate.spendMicros += BigInt(row.metrics?.costMicros ?? '0');
+      campaignAggregate.conversionsScaled += this.decimalStringToScaledInt(
         row.metrics?.conversions !== undefined
           ? String(row.metrics.conversions)
-          : undefined;
-      entity.metadata = row as unknown as Record<string, unknown>;
+          : undefined,
+      );
+      campaignAggregates.set(campaignKey, campaignAggregate);
+
+      const externalAdId = row.adGroupAd?.ad?.id;
+      if (!externalAdId) {
+        continue;
+      }
+
+      adRows.set(`${externalAdId}:${reportDate}`, {
+        reportDate,
+        externalAdId,
+        externalCampaignId: row.campaign?.id ?? undefined,
+        campaignName: row.campaign?.name ?? undefined,
+        externalAdsetId: row.adGroup?.id ?? undefined,
+        adsetName: row.adGroup?.name ?? undefined,
+        adName: row.adGroupAd?.ad?.name ?? undefined,
+        impressions: String(row.metrics?.impressions ?? '0'),
+        clicks: String(row.metrics?.clicks ?? '0'),
+        spend: this.microsToDecimalString(row.metrics?.costMicros),
+        conversions:
+          row.metrics?.conversions !== undefined
+            ? String(row.metrics.conversions)
+            : undefined,
+        metadata: row as unknown as Record<string, unknown>,
+      });
+    }
+
+    for (const aggregate of campaignAggregates.values()) {
+      const entity = this.performanceRepository.create({
+        provider: job.provider,
+        external_account_id: job.external_account_id,
+        external_campaign_id: aggregate.externalCampaignId,
+        report_date: aggregate.reportDate,
+        campaign_name: aggregate.campaignName,
+        impressions: aggregate.impressions.toString(),
+        clicks: aggregate.clicks.toString(),
+        spend: this.scaledIntToDecimalString(aggregate.spendMicros),
+        conversions: this.scaledIntToOptionalDecimalString(
+          aggregate.conversionsScaled,
+        ),
+      });
 
       await this.performanceRepository.save(entity);
       performanceUpserted += 1;
+    }
 
-      const adDailyPersisted = await this.persistGoogleAdDailyPerformance({
-        job,
-        reportDate,
-        row,
+    for (const adRow of adRows.values()) {
+      const entity = this.adPerformanceRepository.create({
+        provider: job.provider,
+        external_account_id: job.external_account_id,
+        external_ad_id: adRow.externalAdId,
+        report_date: adRow.reportDate,
+        external_campaign_id: adRow.externalCampaignId,
+        campaign_name: adRow.campaignName,
+        external_adset_id: adRow.externalAdsetId,
+        adset_name: adRow.adsetName,
+        ad_name: adRow.adName,
+        impressions: adRow.impressions,
+        clicks: adRow.clicks,
+        spend: adRow.spend,
+        conversions: adRow.conversions,
+        metadata: adRow.metadata,
       });
-      if (adDailyPersisted) {
-        adPerformanceUpserted += 1;
-      }
+
+      await this.adPerformanceRepository.save(entity);
+      adPerformanceUpserted += 1;
     }
 
     return {
@@ -263,9 +383,9 @@ export class MarketingExtractProcessorService {
     );
     url.searchParams.set(
       'fields',
-      'campaign_id,campaign_name,date_start,impressions,clicks,spend,actions',
+      'account_name,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,impressions,clicks,spend,actions',
     );
-    url.searchParams.set('level', 'campaign');
+    url.searchParams.set('level', 'ad');
     url.searchParams.set('time_increment', '1');
     url.searchParams.set(
       'time_range',
@@ -276,6 +396,17 @@ export class MarketingExtractProcessorService {
     const response = await fetch(url);
     if (!response.ok) {
       const body = await response.text();
+      this.logger.error(
+        [
+          '[META_EXTRACT_ERROR]',
+          `jobId=${job.id}`,
+          `account=${job.external_account_id}`,
+          `dateFrom=${job.date_from}`,
+          `dateTo=${job.date_to}`,
+          `url=${url.toString()}`,
+          `body=${body}`,
+        ].join(' '),
+      );
       throw new InternalServerErrorException(
         `Falha ao extrair campanhas Meta Ads: ${body}`,
       );
@@ -283,9 +414,42 @@ export class MarketingExtractProcessorService {
 
     const payload = (await response.json()) as MetaInsightsResponse;
     const rows = payload.data ?? [];
+    this.logProviderPreview('meta_ads', job, rows);
+    await this.deleteExistingConsolidatedRows(job);
+
     let rawInserted = 0;
     let performanceUpserted = 0;
     let adPerformanceUpserted = 0;
+    const campaignAggregates = new Map<
+      string,
+      {
+        reportDate: string;
+        externalCampaignId: string;
+        campaignName?: string;
+        impressions: bigint;
+        clicks: bigint;
+        spendScaled: bigint;
+        conversionsScaled: bigint;
+      }
+    >();
+    const adRows = new Map<
+      string,
+      {
+        reportDate: string;
+        externalAdId: string;
+        accountName?: string;
+        externalCampaignId?: string;
+        campaignName?: string;
+        externalAdsetId?: string;
+        adsetName?: string;
+        adName?: string;
+        impressions: string;
+        clicks: string;
+        spend: string;
+        conversions?: string;
+        metadata: Record<string, unknown>;
+      }
+    >();
 
     for (const row of rows) {
       const reportDate = row.date_start ?? job.date_from;
@@ -304,42 +468,87 @@ export class MarketingExtractProcessorService {
         continue;
       }
 
-      const performance = await this.performanceRepository.findOne({
-        where: {
-          provider: job.provider,
-          external_account_id: job.external_account_id,
-          external_campaign_id: row.campaign_id,
-          report_date: reportDate,
-        },
+      const conversions = this.extractMetaConversions(row.actions);
+      const campaignKey = `${row.campaign_id}:${reportDate}`;
+      const campaignAggregate = campaignAggregates.get(campaignKey) ?? {
+        reportDate,
+        externalCampaignId: row.campaign_id,
+        campaignName: row.campaign_name ?? undefined,
+        impressions: 0n,
+        clicks: 0n,
+        spendScaled: 0n,
+        conversionsScaled: 0n,
+      };
+
+      campaignAggregate.campaignName ??= row.campaign_name ?? undefined;
+      campaignAggregate.impressions += BigInt(row.impressions ?? '0');
+      campaignAggregate.clicks += BigInt(row.clicks ?? '0');
+      campaignAggregate.spendScaled += this.decimalStringToScaledInt(row.spend);
+      campaignAggregate.conversionsScaled +=
+        this.decimalStringToScaledInt(conversions);
+      campaignAggregates.set(campaignKey, campaignAggregate);
+
+      if (!row.ad_id) {
+        continue;
+      }
+
+      adRows.set(`${row.ad_id}:${reportDate}`, {
+        reportDate,
+        externalAdId: row.ad_id,
+        accountName: row.account_name ?? undefined,
+        externalCampaignId: row.campaign_id ?? undefined,
+        campaignName: row.campaign_name ?? undefined,
+        externalAdsetId: row.adset_id ?? undefined,
+        adsetName: row.adset_name ?? undefined,
+        adName: row.ad_name ?? undefined,
+        impressions: String(row.impressions ?? '0'),
+        clicks: String(row.clicks ?? '0'),
+        spend: String(row.spend ?? '0'),
+        conversions,
+        metadata: row as unknown as Record<string, unknown>,
       });
+    }
 
-      const entity =
-        performance ??
-        this.performanceRepository.create({
-          provider: job.provider,
-          external_account_id: job.external_account_id,
-          external_campaign_id: row.campaign_id,
-          report_date: reportDate,
-        });
-
-      entity.campaign_name = row.campaign_name ?? undefined;
-      entity.impressions = String(row.impressions ?? '0');
-      entity.clicks = String(row.clicks ?? '0');
-      entity.spend = String(row.spend ?? '0');
-      entity.conversions = this.extractMetaConversions(row.actions);
-      entity.metadata = row as unknown as Record<string, unknown>;
+    for (const aggregate of campaignAggregates.values()) {
+      const entity = this.performanceRepository.create({
+        provider: job.provider,
+        external_account_id: job.external_account_id,
+        external_campaign_id: aggregate.externalCampaignId,
+        report_date: aggregate.reportDate,
+        campaign_name: aggregate.campaignName,
+        impressions: aggregate.impressions.toString(),
+        clicks: aggregate.clicks.toString(),
+        spend: this.scaledIntToDecimalString(aggregate.spendScaled),
+        conversions: this.scaledIntToOptionalDecimalString(
+          aggregate.conversionsScaled,
+        ),
+      });
 
       await this.performanceRepository.save(entity);
       performanceUpserted += 1;
+    }
 
-      const adDailyPersisted = await this.persistMetaAdDailyPerformance({
-        job,
-        reportDate,
-        row,
+    for (const adRow of adRows.values()) {
+      const entity = this.adPerformanceRepository.create({
+        provider: job.provider,
+        external_account_id: job.external_account_id,
+        account_name: adRow.accountName,
+        external_campaign_id: adRow.externalCampaignId,
+        campaign_name: adRow.campaignName,
+        external_adset_id: adRow.externalAdsetId,
+        adset_name: adRow.adsetName,
+        external_ad_id: adRow.externalAdId,
+        ad_name: adRow.adName,
+        report_date: adRow.reportDate,
+        impressions: adRow.impressions,
+        clicks: adRow.clicks,
+        spend: adRow.spend,
+        conversions: adRow.conversions,
+        metadata: adRow.metadata,
       });
-      if (adDailyPersisted) {
-        adPerformanceUpserted += 1;
-      }
+
+      await this.adPerformanceRepository.save(entity);
+      adPerformanceUpserted += 1;
     }
 
     return {
@@ -350,102 +559,107 @@ export class MarketingExtractProcessorService {
     };
   }
 
-  private async persistMetaAdDailyPerformance(params: {
-    job: MarketingExtractJob;
-    reportDate: string;
-    row: NonNullable<MetaInsightsResponse['data']>[number];
-  }): Promise<boolean> {
-    const { job, reportDate, row } = params;
-    if (!row.ad_id) {
-      return false;
-    }
+  private async deleteExistingConsolidatedRows(job: MarketingExtractJob) {
+    await this.performanceRepository
+      .createQueryBuilder()
+      .delete()
+      .from(MarketingCampaignDailyPerformance)
+      .where('provider = :provider', { provider: job.provider })
+      .andWhere('external_account_id = :accountId', {
+        accountId: job.external_account_id,
+      })
+      .andWhere('report_date BETWEEN :dateFrom AND :dateTo', {
+        dateFrom: job.date_from,
+        dateTo: job.date_to,
+      })
+      .execute();
 
-    const performance = await this.adPerformanceRepository.findOne({
-      where: {
-        provider: job.provider,
-        external_account_id: job.external_account_id,
-        external_ad_id: row.ad_id,
-        report_date: reportDate,
-      },
-    });
-
-    const entity =
-      performance ??
-      this.adPerformanceRepository.create({
-        provider: job.provider,
-        external_account_id: job.external_account_id,
-        external_ad_id: row.ad_id,
-        report_date: reportDate,
-      });
-
-    entity.account_name = row.account_name ?? undefined;
-    entity.external_campaign_id = row.campaign_id ?? undefined;
-    entity.campaign_name = row.campaign_name ?? undefined;
-    entity.external_adset_id = row.adset_id ?? undefined;
-    entity.adset_name = row.adset_name ?? undefined;
-    entity.ad_name = row.ad_name ?? undefined;
-    entity.impressions = String(row.impressions ?? '0');
-    entity.clicks = String(row.clicks ?? '0');
-    entity.spend = String(row.spend ?? '0');
-    entity.conversions = this.extractMetaConversions(row.actions);
-    entity.metadata = row as unknown as Record<string, unknown>;
-
-    await this.adPerformanceRepository.save(entity);
-    return true;
+    await this.adPerformanceRepository
+      .createQueryBuilder()
+      .delete()
+      .from(MarketingAdDailyPerformance)
+      .where('provider = :provider', { provider: job.provider })
+      .andWhere('external_account_id = :accountId', {
+        accountId: job.external_account_id,
+      })
+      .andWhere('report_date BETWEEN :dateFrom AND :dateTo', {
+        dateFrom: job.date_from,
+        dateTo: job.date_to,
+      })
+      .execute();
   }
 
-  private async persistGoogleAdDailyPerformance(params: {
-    job: MarketingExtractJob;
-    reportDate: string;
-    row: NonNullable<GoogleSearchStreamChunk['results']>[number];
-  }): Promise<boolean> {
-    const { job, reportDate, row } = params;
-    const externalAdId = row.adGroupAd?.ad?.id;
-    if (!externalAdId) {
-      return false;
+  private logProviderPreview(
+    provider: 'google_ads' | 'meta_ads',
+    job: MarketingExtractJob,
+    rows: Array<Record<string, unknown>>,
+  ) {
+    const firstRow = rows[0];
+    const preview =
+      firstRow == null
+        ? 'null'
+        : JSON.stringify(firstRow, null, 2).slice(0, 1200);
+
+    const header = [
+      provider === 'google_ads'
+        ? '[GOOGLE_EXTRACT_RESULT]'
+        : '[META_EXTRACT_RESULT]',
+      `jobId=${job.id}`,
+      `account=${job.external_account_id}`,
+      `dateFrom=${job.date_from}`,
+      `dateTo=${job.date_to}`,
+      `providerRows=${rows.length}`,
+    ].join(' ');
+
+    if (rows.length === 0) {
+      this.logger.warn(`${header} preview=null`);
+      return;
     }
 
-    const performance = await this.adPerformanceRepository.findOne({
-      where: {
-        provider: job.provider,
-        external_account_id: job.external_account_id,
-        external_ad_id: externalAdId,
-        report_date: reportDate,
-      },
-    });
-
-    const entity =
-      performance ??
-      this.adPerformanceRepository.create({
-        provider: job.provider,
-        external_account_id: job.external_account_id,
-        external_ad_id: externalAdId,
-        report_date: reportDate,
-      });
-
-    entity.external_campaign_id = row.campaign?.id ?? undefined;
-    entity.campaign_name = row.campaign?.name ?? undefined;
-    entity.external_adset_id = row.adGroup?.id ?? undefined;
-    entity.adset_name = row.adGroup?.name ?? undefined;
-    entity.ad_name = row.adGroupAd?.ad?.name ?? undefined;
-    entity.impressions = String(row.metrics?.impressions ?? '0');
-    entity.clicks = String(row.metrics?.clicks ?? '0');
-    entity.spend = this.microsToDecimalString(row.metrics?.costMicros);
-    entity.conversions =
-      row.metrics?.conversions !== undefined
-        ? String(row.metrics.conversions)
-        : undefined;
-    entity.metadata = row as unknown as Record<string, unknown>;
-
-    await this.adPerformanceRepository.save(entity);
-    return true;
+    this.logger.log(`${header} preview=${preview}`);
   }
 
   private microsToDecimalString(costMicros?: string): string {
     const micros = BigInt(costMicros ?? '0');
-    const whole = micros / 1000000n;
-    const fraction = micros % 1000000n;
+    const whole = micros / this.numericMultiplier;
+    const fraction = micros % this.numericMultiplier;
     return `${whole}.${fraction.toString().padStart(6, '0')}`;
+  }
+
+  private decimalStringToScaledInt(value?: string): bigint {
+    if (!value?.trim()) {
+      return 0n;
+    }
+
+    const normalized = value.trim();
+    const negative = normalized.startsWith('-');
+    const unsigned = negative ? normalized.slice(1) : normalized;
+    const [wholePart, fractionPart = ''] = unsigned.split('.');
+    const safeWhole = wholePart || '0';
+    const safeFraction = fractionPart.padEnd(Number(this.numericScale), '0');
+    const scaledFraction = safeFraction.slice(0, Number(this.numericScale));
+    const scaled =
+      BigInt(safeWhole) * this.numericMultiplier + BigInt(scaledFraction || '0');
+
+    return negative ? -scaled : scaled;
+  }
+
+  private scaledIntToDecimalString(value: bigint): string {
+    const negative = value < 0;
+    const absolute = negative ? -value : value;
+    const whole = absolute / this.numericMultiplier;
+    const fraction = absolute % this.numericMultiplier;
+    const prefix = negative ? '-' : '';
+
+    return `${prefix}${whole}.${fraction.toString().padStart(Number(this.numericScale), '0')}`;
+  }
+
+  private scaledIntToOptionalDecimalString(value: bigint): string | undefined {
+    if (value === 0n) {
+      return undefined;
+    }
+
+    return this.scaledIntToDecimalString(value);
   }
 
   private extractMetaConversions(

@@ -482,7 +482,13 @@ export class OauthController {
           <button id="syncAccountsBtn" class="ghost" type="button">Sincronizar contas desta conexao</button>
           <button id="refreshSyncedBtn" class="ghost" type="button">Atualizar contas sincronizadas</button>
           <button id="createJobsBtn" class="ghost" type="button">Criar jobs de yesterday</button>
+          <input id="manualDateFromInput" type="date" style="border:1px solid var(--line); border-radius:999px; padding:12px 18px; font:inherit; background:rgba(255,255,255,0.9);" />
+          <input id="manualDateToInput" type="date" style="border:1px solid var(--line); border-radius:999px; padding:12px 18px; font:inherit; background:rgba(255,255,255,0.9);" />
+          <button id="createManualJobBtn" class="ghost" type="button">Criar job manual</button>
           <button id="listJobsBtn" class="ghost" type="button">Atualizar jobs</button>
+        </div>
+        <div class="foot">
+          O job manual usa as contas sincronizadas marcadas para extracao e permite buscar um intervalo historico customizado.
         </div>
         <div id="syncedAccounts" class="list" style="margin-top: 18px;">
           <div class="sub">As contas sincronizadas aparecerao aqui apos a primeira sincronizacao manual.</div>
@@ -534,6 +540,9 @@ export class OauthController {
       const syncAccountsBtn = document.getElementById('syncAccountsBtn');
       const refreshSyncedBtn = document.getElementById('refreshSyncedBtn');
       const createJobsBtn = document.getElementById('createJobsBtn');
+      const manualDateFromInput = document.getElementById('manualDateFromInput');
+      const manualDateToInput = document.getElementById('manualDateToInput');
+      const createManualJobBtn = document.getElementById('createManualJobBtn');
       const listJobsBtn = document.getElementById('listJobsBtn');
       const syncedAccountsEl = document.getElementById('syncedAccounts');
       const jobsEl = document.getElementById('jobs');
@@ -561,7 +570,28 @@ export class OauthController {
         syncAccountsBtn.disabled = isBusy;
         refreshSyncedBtn.disabled = isBusy;
         createJobsBtn.disabled = isBusy;
+        createManualJobBtn.disabled = isBusy;
+        manualDateFromInput.disabled = isBusy;
+        manualDateToInput.disabled = isBusy;
         listJobsBtn.disabled = isBusy;
+      }
+
+      function formatInputDate(date) {
+        return date.toISOString().slice(0, 10);
+      }
+
+      function seedManualDateInputs() {
+        if (manualDateFromInput.value && manualDateToInput.value) {
+          return;
+        }
+
+        const dateTo = new Date();
+        dateTo.setDate(dateTo.getDate() - 1);
+        const dateFrom = new Date(dateTo);
+        dateFrom.setDate(dateFrom.getDate() - 29);
+
+        manualDateFromInput.value = formatInputDate(dateFrom);
+        manualDateToInput.value = formatInputDate(dateTo);
       }
 
       function providerLabel(provider) {
@@ -1041,6 +1071,45 @@ export class OauthController {
         }
       });
 
+      createManualJobBtn.addEventListener('click', async () => {
+        try {
+          if (!manualDateFromInput.value || !manualDateToInput.value) {
+            throw new Error('Preencha dateFrom e dateTo para criar o job manual.');
+          }
+          setBusy(true);
+          const response = await fetch('/marketing-sync/jobs/manual', {
+            method: 'POST',
+            headers: getInternalHeaders(),
+            body: JSON.stringify({
+              provider: activeProvider,
+              dateFrom: manualDateFromInput.value,
+              dateTo: manualDateToInput.value,
+              enqueue: true,
+            }),
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.message || 'Falha ao criar job manual.');
+          }
+          setStatus(
+            'Job manual criado para ' +
+              providerLabel(activeProvider) +
+              ' de ' +
+              manualDateFromInput.value +
+              ' ate ' +
+              manualDateToInput.value +
+              '.',
+          );
+          await loadJobs();
+          await loadRawData();
+          await loadPerformanceData();
+        } catch (error) {
+          setStatus(error.message || 'Erro ao criar job manual.', true);
+        } finally {
+          setBusy(false);
+        }
+      });
+
       listJobsBtn.addEventListener('click', async () => {
         try {
           setBusy(true);
@@ -1067,6 +1136,7 @@ export class OauthController {
       (async () => {
         try {
           updateProviderUI();
+          seedManualDateInputs();
           setBusy(true);
           if (query.get('connectionId')) {
             setStatus('Callback concluido. Carregando conexao...');
