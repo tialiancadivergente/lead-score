@@ -1,0 +1,1087 @@
+{
+  "info": {
+    "_postman_id": "5f516b9a-2ed2-4c46-8c5a-2df7d7b2e001",
+    "name": "Dashboard de Lancamentos",
+    "description": "Collection operacional do fluxo de marketing sync e dos endpoints read-only do Dashboard de Lancamentos.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "BASE_URL",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "INTERNAL_API_KEY",
+      "value": "change-me"
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "frontendRedirectUrl",
+      "value": ""
+    },
+    {
+      "key": "provider",
+      "value": "meta_ads"
+    },
+    {
+      "key": "connectionId",
+      "value": ""
+    },
+    {
+      "key": "customerId",
+      "value": ""
+    },
+    {
+      "key": "customerName",
+      "value": ""
+    },
+    {
+      "key": "metaAccountId",
+      "value": ""
+    },
+    {
+      "key": "metaAccountName",
+      "value": ""
+    },
+    {
+      "key": "accountId",
+      "value": ""
+    },
+    {
+      "key": "jobId",
+      "value": ""
+    },
+    {
+      "key": "externalAccountId",
+      "value": ""
+    },
+    {
+      "key": "externalCampaignId",
+      "value": ""
+    },
+    {
+      "key": "externalAdsetId",
+      "value": ""
+    },
+    {
+      "key": "externalAdId",
+      "value": ""
+    },
+    {
+      "key": "reportDate",
+      "value": "2026-04-16"
+    },
+    {
+      "key": "dateFrom",
+      "value": "2026-04-01"
+    },
+    {
+      "key": "dateTo",
+      "value": "2026-04-16"
+    },
+    {
+      "key": "launchId",
+      "value": ""
+    },
+    {
+      "key": "seasonId",
+      "value": ""
+    },
+    {
+      "key": "selected",
+      "value": "true"
+    },
+    {
+      "key": "limit",
+      "value": "50"
+    },
+    {
+      "key": "page",
+      "value": "1"
+    },
+    {
+      "key": "pageSize",
+      "value": "25"
+    },
+    {
+      "key": "sortBy",
+      "value": "spend"
+    },
+    {
+      "key": "sortOrder",
+      "value": "desc"
+    },
+    {
+      "key": "syncKey",
+      "value": "marketing_extract"
+    },
+    {
+      "key": "scheduleIntervalMinutes",
+      "value": "60"
+    }
+  ],
+  "item": [
+    {
+      "name": "Step 1 - OAuth e Conexoes",
+      "item": [
+        {
+          "name": "Google Ads OAuth Test Page",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{BASE_URL}}/oauth/google-ads/page",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "oauth",
+                "google-ads",
+                "page"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Google Ads Authorize",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{BASE_URL}}/oauth/google-ads/authorize?userId={{userId}}&frontendRedirectUrl={{frontendRedirectUrl}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "oauth",
+                "google-ads",
+                "authorize"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "{{userId}}"
+                },
+                {
+                  "key": "frontendRedirectUrl",
+                  "value": "{{frontendRedirectUrl}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Meta Ads Authorize",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{BASE_URL}}/oauth/meta/authorize?userId={{userId}}&frontendRedirectUrl={{frontendRedirectUrl}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "oauth",
+                "meta",
+                "authorize"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "{{userId}}"
+                },
+                {
+                  "key": "frontendRedirectUrl",
+                  "value": "{{frontendRedirectUrl}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List OAuth Connections",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{BASE_URL}}/oauth/connections?provider={{provider}}&userId={{userId}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "oauth",
+                "connections"
+              ],
+              "query": [
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                },
+                {
+                  "key": "userId",
+                  "value": "{{userId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Google Ads Accounts By Connection",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{BASE_URL}}/oauth/google-ads/connections/{{connectionId}}/accounts",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "oauth",
+                "google-ads",
+                "connections",
+                "{{connectionId}}",
+                "accounts"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Meta Ads Accounts By Connection",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{BASE_URL}}/oauth/meta/connections/{{connectionId}}/accounts",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "oauth",
+                "meta",
+                "connections",
+                "{{connectionId}}",
+                "accounts"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Select Google Ads Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"customerName\": \"{{customerName}}\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/oauth/google-ads/connections/{{connectionId}}/select-account",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "oauth",
+                "google-ads",
+                "connections",
+                "{{connectionId}}",
+                "select-account"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Select Meta Ads Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"{{metaAccountId}}\",\n  \"accountName\": \"{{metaAccountName}}\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/oauth/meta/connections/{{connectionId}}/select-account",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "oauth",
+                "meta",
+                "connections",
+                "{{connectionId}}",
+                "select-account"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Google Ads Callback (manual/reference)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{BASE_URL}}/oauth/google-ads/callback?code=CODE_FROM_PROVIDER&state=STATE_FROM_AUTHORIZE",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "oauth",
+                "google-ads",
+                "callback"
+              ],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "CODE_FROM_PROVIDER"
+                },
+                {
+                  "key": "state",
+                  "value": "STATE_FROM_AUTHORIZE"
+                }
+              ]
+            },
+            "description": "Endpoint normalmente chamado pelo provider via browser redirect. Mantido aqui como referencia/manual test."
+          }
+        },
+        {
+          "name": "Meta Ads Callback (manual/reference)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{BASE_URL}}/oauth/meta/callback?code=CODE_FROM_PROVIDER&state=STATE_FROM_AUTHORIZE",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "oauth",
+                "meta",
+                "callback"
+              ],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "CODE_FROM_PROVIDER"
+                },
+                {
+                  "key": "state",
+                  "value": "STATE_FROM_AUTHORIZE"
+                }
+              ]
+            },
+            "description": "Endpoint normalmente chamado pelo provider via browser redirect. Mantido aqui como referencia/manual test."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Step 2 - Marketing Sync",
+      "item": [
+        {
+          "name": "List Sync Configurations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-sync/configurations?syncKey={{syncKey}}&provider={{provider}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-sync",
+                "configurations"
+              ],
+              "query": [
+                {
+                  "key": "syncKey",
+                  "value": "{{syncKey}}"
+                },
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Upsert Sync Configuration (Global)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"syncKey\": \"{{syncKey}}\",\n  \"enabled\": true,\n  \"scheduleEnabled\": true,\n  \"scheduleIntervalMinutes\": {{scheduleIntervalMinutes}},\n  \"config\": {},\n  \"metadata\": {\n    \"managedBy\": \"postman\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-sync/configurations",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-sync",
+                "configurations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Upsert Sync Configuration (Meta Only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"syncKey\": \"{{syncKey}}\",\n  \"enabled\": true,\n  \"scheduleEnabled\": true,\n  \"scheduleIntervalMinutes\": {{scheduleIntervalMinutes}},\n  \"config\": {\n    \"provider\": \"meta_ads\"\n  },\n  \"metadata\": {\n    \"managedBy\": \"postman\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-sync/configurations",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-sync",
+                "configurations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Disable Scheduler Configuration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"syncKey\": \"{{syncKey}}\",\n  \"enabled\": true,\n  \"scheduleEnabled\": false,\n  \"scheduleIntervalMinutes\": {{scheduleIntervalMinutes}},\n  \"config\": {},\n  \"metadata\": {\n    \"managedBy\": \"postman\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-sync/configurations",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-sync",
+                "configurations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Refresh Accounts",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-sync/accounts/refresh?provider={{provider}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-sync",
+                "accounts",
+                "refresh"
+              ],
+              "query": [
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Refresh Accounts For Connection",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-sync/connections/{{connectionId}}/accounts/refresh",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-sync",
+                "connections",
+                "{{connectionId}}",
+                "accounts",
+                "refresh"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Accounts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-sync/accounts?provider={{provider}}&connectionId={{connectionId}}&selected={{selected}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-sync",
+                "accounts"
+              ],
+              "query": [
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                },
+                {
+                  "key": "connectionId",
+                  "value": "{{connectionId}}"
+                },
+                {
+                  "key": "selected",
+                  "value": "{{selected}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Set Account Selection",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"selected\": true\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-sync/accounts/{{accountId}}/selection",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-sync",
+                "accounts",
+                "{{accountId}}",
+                "selection"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Daily Jobs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"{{provider}}\",\n  \"includeToday\": true,\n  \"enqueue\": true\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-sync/jobs/daily",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-sync",
+                "jobs",
+                "daily"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Jobs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-sync/jobs?provider={{provider}}&accountId={{externalAccountId}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-sync",
+                "jobs"
+              ],
+              "query": [
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                },
+                {
+                  "key": "accountId",
+                  "value": "{{externalAccountId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Raw",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-sync/raw?provider={{provider}}&accountId={{externalAccountId}}&jobId={{jobId}}&reportDate={{reportDate}}&limit={{limit}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-sync",
+                "raw"
+              ],
+              "query": [
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                },
+                {
+                  "key": "accountId",
+                  "value": "{{externalAccountId}}"
+                },
+                {
+                  "key": "jobId",
+                  "value": "{{jobId}}"
+                },
+                {
+                  "key": "reportDate",
+                  "value": "{{reportDate}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "{{limit}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Legacy Performance",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-sync/performance?provider={{provider}}&accountId={{externalAccountId}}&reportDate={{reportDate}}&limit={{limit}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-sync",
+                "performance"
+              ],
+              "query": [
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                },
+                {
+                  "key": "accountId",
+                  "value": "{{externalAccountId}}"
+                },
+                {
+                  "key": "reportDate",
+                  "value": "{{reportDate}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "{{limit}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Enqueue Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-sync/jobs/{{jobId}}/enqueue",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-sync",
+                "jobs",
+                "{{jobId}}",
+                "enqueue"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Process Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-sync/jobs/{{jobId}}/process",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-sync",
+                "jobs",
+                "{{jobId}}",
+                "process"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Step 3 - Marketing Dashboard",
+      "item": [
+        {
+          "name": "Filters",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-dashboard/filters?provider={{provider}}&externalAccountId={{externalAccountId}}&externalCampaignId={{externalCampaignId}}&externalAdsetId={{externalAdsetId}}&externalAdId={{externalAdId}}&dateFrom={{dateFrom}}&dateTo={{dateTo}}&launchId={{launchId}}&seasonId={{seasonId}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-dashboard",
+                "filters"
+              ],
+              "query": [
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                },
+                {
+                  "key": "externalAccountId",
+                  "value": "{{externalAccountId}}"
+                },
+                {
+                  "key": "externalCampaignId",
+                  "value": "{{externalCampaignId}}"
+                },
+                {
+                  "key": "externalAdsetId",
+                  "value": "{{externalAdsetId}}"
+                },
+                {
+                  "key": "externalAdId",
+                  "value": "{{externalAdId}}"
+                },
+                {
+                  "key": "dateFrom",
+                  "value": "{{dateFrom}}"
+                },
+                {
+                  "key": "dateTo",
+                  "value": "{{dateTo}}"
+                },
+                {
+                  "key": "launchId",
+                  "value": "{{launchId}}"
+                },
+                {
+                  "key": "seasonId",
+                  "value": "{{seasonId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-dashboard/summary?provider={{provider}}&externalAccountId={{externalAccountId}}&externalCampaignId={{externalCampaignId}}&externalAdsetId={{externalAdsetId}}&externalAdId={{externalAdId}}&dateFrom={{dateFrom}}&dateTo={{dateTo}}&launchId={{launchId}}&seasonId={{seasonId}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-dashboard",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                },
+                {
+                  "key": "externalAccountId",
+                  "value": "{{externalAccountId}}"
+                },
+                {
+                  "key": "externalCampaignId",
+                  "value": "{{externalCampaignId}}"
+                },
+                {
+                  "key": "externalAdsetId",
+                  "value": "{{externalAdsetId}}"
+                },
+                {
+                  "key": "externalAdId",
+                  "value": "{{externalAdId}}"
+                },
+                {
+                  "key": "dateFrom",
+                  "value": "{{dateFrom}}"
+                },
+                {
+                  "key": "dateTo",
+                  "value": "{{dateTo}}"
+                },
+                {
+                  "key": "launchId",
+                  "value": "{{launchId}}"
+                },
+                {
+                  "key": "seasonId",
+                  "value": "{{seasonId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Timeseries",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-dashboard/timeseries?provider={{provider}}&externalAccountId={{externalAccountId}}&externalCampaignId={{externalCampaignId}}&externalAdsetId={{externalAdsetId}}&externalAdId={{externalAdId}}&dateFrom={{dateFrom}}&dateTo={{dateTo}}&launchId={{launchId}}&seasonId={{seasonId}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-dashboard",
+                "timeseries"
+              ],
+              "query": [
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                },
+                {
+                  "key": "externalAccountId",
+                  "value": "{{externalAccountId}}"
+                },
+                {
+                  "key": "externalCampaignId",
+                  "value": "{{externalCampaignId}}"
+                },
+                {
+                  "key": "externalAdsetId",
+                  "value": "{{externalAdsetId}}"
+                },
+                {
+                  "key": "externalAdId",
+                  "value": "{{externalAdId}}"
+                },
+                {
+                  "key": "dateFrom",
+                  "value": "{{dateFrom}}"
+                },
+                {
+                  "key": "dateTo",
+                  "value": "{{dateTo}}"
+                },
+                {
+                  "key": "launchId",
+                  "value": "{{launchId}}"
+                },
+                {
+                  "key": "seasonId",
+                  "value": "{{seasonId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Table",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{INTERNAL_API_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/marketing-dashboard/table?provider={{provider}}&externalAccountId={{externalAccountId}}&externalCampaignId={{externalCampaignId}}&externalAdsetId={{externalAdsetId}}&externalAdId={{externalAdId}}&dateFrom={{dateFrom}}&dateTo={{dateTo}}&launchId={{launchId}}&seasonId={{seasonId}}&page={{page}}&pageSize={{pageSize}}&sortBy={{sortBy}}&sortOrder={{sortOrder}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "marketing-dashboard",
+                "table"
+              ],
+              "query": [
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                },
+                {
+                  "key": "externalAccountId",
+                  "value": "{{externalAccountId}}"
+                },
+                {
+                  "key": "externalCampaignId",
+                  "value": "{{externalCampaignId}}"
+                },
+                {
+                  "key": "externalAdsetId",
+                  "value": "{{externalAdsetId}}"
+                },
+                {
+                  "key": "externalAdId",
+                  "value": "{{externalAdId}}"
+                },
+                {
+                  "key": "dateFrom",
+                  "value": "{{dateFrom}}"
+                },
+                {
+                  "key": "dateTo",
+                  "value": "{{dateTo}}"
+                },
+                {
+                  "key": "launchId",
+                  "value": "{{launchId}}"
+                },
+                {
+                  "key": "seasonId",
+                  "value": "{{seasonId}}"
+                },
+                {
+                  "key": "page",
+                  "value": "{{page}}"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "{{pageSize}}"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "{{sortBy}}"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "{{sortOrder}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

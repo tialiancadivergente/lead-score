@@ -7,27 +7,48 @@ export class SeedFormOResgateDosOtimistas1770000000008
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
+      WITH target AS (
+        SELECT
+          l.id AS launch_id,
+          s.id AS season_id
+        FROM "launch" l
+        INNER JOIN "season" s ON s."launch_id" = l."id"
+        WHERE LOWER(l."name") = 'oro'
+          AND LOWER(s."name") = 'nov25'
+      )
       INSERT INTO "form" ("name", "launch_id", "season_id")
       SELECT
         'O Resgate dos Otimistas',
-        '4c88a392-6e6f-417e-822a-5be7221900fd'::uuid,
-        '1a946392-06fa-4e35-ab62-dfbee8cd56d1'::uuid
+        t.launch_id,
+        t.season_id
+      FROM target t
       WHERE NOT EXISTS (
         SELECT 1
         FROM "form" f
+        CROSS JOIN target t
         WHERE LOWER(f."name") = LOWER('O Resgate dos Otimistas')
-          AND f."launch_id" = '4c88a392-6e6f-417e-822a-5be7221900fd'::uuid
-          AND f."season_id" = '1a946392-06fa-4e35-ab62-dfbee8cd56d1'::uuid
+          AND f."launch_id" = t.launch_id
+          AND f."season_id" = t.season_id
       )
     `);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
+      WITH target AS (
+        SELECT
+          l.id AS launch_id,
+          s.id AS season_id
+        FROM "launch" l
+        INNER JOIN "season" s ON s."launch_id" = l."id"
+        WHERE LOWER(l."name") = 'oro'
+          AND LOWER(s."name") = 'nov25'
+      )
       DELETE FROM "form" f
+      USING target t
       WHERE LOWER(f."name") = LOWER('O Resgate dos Otimistas')
-        AND f."launch_id" = '4c88a392-6e6f-417e-822a-5be7221900fd'::uuid
-        AND f."season_id" = '1a946392-06fa-4e35-ab62-dfbee8cd56d1'::uuid
+        AND f."launch_id" = t.launch_id
+        AND f."season_id" = t.season_id
         AND NOT EXISTS (
           SELECT 1
           FROM "form_version" fv

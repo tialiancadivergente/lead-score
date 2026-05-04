@@ -7,31 +7,61 @@ export class SeedFormVersionOResgateDosOtimistas1770000000009
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
+      WITH target_form AS (
+        SELECT f."id" AS form_id
+        FROM "form" f
+        INNER JOIN "launch" l ON l."id" = f."launch_id"
+        INNER JOIN "season" s ON s."id" = f."season_id"
+        WHERE LOWER(f."name") = LOWER('O Resgate dos Otimistas')
+          AND LOWER(l."name") = 'oro'
+          AND LOWER(s."name") = 'nov25'
+      )
       INSERT INTO "form_version" ("form_id", "version_number", "active")
       SELECT
-        '7405904f-64b9-4b2e-a067-a5fa246e1d55'::uuid,
+        tf.form_id,
         1,
         true
+      FROM target_form tf
       WHERE NOT EXISTS (
         SELECT 1
         FROM "form_version" fv
-        WHERE fv."form_id" = '7405904f-64b9-4b2e-a067-a5fa246e1d55'::uuid
+        CROSS JOIN target_form tf
+        WHERE fv."form_id" = tf.form_id
           AND fv."version_number" = 1
       )
     `);
 
     await queryRunner.query(`
+      WITH target_form AS (
+        SELECT f."id" AS form_id
+        FROM "form" f
+        INNER JOIN "launch" l ON l."id" = f."launch_id"
+        INNER JOIN "season" s ON s."id" = f."season_id"
+        WHERE LOWER(f."name") = LOWER('O Resgate dos Otimistas')
+          AND LOWER(l."name") = 'oro'
+          AND LOWER(s."name") = 'nov25'
+      )
       UPDATE "form_version"
       SET "active" = true
-      WHERE "form_id" = '7405904f-64b9-4b2e-a067-a5fa246e1d55'::uuid
+      WHERE "form_id" = (SELECT form_id FROM target_form)
         AND "version_number" = 1
     `);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
+      WITH target_form AS (
+        SELECT f."id" AS form_id
+        FROM "form" f
+        INNER JOIN "launch" l ON l."id" = f."launch_id"
+        INNER JOIN "season" s ON s."id" = f."season_id"
+        WHERE LOWER(f."name") = LOWER('O Resgate dos Otimistas')
+          AND LOWER(l."name") = 'oro'
+          AND LOWER(s."name") = 'nov25'
+      )
       DELETE FROM "form_version" fv
-      WHERE fv."form_id" = '7405904f-64b9-4b2e-a067-a5fa246e1d55'::uuid
+      USING target_form tf
+      WHERE fv."form_id" = tf.form_id
         AND fv."version_number" = 1
         AND NOT EXISTS (
           SELECT 1

@@ -29,6 +29,14 @@ import { LeadscoreTierRule } from './leadscore/leadscore-tier-rule.entity';
 import { Invite } from './system/invite.entity';
 import { PasswordReset } from './system/password-reset.entity';
 import { User } from './system/user.entity';
+import { OAuthConnection } from './integrations/oauth-connection.entity';
+import { OAuthState } from './integrations/oauth-state.entity';
+import { MarketingConnectionAccount } from './marketing-sync/marketing-connection-account.entity';
+import { MarketingAdDailyPerformance } from './marketing-sync/marketing-ad-daily-performance.entity';
+import { MarketingExtractJob } from './marketing-sync/marketing-extract-job.entity';
+import { MarketingExtractRaw } from './marketing-sync/marketing-extract-raw.entity';
+import { MarketingCampaignDailyPerformance } from './marketing-sync/marketing-campaign-daily-performance.entity';
+import { MarketingSyncConfiguration } from './marketing-sync/marketing-sync-configuration.entity';
 import { VotingCampaign } from './voting/voting-campaign.entity';
 import { VotingCategory } from './voting/voting-category.entity';
 import { VotingCandidate } from './voting/voting-candidate.entity';
@@ -69,6 +77,15 @@ export const ENTITIES = [
   AdAccount,
   Campaign,
   CampaignDailyPerformance,
+
+  OAuthConnection,
+  OAuthState,
+  MarketingConnectionAccount,
+  MarketingAdDailyPerformance,
+  MarketingExtractJob,
+  MarketingExtractRaw,
+  MarketingCampaignDailyPerformance,
+  MarketingSyncConfiguration,
 
   User,
   PasswordReset,
