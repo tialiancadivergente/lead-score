@@ -127,8 +127,35 @@ echo -e "${GREEN}✓ ConfigMap applied${NC}"
 
 # Verificar se secrets existem
 echo -e "${YELLOW}Checking secrets...${NC}"
-if ! kubectl get secret lead-score-secrets -n lead-score &> /dev/null; then
+REQUIRED_SECRET_KEYS=(
+    "DB_USER"
+    "DB_PASSWORD"
+    "SERVICE_BUS_CONNECTION_STRING"
+    "ACTIVECAMPAIGN_API_TOKEN"
+    "INTERNAL_API_KEY"
+    "GOOGLE_ADS_CLIENT_ID"
+    "GOOGLE_ADS_CLIENT_SECRET"
+    "GOOGLE_ADS_DEVELOPER_TOKEN"
+    "META_APP_ID"
+    "META_APP_SECRET"
+    "META_CONFIG_ID"
+)
+
+SECRET_NEEDS_UPDATE=false
+if kubectl get secret lead-score-secrets -n lead-score &> /dev/null; then
+    for key in "${REQUIRED_SECRET_KEYS[@]}"; do
+        if [ -z "$(kubectl get secret lead-score-secrets -n lead-score -o jsonpath="{.data.${key}}" 2>/dev/null)" ]; then
+            echo -e "${YELLOW}Warning: Secret key ${key} not found.${NC}"
+            SECRET_NEEDS_UPDATE=true
+        fi
+    done
+fi
+
+if ! kubectl get secret lead-score-secrets -n lead-score &> /dev/null || [ "$SECRET_NEEDS_UPDATE" = true ]; then
     echo -e "${YELLOW}Warning: Secrets not found.${NC}"
+    if [ "$SECRET_NEEDS_UPDATE" = true ]; then
+        echo -e "${YELLOW}Warning: Secrets exist but need missing OAuth keys.${NC}"
+    fi
     echo ""
     read -p "Create secrets from .env file? (y/n) " -n 1 -r
     echo
