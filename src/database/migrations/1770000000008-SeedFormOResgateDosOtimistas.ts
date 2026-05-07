@@ -16,8 +16,9 @@ export class SeedFormOResgateDosOtimistas1770000000008
         WHERE LOWER(l."name") = 'oro'
           AND LOWER(s."name") = 'nov25'
       )
-      INSERT INTO "form" ("name", "launch_id", "season_id")
+      INSERT INTO "form" ("id", "name", "launch_id", "season_id")
       SELECT
+        '7405904f-64b9-4b2e-a067-a5fa246e1d55'::uuid,
         'O Resgate dos Otimistas',
         t.launch_id,
         t.season_id

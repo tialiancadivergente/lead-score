@@ -16,8 +16,9 @@ export class SeedFormVersionOResgateDosOtimistas1770000000009
           AND LOWER(l."name") = 'oro'
           AND LOWER(s."name") = 'nov25'
       )
-      INSERT INTO "form_version" ("form_id", "version_number", "active")
+      INSERT INTO "form_version" ("id", "form_id", "version_number", "active")
       SELECT
+        '2f76bc57-57a2-41fd-9c2c-18a726dd4fe0'::uuid,
         tf.form_id,
         1,
         true

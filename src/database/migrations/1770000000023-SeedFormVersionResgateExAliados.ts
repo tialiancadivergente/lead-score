@@ -5,13 +5,15 @@ export class SeedFormVersionResgateExAliados1770000000023
 {
   name = 'SeedFormVersionResgateExAliados1770000000023';
 
+  private readonly formVersionId = 'a9e5538c-ee07-41e4-95a0-862e89adf186';
   private readonly formId = 'd588a7fc-3110-4fe5-87f2-fc5fbf74b321';
   private readonly versionNumber = 1;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      INSERT INTO "form_version" ("form_id", "version_number", "active")
+      INSERT INTO "form_version" ("id", "form_id", "version_number", "active")
       SELECT
+        '${this.formVersionId}'::uuid,
         '${this.formId}'::uuid,
         ${this.versionNumber},
         true

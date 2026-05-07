@@ -10,8 +10,9 @@ export class SeedFormVersionLdiLevanteDosImprovaveis1770000000032
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      INSERT INTO "form_version" ("form_id", "version_number", "active")
+      INSERT INTO "form_version" ("id", "form_id", "version_number", "active")
       SELECT
+        '2228a3ba-b79e-41b0-90a0-47cac5816209'::uuid,
         '${this.formId}'::uuid,
         ${this.versionNumber},
         true
