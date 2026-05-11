@@ -1,23 +1,12 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { HotmartService } from './hotmart.service';
 
-// Para habilitar: HOTMART_SCHEDULER_ENABLED=true no .env
-const SCHEDULER_ENABLED =
-  process.env.HOTMART_SCHEDULER_ENABLED === 'true';
-const SCHEDULER_INTERVAL_MINUTES = parseInt(
-  process.env.HOTMART_SCHEDULER_INTERVAL_MINUTES ?? '60',
-  10,
-);
+const SCHEDULER_ENABLED = process.env.HOTMART_SCHEDULER_ENABLED !== 'false';
+const SCHEDULED_HOURS = [9, 15, 21];
+const LOOKBACK_DAYS = 7;
 
 @Injectable()
-export class HotmartSchedulerService
-  implements OnModuleInit, OnModuleDestroy
-{
+export class HotmartSchedulerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(HotmartSchedulerService.name);
   private timeoutRef?: NodeJS.Timeout;
   private isRunning = false;
@@ -26,62 +15,65 @@ export class HotmartSchedulerService
 
   onModuleInit() {
     if (!SCHEDULER_ENABLED) {
-      this.logger.log(
-        'Scheduler Hotmart desabilitado (HOTMART_SCHEDULER_ENABLED != true).',
-      );
+      this.logger.log('Scheduler Hotmart desabilitado (HOTMART_SCHEDULER_ENABLED != true)');
       return;
     }
-    this.logger.log(
-      `Scheduler Hotmart habilitado. Intervalo: ${SCHEDULER_INTERVAL_MINUTES} minuto(s).`,
-    );
-    this.scheduleNextTick();
+    this.logger.log(`Scheduler Hotmart habilitado. Horários: ${SCHEDULED_HOURS.map(h => `${h}h`).join(', ')}`);
+    this.scheduleNext();
   }
 
   onModuleDestroy() {
     if (this.timeoutRef) clearTimeout(this.timeoutRef);
   }
 
-  private async runScheduledTick() {
-    if (!SCHEDULER_ENABLED) return;
+  private scheduleNext() {
+    if (this.timeoutRef) clearTimeout(this.timeoutRef);
+    const next = this.getNextFireTime();
+    const msUntilNext = next.getTime() - Date.now();
+    this.logger.log(`Próxima execução agendada: ${next.toLocaleString('pt-BR')}`);
+    this.timeoutRef = setTimeout(() => void this.run(), msUntilNext);
+  }
 
+  private async run() {
     if (this.isRunning) {
-      this.logger.warn(
-        'Execução anterior do scheduler Hotmart ainda em andamento. Tick ignorado.',
-      );
-      return this.scheduleNextTick();
+      this.logger.warn('Execução anterior ainda em andamento, tick ignorado');
+      this.scheduleNext();
+      return;
     }
 
     this.isRunning = true;
     try {
-      // Sync das últimas 24h
       const now = new Date();
-      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const startDate = new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split('T')[0];
       const endDate = now.toISOString().split('T')[0];
-      const startDate = yesterday.toISOString().split('T')[0];
 
-      const result = await this.hotmartService.syncHistory({
-        startDate,
-        endDate,
-      });
-      this.logger.log(
-        `Scheduler Hotmart executado. synced=${result.synced} skipped=${result.skipped}`,
-      );
-    } catch (error) {
-      this.logger.error(
-        'Falha no scheduler Hotmart.',
-        error instanceof Error ? error.stack : undefined,
-      );
+      this.logger.log(`Executando sync Hotmart: ${startDate} → ${endDate} (últimos ${LOOKBACK_DAYS} dias)`);
+
+      const result = await this.hotmartService.syncHistory({ startDate, endDate });
+      this.logger.log(`Sync concluído: synced=${result.synced} skipped=${result.skipped}`);
+    } catch (err) {
+      this.logger.error('Falha no scheduler Hotmart', err instanceof Error ? err.stack : undefined);
     } finally {
       this.isRunning = false;
-      this.scheduleNextTick();
+      this.scheduleNext();
     }
   }
 
-  private scheduleNextTick() {
-    if (this.timeoutRef) clearTimeout(this.timeoutRef);
-    this.timeoutRef = setTimeout(
-      () => void this.runScheduledTick(),
-      SCHEDULER_INTERVAL_MINUTES * 60 * 1000,
-    );
+  private getNextFireTime(): Date {
+    const now = new Date();
+
+    for (const hour of SCHEDULED_HOURS) {
+      const candidate = new Date(now);
+      candidate.setHours(hour, 0, 0, 0);
+      if (candidate > now) return candidate;
+    }
+
+    // Todos os horários de hoje já passaram — próximo é 09h de amanhã
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(SCHEDULED_HOURS[0], 0, 0, 0);
+    return tomorrow;
   }
 }

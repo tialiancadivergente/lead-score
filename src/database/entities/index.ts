@@ -43,6 +43,7 @@ import { VotingCandidate } from './voting/voting-candidate.entity';
 import { VotingVoter } from './voting/voting-voter.entity';
 import { VotingVote } from './voting/voting-vote.entity';
 import { HotmartSaleRaw } from './hotmart/hotmart-sale-raw.entity';
+import { HotmartSale } from './hotmart/hotmart-sale.entity';
 
 export const ENTITIES = [
   Person,
@@ -99,4 +100,5 @@ export const ENTITIES = [
   VotingVote,
 
   HotmartSaleRaw,
+  HotmartSale,
 ];
