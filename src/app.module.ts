@@ -15,6 +15,7 @@ import { FormModule } from './form/form.module';
 import { OauthModule } from './oauth/oauth.module';
 import { MarketingDashboardModule } from './marketing-dashboard/marketing-dashboard.module';
 import { MarketingSyncModule } from './marketing-sync/marketing-sync.module';
+import { HotmartModule } from './hotmart/hotmart.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { MarketingSyncModule } from './marketing-sync/marketing-sync.module';
     OauthModule,
     MarketingSyncModule,
     MarketingDashboardModule,
+    HotmartModule,
   ],
   controllers: [AppController],
   providers: [AppService],

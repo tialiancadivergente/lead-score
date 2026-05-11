@@ -16,8 +16,9 @@ export class SeedLeadscoreOro1770000000010 implements MigrationInterface {
           AND LOWER(s."name") = 'nov25'
           AND fv."version_number" = 1
       )
-      INSERT INTO "leadscore" ("form_version_id", "name", "active")
+      INSERT INTO "leadscore" ("id", "form_version_id", "name", "active")
       SELECT
+        '7c9e8ea7-90c7-4d2c-b723-78a5bc4276c1'::uuid,
         tfv.form_version_id,
         'leadscore oro',
         true

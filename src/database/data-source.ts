@@ -17,4 +17,5 @@ export const AppDataSource = new DataSource({
     | 'uuid-ossp',
   entities: ENTITIES,
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
+  migrationsTransactionMode: 'each',
 });

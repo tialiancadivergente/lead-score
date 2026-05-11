@@ -5,8 +5,9 @@ export class SeedLeadscoreOra1770000000026 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      INSERT INTO "leadscore" ("form_version_id", "name", "active")
+      INSERT INTO "leadscore" ("id", "form_version_id", "name", "active")
       SELECT
+        '24246136-44fb-42e8-ba0b-c68d37fe70bc'::uuid,
         'a9e5538c-ee07-41e4-95a0-862e89adf186'::uuid,
         'leadscore ora',
         true
