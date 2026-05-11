@@ -33,9 +33,20 @@ export class HotmartController {
   }
 
   @UseGuards(ApiKeyGuard)
-  @ApiOperation({ summary: 'Sincroniza vendas históricas da API Hotmart (executa em background)' })
-  @ApiQuery({ name: 'startDate', required: false, description: 'ISO date, ex.: 2024-01-01' })
-  @ApiQuery({ name: 'endDate', required: false, description: 'ISO date, ex.: 2024-12-31' })
+  @ApiOperation({
+    summary:
+      'Sincroniza vendas históricas da API Hotmart (executa em background)',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    description: 'ISO date, ex.: 2024-01-01',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    description: 'ISO date, ex.: 2024-12-31',
+  })
   @ApiQuery({
     name: 'transactionStatus',
     required: false,
@@ -56,17 +67,27 @@ export class HotmartController {
 
   @UseGuards(ApiKeyGuard)
   @ApiOperation({ summary: 'Processa em lote registros raw pendentes' })
-  @ApiQuery({ name: 'limit', required: false, description: 'Máximo de registros (default: 100)' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Máximo de registros (default: 100)',
+  })
   @Post('process-batch')
   processBatch(@Query('limit') limit?: string) {
-    return this.processorService.processBatch(limit ? Number.parseInt(limit, 10) : 100);
+    return this.processorService.processBatch(
+      limit ? Number.parseInt(limit, 10) : 100,
+    );
   }
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
 
   @UseGuards(ApiKeyGuard)
   @ApiOperation({ summary: 'Lista vendas processadas (hotmart_sale)' })
-  @ApiQuery({ name: 'status', required: false, description: 'APPROVED | COMPLETE | CANCELLED | REFUNDED | WAITING_PAYMENT' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    description: 'APPROVED | COMPLETE | CANCELLED | REFUNDED | WAITING_PAYMENT',
+  })
   @ApiQuery({ name: 'productId', required: false })
   @ApiQuery({ name: 'sourceAccount', required: false })
   @ApiQuery({ name: 'personId', required: false })

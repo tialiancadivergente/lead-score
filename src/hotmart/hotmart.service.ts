@@ -20,8 +20,10 @@ const HOTMART_SANDBOX = process.env.HOTMART_SANDBOX === 'true';
 const HOTMART_API_BASE = HOTMART_SANDBOX
   ? 'https://sandbox.hotmart.com/payments/api/v1'
   : 'https://developers.hotmart.com/payments/api/v1';
-const HOTMART_TOKEN_URL = 'https://api-sec-vlc.hotmart.com/security/oauth/token';
-const HOTMART_SALE_QUEUE = process.env.SERVICE_BUS_HOTMART_SALE_QUEUE ?? 'hotmart-sale-process';
+const HOTMART_TOKEN_URL =
+  'https://api-sec-vlc.hotmart.com/security/oauth/token';
+const HOTMART_SALE_QUEUE =
+  process.env.SERVICE_BUS_HOTMART_SALE_QUEUE ?? 'hotmart-sale-process';
 const PROCESS_VIA_QUEUE = process.env.HOTMART_PROCESS_VIA_QUEUE === 'true';
 
 @Injectable()
@@ -58,12 +60,19 @@ export class HotmartService {
     this.logger.log('=== HOTMART WEBHOOK RECEBIDO ===');
     this.logger.log(JSON.stringify(payload, null, 2));
 
-    const { event, transactionCode, buyerEmail } = this.extractWebhookFields(payload);
+    const { event, transactionCode, buyerEmail } =
+      this.extractWebhookFields(payload);
     this.logger.log(
       `event=${event} transaction=${transactionCode ?? 'n/a'} email=${buyerEmail ?? 'n/a'}`,
     );
 
-    return this.saveRawItem(event, transactionCode, buyerEmail, payload, HOTMART_SOURCE_ACCOUNT);
+    return this.saveRawItem(
+      event,
+      transactionCode,
+      buyerEmail,
+      payload,
+      HOTMART_SOURCE_ACCOUNT,
+    );
   }
 
   // ── Listagem raw ──────────────────────────────────────────────────────────
@@ -75,7 +84,11 @@ export class HotmartService {
   // ── Sync histórico ────────────────────────────────────────────────────────
 
   async syncHistory(
-    params: { startDate?: string; endDate?: string; transactionStatus?: string } = {},
+    params: {
+      startDate?: string;
+      endDate?: string;
+      transactionStatus?: string;
+    } = {},
   ): Promise<{ synced: number; skipped: number; message?: string }> {
     if (!HOTMART_CLIENT_ID || !HOTMART_CLIENT_SECRET) {
       return {
@@ -98,16 +111,21 @@ export class HotmartService {
       const url = this.buildHistoryUrl(params, pageToken);
       this.logger.log(`Buscando página ${page}: ${url}`);
 
-      const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       if (!response.ok) {
         const body = await response.text();
-        this.logger.error(`Erro na API Hotmart: status=${response.status} body=${body}`);
+        this.logger.error(
+          `Erro na API Hotmart: status=${response.status} body=${body}`,
+        );
         break;
       }
 
       const json = (await response.json()) as Record<string, unknown>;
-      const items = (json['items'] as Record<string, unknown>[] | undefined) ?? [];
+      const items =
+        (json['items'] as Record<string, unknown>[] | undefined) ?? [];
       this.logger.log(`Página ${page}: ${items.length} itens`);
 
       const { saved, skipped } = await this.upsertPage(items);
@@ -118,7 +136,9 @@ export class HotmartService {
       pageToken = pageInfo?.['next_page_token'] as string | undefined;
     } while (pageToken);
 
-    this.logger.log(`Sync concluído: saved=${totalSaved} skipped=${totalSkipped}`);
+    this.logger.log(
+      `Sync concluído: saved=${totalSaved} skipped=${totalSkipped}`,
+    );
     return { synced: totalSaved, skipped: totalSkipped };
   }
 
@@ -134,7 +154,16 @@ export class HotmartService {
     page?: number;
     limit?: number;
   }): Promise<{ data: HotmartSale[]; total: number }> {
-    const { page = 1, limit = 20, status, productId, sourceAccount, personId, from, to } = filters;
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      productId,
+      sourceAccount,
+      personId,
+      from,
+      to,
+    } = filters;
 
     const qb = this.saleRepo
       .createQueryBuilder('s')
@@ -144,7 +173,8 @@ export class HotmartService {
 
     if (status) qb.andWhere('s.purchase_status = :status', { status });
     if (productId) qb.andWhere('s.product_id = :productId', { productId });
-    if (sourceAccount) qb.andWhere('s.source_account = :sourceAccount', { sourceAccount });
+    if (sourceAccount)
+      qb.andWhere('s.source_account = :sourceAccount', { sourceAccount });
     if (personId) qb.andWhere('s.person_id = :personId', { personId });
     if (from) qb.andWhere('s.order_date >= :from', { from: new Date(from) });
     if (to) qb.andWhere('s.order_date <= :to', { to: new Date(to) });
@@ -161,29 +191,47 @@ export class HotmartService {
     total_sales: number;
     total_revenue: number;
     by_status: Record<string, number>;
-    by_product: { product_id: number; product_name: string; count: number; revenue: number }[];
+    by_product: {
+      product_id: number;
+      product_name: string;
+      count: number;
+      revenue: number;
+    }[];
   }> {
     const qb = this.saleRepo.createQueryBuilder('s');
-    if (filters.from) qb.andWhere('s.order_date >= :from', { from: new Date(filters.from) });
-    if (filters.to) qb.andWhere('s.order_date <= :to', { to: new Date(filters.to) });
-    if (filters.sourceAccount) qb.andWhere('s.source_account = :sa', { sa: filters.sourceAccount });
+    if (filters.from)
+      qb.andWhere('s.order_date >= :from', { from: new Date(filters.from) });
+    if (filters.to)
+      qb.andWhere('s.order_date <= :to', { to: new Date(filters.to) });
+    if (filters.sourceAccount)
+      qb.andWhere('s.source_account = :sa', { sa: filters.sourceAccount });
 
     const [total, byStatus, byProduct, revenueRow] = await Promise.all([
       qb.clone().getCount(),
-      qb.clone()
+      qb
+        .clone()
         .select('s.purchase_status', 'status')
         .addSelect('COUNT(*)', 'count')
         .groupBy('s.purchase_status')
         .getRawMany<{ status: string; count: string }>(),
-      qb.clone()
+      qb
+        .clone()
         .select('s.product_id', 'product_id')
         .addSelect('s.product_name', 'product_name')
         .addSelect('COUNT(*)', 'count')
         .addSelect('SUM(s.price)', 'revenue')
         .groupBy('s.product_id, s.product_name')
-        .getRawMany<{ product_id: string; product_name: string; count: string; revenue: string }>(),
-      qb.clone()
-        .andWhere('s.purchase_status IN (:...statuses)', { statuses: ['APPROVED', 'COMPLETE'] })
+        .getRawMany<{
+          product_id: string;
+          product_name: string;
+          count: string;
+          revenue: string;
+        }>(),
+      qb
+        .clone()
+        .andWhere('s.purchase_status IN (:...statuses)', {
+          statuses: ['APPROVED', 'COMPLETE'],
+        })
         .select('SUM(s.price)', 'total')
         .getRawOne<{ total: string }>(),
     ]);
@@ -191,8 +239,10 @@ export class HotmartService {
     return {
       total_sales: total,
       total_revenue: Number(revenueRow?.total ?? 0),
-      by_status: Object.fromEntries(byStatus.map(r => [r.status ?? 'null', Number(r.count)])),
-      by_product: byProduct.map(r => ({
+      by_status: Object.fromEntries(
+        byStatus.map((r) => [r.status ?? 'null', Number(r.count)]),
+      ),
+      by_product: byProduct.map((r) => ({
         product_id: Number(r.product_id),
         product_name: r.product_name,
         count: Number(r.count),
@@ -221,7 +271,9 @@ export class HotmartService {
         const newStatus = this.getPurchaseStatus(payload);
 
         if (oldStatus === newStatus) {
-          this.logger.warn(`Duplicata ignorada (status=${newStatus ?? 'n/a'}): ${transactionCode}`);
+          this.logger.warn(
+            `Duplicata ignorada (status=${newStatus ?? 'n/a'}): ${transactionCode}`,
+          );
           return { saved: false, reason: 'duplicate' };
         }
 
@@ -268,7 +320,7 @@ export class HotmartService {
     if (!items.length) return { saved: 0, skipped: 0 };
 
     const txCodes = items
-      .map(item => this.extractHistoryItemFields(item).transactionCode)
+      .map((item) => this.extractHistoryItemFields(item).transactionCode)
       .filter((c): c is string => !!c);
 
     const existing = txCodes.length
@@ -278,17 +330,23 @@ export class HotmartService {
         })
       : [];
 
-    const existingMap = new Map(existing.map(e => [e.transaction_code ?? '', e]));
+    const existingMap = new Map(
+      existing.map((e) => [e.transaction_code ?? '', e]),
+    );
     const toInsert: DeepPartial<HotmartSaleRaw>[] = [];
-    const toUpdate: Array<{ id: string; payload: Record<string, unknown> }> = [];
+    const toUpdate: Array<{ id: string; payload: Record<string, unknown> }> =
+      [];
     let skipped = 0;
 
     for (const item of items) {
-      const { transactionCode, buyerEmail } = this.extractHistoryItemFields(item);
+      const { transactionCode, buyerEmail } =
+        this.extractHistoryItemFields(item);
       const ex = transactionCode ? existingMap.get(transactionCode) : undefined;
 
       if (ex) {
-        if (this.getPurchaseStatus(ex.payload) !== this.getPurchaseStatus(item)) {
+        if (
+          this.getPurchaseStatus(ex.payload) !== this.getPurchaseStatus(item)
+        ) {
           toUpdate.push({ id: ex.id, payload: item });
         } else {
           skipped++;
@@ -316,7 +374,7 @@ export class HotmartService {
 
     if (toUpdate.length) {
       await Promise.all(
-        toUpdate.map(async u => {
+        toUpdate.map(async (u) => {
           const rawFields = this.extractRawFields(u.payload);
           await this.rawRepo.update(u.id, {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -339,20 +397,32 @@ export class HotmartService {
 
   private triggerProcessing(rawId: string): void {
     if (PROCESS_VIA_QUEUE) {
-      this.serviceBus.publish(HOTMART_SALE_QUEUE, { rawId }).catch(err =>
-        this.logger.error(`Falha ao publicar na fila rawId=${rawId}: ${err.message}`),
-      );
+      this.serviceBus
+        .publish(HOTMART_SALE_QUEUE, { rawId })
+        .catch((err) =>
+          this.logger.error(
+            `Falha ao publicar na fila rawId=${rawId}: ${err.message}`,
+          ),
+        );
     } else {
-      this.processor.processRaw(rawId).catch(err =>
-        this.logger.warn(`Processamento direto falhou rawId=${rawId}: ${err.message}`),
-      );
+      this.processor
+        .processRaw(rawId)
+        .catch((err) =>
+          this.logger.warn(
+            `Processamento direto falhou rawId=${rawId}: ${err.message}`,
+          ),
+        );
     }
   }
 
   private extractRawFields(payload: Record<string, unknown>) {
     const data = payload['data'] as Record<string, unknown> | undefined;
-    const purchase = (data?.['purchase'] ?? payload['purchase']) as Record<string, unknown> | undefined;
-    const product = (data?.['product'] ?? payload['product']) as Record<string, unknown> | undefined;
+    const purchase = (data?.['purchase'] ?? payload['purchase']) as
+      | Record<string, unknown>
+      | undefined;
+    const product = (data?.['product'] ?? payload['product']) as
+      | Record<string, unknown>
+      | undefined;
     return {
       purchase_status: purchase?.['status'] as string | undefined,
       product_id: product?.['id'] as number | undefined,
@@ -360,9 +430,13 @@ export class HotmartService {
     };
   }
 
-  private getPurchaseStatus(payload: Record<string, unknown>): string | undefined {
+  private getPurchaseStatus(
+    payload: Record<string, unknown>,
+  ): string | undefined {
     const data = payload['data'] as Record<string, unknown> | undefined;
-    const purchase = (data?.['purchase'] ?? payload['purchase']) as Record<string, unknown> | undefined;
+    const purchase = (data?.['purchase'] ?? payload['purchase']) as
+      | Record<string, unknown>
+      | undefined;
     return purchase?.['status'] as string | undefined;
   }
 
@@ -388,7 +462,9 @@ export class HotmartService {
   }
 
   private async fetchAccessToken(): Promise<string> {
-    const basic = Buffer.from(`${HOTMART_CLIENT_ID}:${HOTMART_CLIENT_SECRET}`).toString('base64');
+    const basic = Buffer.from(
+      `${HOTMART_CLIENT_ID}:${HOTMART_CLIENT_SECRET}`,
+    ).toString('base64');
     this.logger.log(`Obtendo token Hotmart (sandbox=${HOTMART_SANDBOX})`);
 
     const response = await fetch(HOTMART_TOKEN_URL, {
@@ -402,25 +478,39 @@ export class HotmartService {
 
     const raw = await response.text();
     if (!response.ok) {
-      throw new Error(`Falha ao obter token Hotmart: ${response.status} — ${raw}`);
+      throw new Error(
+        `Falha ao obter token Hotmart: ${response.status} — ${raw}`,
+      );
     }
 
     this.logger.log('Token Hotmart obtido com sucesso');
-    return (JSON.parse(raw) as Record<string, unknown>)['access_token'] as string;
+    return (JSON.parse(raw) as Record<string, unknown>)[
+      'access_token'
+    ] as string;
   }
 
   private buildHistoryUrl(
-    params: { startDate?: string; endDate?: string; transactionStatus?: string },
+    params: {
+      startDate?: string;
+      endDate?: string;
+      transactionStatus?: string;
+    },
     pageToken?: string,
   ): string {
     const url = new URL(`${HOTMART_API_BASE}/sales/history`);
     url.searchParams.set('max_results', '500');
 
     if (params.startDate) {
-      url.searchParams.set('start_date', String(new Date(params.startDate).getTime()));
+      url.searchParams.set(
+        'start_date',
+        String(new Date(params.startDate).getTime()),
+      );
     }
     if (params.endDate) {
-      url.searchParams.set('end_date', String(new Date(params.endDate).getTime()));
+      url.searchParams.set(
+        'end_date',
+        String(new Date(params.endDate).getTime()),
+      );
     }
     if (params.transactionStatus) {
       for (const status of params.transactionStatus.split(',')) {

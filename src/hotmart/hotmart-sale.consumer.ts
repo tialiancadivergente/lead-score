@@ -5,9 +5,13 @@ import { HotmartProcessorService } from './hotmart-processor.service';
 
 const ENABLED =
   process.env.HOTMART_PROCESS_VIA_QUEUE === 'true' &&
-  (process.env.SERVICE_BUS_HOTMART_SALE_CONSUMER_ENABLED ?? process.env.SERVICE_BUS_CONSUMER_ENABLED) === 'true';
-const QUEUE = process.env.SERVICE_BUS_HOTMART_SALE_QUEUE ?? 'hotmart-sale-process';
-const CONCURRENCY = Number(process.env.SERVICE_BUS_HOTMART_SALE_MAX_CONCURRENCY ?? '5');
+  (process.env.SERVICE_BUS_HOTMART_SALE_CONSUMER_ENABLED ??
+    process.env.SERVICE_BUS_CONSUMER_ENABLED) === 'true';
+const QUEUE =
+  process.env.SERVICE_BUS_HOTMART_SALE_QUEUE ?? 'hotmart-sale-process';
+const CONCURRENCY = Number(
+  process.env.SERVICE_BUS_HOTMART_SALE_MAX_CONCURRENCY ?? '5',
+);
 
 @Injectable()
 export class HotmartSaleConsumer implements OnModuleInit {
@@ -20,7 +24,9 @@ export class HotmartSaleConsumer implements OnModuleInit {
 
   onModuleInit() {
     if (!ENABLED) {
-      this.logger.log('HotmartSaleConsumer desabilitado (HOTMART_PROCESS_VIA_QUEUE != true)');
+      this.logger.log(
+        'HotmartSaleConsumer desabilitado (HOTMART_PROCESS_VIA_QUEUE != true)',
+      );
       return;
     }
     this.serviceBus.createQueueProcessor({
@@ -32,7 +38,9 @@ export class HotmartSaleConsumer implements OnModuleInit {
     this.logger.log(`HotmartSaleConsumer escutando: ${QUEUE}`);
   }
 
-  private async handleMessage(message: ServiceBusReceivedMessage): Promise<void> {
+  private async handleMessage(
+    message: ServiceBusReceivedMessage,
+  ): Promise<void> {
     const { rawId } = message.body as { rawId: string };
     if (!rawId) throw new Error('Mensagem sem rawId');
     await this.processor.processRaw(rawId);

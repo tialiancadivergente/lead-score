@@ -3,7 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HotmartSaleRaw } from '../database/entities/hotmart/hotmart-sale-raw.entity';
 import { HotmartSale } from '../database/entities/hotmart/hotmart-sale.entity';
-import { IdentifierType, IdentifierTypeCode } from '../database/entities/identity/identifier-type.entity';
+import {
+  IdentifierType,
+  IdentifierTypeCode,
+} from '../database/entities/identity/identifier-type.entity';
 import { Person } from '../database/entities/identity/person.entity';
 import { PersonIdentifier } from '../database/entities/identity/person-identifier.entity';
 
@@ -38,12 +41,17 @@ export class HotmartProcessorService {
       return;
     }
 
-    this.logger.log(`Processando raw=${rawId} transaction=${raw.transaction_code ?? 'n/a'} status=${raw.import_status}`);
+    this.logger.log(
+      `Processando raw=${rawId} transaction=${raw.transaction_code ?? 'n/a'} status=${raw.import_status}`,
+    );
     await this.rawRepo.update(rawId, { import_status: 'processing' });
 
     try {
       const fields = this.extractSaleFields(raw);
-      const person = await this.findOrCreatePerson(fields.buyerEmail, fields.buyerName);
+      const person = await this.findOrCreatePerson(
+        fields.buyerEmail,
+        fields.buyerName,
+      );
 
       await this.saleRepo.upsert(
         this.buildSaleRecord(rawId, person.id, fields, raw.source_account),
@@ -56,16 +64,23 @@ export class HotmartProcessorService {
         error: undefined,
       });
 
-      this.logger.log(`Processado raw=${rawId} transaction=${fields.transactionCode ?? 'n/a'}`);
+      this.logger.log(
+        `Processado raw=${rawId} transaction=${fields.transactionCode ?? 'n/a'}`,
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      await this.rawRepo.update(rawId, { import_status: 'error', error: message });
+      await this.rawRepo.update(rawId, {
+        import_status: 'error',
+        error: message,
+      });
       this.logger.error(`Falha ao processar raw=${rawId}: ${message}`);
       throw err;
     }
   }
 
-  async processBatch(limit = 100): Promise<{ processed: number; failed: number }> {
+  async processBatch(
+    limit = 100,
+  ): Promise<{ processed: number; failed: number }> {
     const pending = await this.rawRepo.find({
       where: { import_status: 'pending' },
       order: { created_at: 'ASC' },
@@ -73,7 +88,9 @@ export class HotmartProcessorService {
       select: ['id'],
     });
 
-    this.logger.log(`Batch iniciado: ${pending.length} registros pending encontrados (limit=${limit})`);
+    this.logger.log(
+      `Batch iniciado: ${pending.length} registros pending encontrados (limit=${limit})`,
+    );
     if (!pending.length) return { processed: 0, failed: 0 };
 
     let processed = 0;
@@ -82,7 +99,7 @@ export class HotmartProcessorService {
 
     for (let i = 0; i < pending.length; i += CHUNK) {
       const results = await Promise.allSettled(
-        pending.slice(i, i + CHUNK).map(r => this.processRaw(r.id)),
+        pending.slice(i, i + CHUNK).map((r) => this.processRaw(r.id)),
       );
       for (const r of results) {
         if (r.status === 'fulfilled') processed++;
@@ -174,15 +191,26 @@ export class HotmartProcessorService {
     const p = raw.payload;
     // Suporta formato webhook (data.buyer/purchase/product) e histórico (buyer/purchase/product)
     const data = p['data'] as Record<string, unknown> | undefined;
-    const buyer = (data?.['buyer'] ?? p['buyer']) as Record<string, unknown> | undefined;
-    const product = (data?.['product'] ?? p['product']) as Record<string, unknown> | undefined;
-    const purchase = (data?.['purchase'] ?? p['purchase']) as Record<string, unknown> | undefined;
+    const buyer = (data?.['buyer'] ?? p['buyer']) as
+      | Record<string, unknown>
+      | undefined;
+    const product = (data?.['product'] ?? p['product']) as
+      | Record<string, unknown>
+      | undefined;
+    const purchase = (data?.['purchase'] ?? p['purchase']) as
+      | Record<string, unknown>
+      | undefined;
     const offer = purchase?.['offer'] as Record<string, unknown> | undefined;
     const priceObj = purchase?.['price'] as Record<string, unknown> | undefined;
-    const payment = purchase?.['payment'] as Record<string, unknown> | undefined;
-    const tracking = purchase?.['tracking'] as Record<string, unknown> | undefined;
+    const payment = purchase?.['payment'] as
+      | Record<string, unknown>
+      | undefined;
+    const tracking = purchase?.['tracking'] as
+      | Record<string, unknown>
+      | undefined;
 
-    const toDate = (v: unknown) => (typeof v === 'number' ? new Date(v) : undefined);
+    const toDate = (v: unknown) =>
+      typeof v === 'number' ? new Date(v) : undefined;
 
     return {
       buyerEmail: buyer?.['email'] as string | undefined,

@@ -68,7 +68,13 @@ export class HotmartSale {
   @Column({ type: 'int', name: 'installments', nullable: true })
   installments?: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, name: 'price', nullable: true })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    name: 'price',
+    nullable: true,
+  })
   price?: number;
 
   @Column({ type: 'text', name: 'currency_code', nullable: true })

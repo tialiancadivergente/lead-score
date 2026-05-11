@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { HotmartService } from './hotmart.service';
 
 const SCHEDULER_ENABLED = process.env.HOTMART_SCHEDULER_ENABLED !== 'false';
@@ -15,10 +20,14 @@ export class HotmartSchedulerService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     if (!SCHEDULER_ENABLED) {
-      this.logger.log('Scheduler Hotmart desabilitado (HOTMART_SCHEDULER_ENABLED != true)');
+      this.logger.log(
+        'Scheduler Hotmart desabilitado (HOTMART_SCHEDULER_ENABLED != true)',
+      );
       return;
     }
-    this.logger.log(`Scheduler Hotmart habilitado. Horários: ${SCHEDULED_HOURS.map(h => `${h}h`).join(', ')}`);
+    this.logger.log(
+      `Scheduler Hotmart habilitado. Horários: ${SCHEDULED_HOURS.map((h) => `${h}h`).join(', ')}`,
+    );
     this.scheduleNext();
   }
 
@@ -30,7 +39,9 @@ export class HotmartSchedulerService implements OnModuleInit, OnModuleDestroy {
     if (this.timeoutRef) clearTimeout(this.timeoutRef);
     const next = this.getNextFireTime();
     const msUntilNext = next.getTime() - Date.now();
-    this.logger.log(`Próxima execução agendada: ${next.toLocaleString('pt-BR')}`);
+    this.logger.log(
+      `Próxima execução agendada: ${next.toLocaleString('pt-BR')}`,
+    );
     this.timeoutRef = setTimeout(() => void this.run(), msUntilNext);
   }
 
@@ -44,17 +55,29 @@ export class HotmartSchedulerService implements OnModuleInit, OnModuleDestroy {
     this.isRunning = true;
     try {
       const now = new Date();
-      const startDate = new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
+      const startDate = new Date(
+        now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000,
+      )
         .toISOString()
         .split('T')[0];
       const endDate = now.toISOString().split('T')[0];
 
-      this.logger.log(`Executando sync Hotmart: ${startDate} → ${endDate} (últimos ${LOOKBACK_DAYS} dias)`);
+      this.logger.log(
+        `Executando sync Hotmart: ${startDate} → ${endDate} (últimos ${LOOKBACK_DAYS} dias)`,
+      );
 
-      const result = await this.hotmartService.syncHistory({ startDate, endDate });
-      this.logger.log(`Sync concluído: synced=${result.synced} skipped=${result.skipped}`);
+      const result = await this.hotmartService.syncHistory({
+        startDate,
+        endDate,
+      });
+      this.logger.log(
+        `Sync concluído: synced=${result.synced} skipped=${result.skipped}`,
+      );
     } catch (err) {
-      this.logger.error('Falha no scheduler Hotmart', err instanceof Error ? err.stack : undefined);
+      this.logger.error(
+        'Falha no scheduler Hotmart',
+        err instanceof Error ? err.stack : undefined,
+      );
     } finally {
       this.isRunning = false;
       this.scheduleNext();

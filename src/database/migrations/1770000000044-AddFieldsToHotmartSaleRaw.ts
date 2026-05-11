@@ -19,8 +19,12 @@ export class AddFieldsToHotmartSaleRaw1770000000044 implements MigrationInterfac
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_hotmart_sale_raw_purchase_status"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_hotmart_sale_raw_product_id"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_hotmart_sale_raw_purchase_status"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_hotmart_sale_raw_product_id"`,
+    );
     await queryRunner.query(`
       ALTER TABLE "hotmart_sale_raw"
       DROP COLUMN IF EXISTS "purchase_status",
