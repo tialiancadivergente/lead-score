@@ -18,10 +18,10 @@ export class HotmartProduct {
   @Index()
   @ManyToOne(() => Launch, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'launch_id' })
-  launch?: Launch;
+  launch?: Launch | null;
 
   @Column({ type: 'uuid', name: 'launch_id', nullable: true })
-  launch_id?: string;
+  launch_id!: string | null;
 
   @Column({ type: 'text', name: 'name' })
   name!: string;

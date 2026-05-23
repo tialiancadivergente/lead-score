@@ -9,7 +9,7 @@ import { HotmartProduct } from '../database/entities/hotmart/hotmart-product.ent
 import { Launch } from '../database/entities/marketing/launch.entity';
 
 export interface CreateHotmartProductDto {
-  launch_id?: string;
+  launch_id?: string | null;
   name: string;
   product_id: number;
   active?: boolean;
@@ -52,7 +52,7 @@ export class HotmartProductService {
         name: dto.name.trim(),
         product_id: Number(dto.product_id),
         active: dto.active ?? true,
-        launch_id: dto.launch_id ?? undefined,
+        launch_id: dto.launch_id ?? null,
       }),
     );
 
@@ -76,11 +76,12 @@ export class HotmartProductService {
     if (dto.active !== undefined) row.active = dto.active;
     if (dto.launch_id !== undefined) {
       if (dto.launch_id === null) {
-        row.launch_id = undefined;
-        row.launch = undefined;
+        row.launch_id = null;
+        row.launch = null;
       } else {
-        await this.assertLaunchExists(dto.launch_id);
-        row.launch_id = dto.launch_id;
+        const launch = await this.assertLaunchExists(dto.launch_id);
+        row.launch_id = launch.id;
+        row.launch = launch;
       }
     }
 
@@ -96,6 +97,7 @@ export class HotmartProductService {
   private async assertLaunchExists(launchId: string) {
     const exists = await this.launchRepo.findOne({ where: { id: launchId } });
     if (!exists) throw new BadRequestException(`Launch id=${launchId} não encontrado.`);
+    return exists;
   }
 
   private mapRow(row: HotmartProduct) {
