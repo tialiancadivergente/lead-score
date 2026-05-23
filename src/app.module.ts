@@ -16,6 +16,7 @@ import { OauthModule } from './oauth/oauth.module';
 import { MarketingDashboardModule } from './marketing-dashboard/marketing-dashboard.module';
 import { MarketingSyncModule } from './marketing-sync/marketing-sync.module';
 import { HotmartModule } from './hotmart/hotmart.module';
+import { MetaAdsModule } from './meta-ads/meta-ads.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { HotmartModule } from './hotmart/hotmart.module';
     MarketingSyncModule,
     MarketingDashboardModule,
     HotmartModule,
+    MetaAdsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
