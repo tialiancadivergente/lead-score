@@ -44,6 +44,11 @@ import { VotingVoter } from './voting/voting-voter.entity';
 import { VotingVote } from './voting/voting-vote.entity';
 import { HotmartSaleRaw } from './hotmart/hotmart-sale-raw.entity';
 import { HotmartSale } from './hotmart/hotmart-sale.entity';
+import { MetaAdPerformance } from './meta-ads/meta-ad-performance.entity';
+import { MetaAdRaw } from './meta-ads/meta-ad-raw.entity';
+import { MetaAdsetRaw } from './meta-ads/meta-adset-raw.entity';
+import { MetaCampaignRaw } from './meta-ads/meta-campaign-raw.entity';
+import { MetaSyncExecution } from './meta-ads/meta-sync-execution.entity';
 
 export const ENTITIES = [
   Person,
@@ -101,4 +106,10 @@ export const ENTITIES = [
 
   HotmartSaleRaw,
   HotmartSale,
+
+  MetaAdPerformance,
+  MetaAdRaw,
+  MetaAdsetRaw,
+  MetaCampaignRaw,
+  MetaSyncExecution,
 ];
