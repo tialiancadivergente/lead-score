@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -6,8 +7,11 @@ import {
   Post,
   Query,
   Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBody,
   ApiOkResponse,
@@ -486,5 +490,13 @@ export class MetaAdsController {
       'attachment; filename="meta-ads-performance.csv"',
     );
     res.send(csv);
+  }
+
+  @ApiOperation({ summary: 'Importar performance via CSV' })
+  @Post('data/import/csv')
+  @UseInterceptors(FileInterceptor('file'))
+  async importCsv(@UploadedFile() file: { buffer: Buffer }) {
+    if (!file) throw new BadRequestException('Arquivo CSV não enviado.');
+    return this.metaAdsService.importPerformanceCsv(file.buffer.toString('utf-8'));
   }
 }

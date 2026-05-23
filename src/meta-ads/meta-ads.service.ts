@@ -698,6 +698,92 @@ export class MetaAdsService {
     return [header, ...rows].join('\n');
   }
 
+  async importPerformanceCsv(csvContent: string): Promise<{ imported: number; skipped: number }> {
+    const lines = csvContent.split(/\r?\n/).filter((l) => l.trim());
+    if (lines.length < 2) {
+      throw new Error('CSV sem linhas de dados.');
+    }
+
+    const headers = this.parseCsvLine(lines[0]).map((h) => h.trim().toLowerCase());
+    const idx = (name: string) => headers.indexOf(name);
+
+    let imported = 0;
+    let skipped = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = this.parseCsvLine(lines[i]);
+      if (cols.length < 2) { skipped++; continue; }
+
+      const get = (col: string) => cols[idx(col)]?.trim() ?? '';
+
+      const accountId = get('conta_id');
+      const adId = get('anuncio_id');
+      const reportDate = get('data');
+
+      if (!accountId || !adId || !reportDate) { skipped++; continue; }
+
+      const platform = get('plataforma') || 'total';
+      const llc = parseInt(get('cliques_link') || '0', 10);
+      const lpv = parseInt(get('visualizacoes_pagina') || '0', 10);
+      const connectRate = llc > 0 ? String(lpv / llc) : (get('connect_rate') || null);
+
+      await this.performanceRepo.upsert(
+        {
+          external_account_id: accountId,
+          external_campaign_id: get('campanha_id') || undefined,
+          campaign_name: get('campanha_nome') || undefined,
+          external_adset_id: get('conjunto_id') || undefined,
+          adset_name: get('conjunto_nome') || undefined,
+          external_ad_id: adId,
+          ad_name: get('anuncio_nome') || undefined,
+          report_date: reportDate,
+          publisher_platform: platform,
+          impressions: get('impressoes') || '0',
+          clicks: get('cliques') || '0',
+          inline_link_clicks: get('cliques_link') || undefined,
+          reach: get('alcance') || undefined,
+          spend: get('gasto') || '0',
+          ctr: get('ctr') || undefined,
+          cpc: get('cpc') || undefined,
+          cpm: get('cpm') || undefined,
+          leads: get('leads') || '0',
+          landing_page_views: get('visualizacoes_pagina') || '0',
+          initiate_checkouts: get('inicios_checkout') || '0',
+          purchases: get('compras') || '0',
+          video_thruplay_watched: get('video_thruplay') || undefined,
+          connect_rate: connectRate ?? undefined,
+        } as any,
+        {
+          conflictPaths: ['external_account_id', 'external_ad_id', 'report_date', 'publisher_platform'],
+          skipUpdateIfNoValuesChanged: false,
+        },
+      );
+      imported++;
+    }
+
+    return { imported, skipped };
+  }
+
+  private parseCsvLine(line: string): string[] {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+        else { inQuotes = !inQuotes; }
+      } else if (ch === ',' && !inQuotes) {
+        result.push(current);
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    result.push(current);
+    return result;
+  }
+
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
   private async resolveTargets(params: {
