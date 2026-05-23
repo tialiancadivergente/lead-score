@@ -17,6 +17,7 @@ import { MarketingDashboardModule } from './marketing-dashboard/marketing-dashbo
 import { MarketingSyncModule } from './marketing-sync/marketing-sync.module';
 import { HotmartModule } from './hotmart/hotmart.module';
 import { MetaAdsModule } from './meta-ads/meta-ads.module';
+import { LaunchDashboardModule } from './launch-dashboard/launch-dashboard.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { MetaAdsModule } from './meta-ads/meta-ads.module';
     MarketingDashboardModule,
     HotmartModule,
     MetaAdsModule,
+    LaunchDashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],
