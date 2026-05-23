@@ -3,6 +3,7 @@ import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { HotmartProcessorService } from './hotmart-processor.service';
 import { HotmartProductService } from './hotmart-product.service';
+import { HotmartSyncScheduleService } from './hotmart-sync-schedule.service';
 import { HotmartService } from './hotmart.service';
 
 @ApiTags('hotmart')
@@ -12,6 +13,7 @@ export class HotmartController {
     private readonly hotmartService: HotmartService,
     private readonly processorService: HotmartProcessorService,
     private readonly hotmartProductService: HotmartProductService,
+    private readonly hotmartSyncScheduleService: HotmartSyncScheduleService,
   ) {}
 
   @ApiOperation({ summary: 'Recebe webhook de eventos de venda da Hotmart' })
@@ -175,5 +177,43 @@ export class HotmartController {
   @Delete('products/:id')
   removeProduct(@Param('id') id: string) {
     return this.hotmartProductService.remove(id);
+  }
+
+  // ── Sync Schedules ────────────────────────────────────────────────────────
+
+  @UseGuards(ApiKeyGuard)
+  @ApiOperation({ summary: 'Lista agendamentos de sync Hotmart' })
+  @Get('sync-schedules')
+  listSchedules() {
+    return this.hotmartSyncScheduleService.listAll();
+  }
+
+  @UseGuards(ApiKeyGuard)
+  @ApiOperation({ summary: 'Cria agendamento de sync Hotmart' })
+  @Post('sync-schedules')
+  createSchedule(@Body() body: Record<string, unknown>) {
+    return this.hotmartSyncScheduleService.create({
+      name: body.name as string | undefined,
+      period_preset: body.period_preset as string,
+      date_from: body.date_from as string | undefined,
+      date_to: body.date_to as string | undefined,
+      transaction_status: body.transaction_status as string | undefined,
+      scheduled_time: body.scheduled_time as string,
+      active: body.active === undefined ? true : Boolean(body.active),
+    });
+  }
+
+  @UseGuards(ApiKeyGuard)
+  @ApiOperation({ summary: 'Remove agendamento de sync Hotmart' })
+  @Delete('sync-schedules/:id')
+  removeSchedule(@Param('id') id: string) {
+    return this.hotmartSyncScheduleService.remove(id);
+  }
+
+  @UseGuards(ApiKeyGuard)
+  @ApiOperation({ summary: 'Executa agendamento de sync Hotmart imediatamente' })
+  @Post('sync-schedules/:id/run')
+  runScheduleNow(@Param('id') id: string) {
+    return this.hotmartSyncScheduleService.runNow(id);
   }
 }
