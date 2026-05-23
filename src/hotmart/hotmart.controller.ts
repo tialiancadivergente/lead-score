@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { HotmartProcessorService } from './hotmart-processor.service';
+import { HotmartProductService } from './hotmart-product.service';
 import { HotmartService } from './hotmart.service';
 
 @ApiTags('hotmart')
@@ -10,6 +11,7 @@ export class HotmartController {
   constructor(
     private readonly hotmartService: HotmartService,
     private readonly processorService: HotmartProcessorService,
+    private readonly hotmartProductService: HotmartProductService,
   ) {}
 
   @ApiOperation({ summary: 'Recebe webhook de eventos de venda da Hotmart' })
@@ -130,5 +132,48 @@ export class HotmartController {
     @Query('sourceAccount') sourceAccount?: string,
   ) {
     return this.hotmartService.getSalesSummary({ from, to, sourceAccount });
+  }
+
+  // ── Produtos Hotmart (config de mapeamento launch→produto) ────────────────
+
+  @UseGuards(ApiKeyGuard)
+  @ApiOperation({ summary: 'Lista configurações de produtos Hotmart por launch' })
+  @Get('products')
+  listProducts() {
+    return this.hotmartProductService.listAll();
+  }
+
+  @UseGuards(ApiKeyGuard)
+  @ApiOperation({ summary: 'Cria configuração de produto Hotmart' })
+  @Post('products')
+  createProduct(@Body() body: Record<string, unknown>) {
+    return this.hotmartProductService.create({
+      launch_id: body.launch_id as string | undefined,
+      name: body.name as string,
+      product_id: Number(body.product_id),
+      active: body.active === undefined ? true : Boolean(body.active),
+    });
+  }
+
+  @UseGuards(ApiKeyGuard)
+  @ApiOperation({ summary: 'Atualiza configuração de produto Hotmart' })
+  @Patch('products/:id')
+  updateProduct(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.hotmartProductService.update(id, {
+      launch_id: body.launch_id === null ? null : body.launch_id as string | undefined,
+      name: body.name as string | undefined,
+      product_id: body.product_id === undefined ? undefined : Number(body.product_id),
+      active: body.active === undefined ? undefined : Boolean(body.active),
+    });
+  }
+
+  @UseGuards(ApiKeyGuard)
+  @ApiOperation({ summary: 'Remove configuração de produto Hotmart' })
+  @Delete('products/:id')
+  removeProduct(@Param('id') id: string) {
+    return this.hotmartProductService.remove(id);
   }
 }

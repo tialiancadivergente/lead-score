@@ -42,6 +42,7 @@ import { VotingCategory } from './voting/voting-category.entity';
 import { VotingCandidate } from './voting/voting-candidate.entity';
 import { VotingVoter } from './voting/voting-voter.entity';
 import { VotingVote } from './voting/voting-vote.entity';
+import { HotmartProduct } from './hotmart/hotmart-product.entity';
 import { HotmartSaleRaw } from './hotmart/hotmart-sale-raw.entity';
 import { HotmartSale } from './hotmart/hotmart-sale.entity';
 import { MetaAdPerformance } from './meta-ads/meta-ad-performance.entity';
@@ -106,6 +107,7 @@ export const ENTITIES = [
 
   HotmartSaleRaw,
   HotmartSale,
+  HotmartProduct,
 
   MetaAdPerformance,
   MetaAdRaw,

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Capture } from '../database/entities/capture/capture.entity';
+import { HotmartProduct } from '../database/entities/hotmart/hotmart-product.entity';
 import { HotmartSale } from '../database/entities/hotmart/hotmart-sale.entity';
 import { Launch } from '../database/entities/marketing/launch.entity';
 import { MetaAdPerformance } from '../database/entities/meta-ads/meta-ad-performance.entity';
@@ -316,7 +317,7 @@ export class LaunchDashboardService {
     }
     if (query.dateTo) {
       qb.andWhere('COALESCE(c.occurred_at, c.created_at) < :captureTo', {
-        captureTo: this.nextDay(query.dateTo!),
+        captureTo: this.nextDay(query.dateTo),
       });
     }
     if (query.externalAdId) {
@@ -331,9 +332,7 @@ export class LaunchDashboardService {
   private async querySalesAggregated(
     query: LaunchDashboardQueryDto,
   ): Promise<{ sales: number; revenue: number }> {
-    if (!query.launchId && !query.seasonId) return { sales: 0, revenue: 0 };
-
-    const qb = this.buildSalesJoinQb(query);
+    const qb = this.buildDirectSalesQb(query);
     const row = await qb
       .select('COUNT(DISTINCT hs.id)', 'sales')
       .addSelect('COALESCE(SUM(hs.price), 0)', 'revenue')
@@ -346,9 +345,7 @@ export class LaunchDashboardService {
   }
 
   private async querySalesTimeseries(query: LaunchDashboardQueryDto) {
-    if (!query.launchId && !query.seasonId) return [];
-
-    const qb = this.buildSalesJoinQb(query);
+    const qb = this.buildDirectSalesQb(query);
 
     const rows = await qb
       .select(
@@ -367,9 +364,7 @@ export class LaunchDashboardService {
   private async querySalesByAd(
     query: LaunchDashboardQueryDto,
   ): Promise<Map<string, { sales: number; revenue: number }>> {
-    if (!query.launchId && !query.seasonId) return new Map();
-
-    const qb = this.buildSalesJoinQb(query);
+    const qb = this.buildAttributedSalesQb(query);
 
     const rows = await qb
       .select('c.external_ad_id', 'externalAdId')
@@ -387,18 +382,62 @@ export class LaunchDashboardService {
     );
   }
 
-  private buildSalesJoinQb(query: LaunchDashboardQueryDto) {
+  // Direct join via hotmart_product — counts all sales for the launch's active products.
+  // Used for summary totals and timeseries (no capture bridge required).
+  private buildDirectSalesQb(query: LaunchDashboardQueryDto) {
+    const qb = this.saleRepo
+      .createQueryBuilder('hs')
+      .innerJoin(HotmartProduct, 'hp', 'hp.product_id = hs.product_id AND hp.active = true')
+      .andWhere(`hs.purchase_status IN ('APPROVED', 'COMPLETE')`);
+
+    if (query.launchId) {
+      qb.andWhere('hp.launch_id = :launchId', { launchId: query.launchId });
+    }
+
+    if (query.dateFrom) {
+      qb.andWhere('COALESCE(hs.approved_date, hs.order_date) >= :salesFrom', {
+        salesFrom: `${query.dateFrom}T00:00:00.000Z`,
+      });
+    }
+    if (query.dateTo) {
+      qb.andWhere('COALESCE(hs.approved_date, hs.order_date) < :salesTo', {
+        salesTo: this.nextDay(query.dateTo),
+      });
+    }
+
+    return qb;
+  }
+
+  // Capture bridge — attributes sales to specific ads via person_id.
+  // Used for per-ad funnel table breakdown.
+  private buildAttributedSalesQb(query: LaunchDashboardQueryDto) {
     const qb = this.captureRepo
       .createQueryBuilder('c')
       .innerJoin(HotmartSale, 'hs', 'hs.person_id = c.person_id')
       .andWhere('c.person_id IS NOT NULL')
-      .andWhere(`hs.purchase_status = 'APPROVED'`);
+      .andWhere(`hs.purchase_status IN ('APPROVED', 'COMPLETE')`);
 
     if (query.launchId) {
       qb.andWhere('c.launch_id = :launchId', { launchId: query.launchId });
+      // Restrict to the launch's active products to avoid cross-product attribution
+      qb.andWhere(
+        `EXISTS (SELECT 1 FROM "hotmart_product" hp2 WHERE hp2.product_id = hs.product_id AND hp2.launch_id = :launchIdProd AND hp2.active = true)`,
+        { launchIdProd: query.launchId },
+      );
     }
     if (query.seasonId) {
       qb.andWhere('c.season_id = :seasonId', { seasonId: query.seasonId });
+    }
+
+    if (query.dateFrom) {
+      qb.andWhere('COALESCE(hs.approved_date, hs.order_date) >= :salesFrom', {
+        salesFrom: `${query.dateFrom}T00:00:00.000Z`,
+      });
+    }
+    if (query.dateTo) {
+      qb.andWhere('COALESCE(hs.approved_date, hs.order_date) < :salesTo', {
+        salesTo: this.nextDay(query.dateTo),
+      });
     }
 
     return qb;
