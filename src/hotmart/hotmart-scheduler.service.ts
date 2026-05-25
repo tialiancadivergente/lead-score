@@ -4,6 +4,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
+import { HotmartSyncScheduleService } from './hotmart-sync-schedule.service';
 import { HotmartService } from './hotmart.service';
 
 const SCHEDULER_ENABLED = process.env.HOTMART_SCHEDULER_ENABLED !== 'false';
@@ -13,10 +14,13 @@ const LOOKBACK_DAYS = 7;
 @Injectable()
 export class HotmartSchedulerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(HotmartSchedulerService.name);
-  private timeoutRef?: NodeJS.Timeout;
+  private intervalRef?: NodeJS.Timeout;
   private isRunning = false;
 
-  constructor(private readonly hotmartService: HotmartService) {}
+  constructor(
+    private readonly hotmartService: HotmartService,
+    private readonly hotmartSyncScheduleService: HotmartSyncScheduleService,
+  ) {}
 
   onModuleInit() {
     if (!SCHEDULER_ENABLED) {
@@ -25,30 +29,48 @@ export class HotmartSchedulerService implements OnModuleInit, OnModuleDestroy {
       );
       return;
     }
+    const hoursLabel = SCHEDULED_HOURS.map((h) => `${h}h`).join(', ');
     this.logger.log(
-      `Scheduler Hotmart habilitado. Horários: ${SCHEDULED_HOURS.map((h) => `${h}h`).join(', ')}`,
+      `Scheduler Hotmart habilitado. Horários padrão: ${hoursLabel} + agendamentos do banco a cada minuto`,
     );
-    this.scheduleNext();
+    this.intervalRef = setInterval(() => void this.tick(), 60_000);
   }
 
   onModuleDestroy() {
-    if (this.timeoutRef) clearTimeout(this.timeoutRef);
+    if (this.intervalRef) clearInterval(this.intervalRef);
   }
 
-  private scheduleNext() {
-    if (this.timeoutRef) clearTimeout(this.timeoutRef);
-    const next = this.getNextFireTime();
-    const msUntilNext = next.getTime() - Date.now();
-    this.logger.log(
-      `Próxima execução agendada: ${next.toLocaleString('pt-BR')}`,
-    );
-    this.timeoutRef = setTimeout(() => void this.run(), msUntilNext);
+  private async tick() {
+    const now = new Date();
+    const hh = now.getHours();
+    const mm = now.getMinutes();
+    const hhStr = String(hh).padStart(2, '0');
+    const mmStr = String(mm).padStart(2, '0');
+    const hhmm = `${hhStr}:${mmStr}`;
+
+    // Run default sync at scheduled hours on the :00 minute
+    if (mm === 0 && SCHEDULED_HOURS.includes(hh)) {
+      await this.runDefaultSync();
+    }
+
+    // Run DB-configured schedules matching the current HH:MM
+    try {
+      const schedules = await this.hotmartSyncScheduleService.getActiveSchedulesForTime(hhmm);
+      for (const schedule of schedules) {
+        this.logger.log(`Executando agendamento DB: ${schedule.id} (${schedule.name ?? 'sem nome'}) às ${hhmm}`);
+        await this.hotmartSyncScheduleService.runNow(schedule.id);
+      }
+    } catch (err) {
+      this.logger.error(
+        'Falha ao verificar agendamentos do banco',
+        err instanceof Error ? err.stack : undefined,
+      );
+    }
   }
 
-  private async run() {
+  private async runDefaultSync() {
     if (this.isRunning) {
       this.logger.warn('Execução anterior ainda em andamento, tick ignorado');
-      this.scheduleNext();
       return;
     }
 
@@ -63,7 +85,7 @@ export class HotmartSchedulerService implements OnModuleInit, OnModuleDestroy {
       const endDate = now.toISOString().split('T')[0];
 
       this.logger.log(
-        `Executando sync Hotmart: ${startDate} → ${endDate} (últimos ${LOOKBACK_DAYS} dias)`,
+        `Executando sync Hotmart padrão: ${startDate} → ${endDate} (últimos ${LOOKBACK_DAYS} dias)`,
       );
 
       const result = await this.hotmartService.syncHistory({
@@ -80,23 +102,6 @@ export class HotmartSchedulerService implements OnModuleInit, OnModuleDestroy {
       );
     } finally {
       this.isRunning = false;
-      this.scheduleNext();
     }
-  }
-
-  private getNextFireTime(): Date {
-    const now = new Date();
-
-    for (const hour of SCHEDULED_HOURS) {
-      const candidate = new Date(now);
-      candidate.setHours(hour, 0, 0, 0);
-      if (candidate > now) return candidate;
-    }
-
-    // Todos os horários de hoje já passaram — próximo é 09h de amanhã
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(SCHEDULED_HOURS[0], 0, 0, 0);
-    return tomorrow;
   }
 }
