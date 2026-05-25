@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   Param,
@@ -1316,6 +1317,19 @@ export class OauthController {
   }
 
   @ApiOperation({
+    summary: 'Desconecta uma conexao Google Ads',
+    description:
+      'Remove tokens e conta selecionada da conexao local, mantendo historico de dados sincronizados.',
+  })
+  @ApiOkResponse({
+    description: 'Conexao desconectada com sucesso.',
+  })
+  @Delete('google-ads/connections/:connectionId')
+  disconnectGoogleAds(@Param('connectionId') connectionId: string) {
+    return this.googleAdsOAuthService.disconnectConnection(connectionId);
+  }
+
+  @ApiOperation({
     summary: 'Seleciona a conta Meta Ads da conexao',
     description:
       'Salva na conexao qual ad account da Meta sera usada pela plataforma.',
@@ -1340,6 +1354,19 @@ export class OauthController {
       accountId: body.accountId ?? '',
       accountName: body.accountName,
     });
+  }
+
+  @ApiOperation({
+    summary: 'Desconecta uma conexao Meta Ads',
+    description:
+      'Remove tokens e conta selecionada da conexao local, mantendo historico de dados sincronizados.',
+  })
+  @ApiOkResponse({
+    description: 'Conexao desconectada com sucesso.',
+  })
+  @Delete('meta/connections/:connectionId')
+  disconnectMetaAds(@Param('connectionId') connectionId: string) {
+    return this.metaAdsOAuthService.disconnectConnection(connectionId);
   }
 
   @ApiOperation({

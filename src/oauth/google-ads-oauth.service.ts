@@ -82,7 +82,9 @@ export class GoogleAdsOAuthService {
 
     let user: User | null = null;
     if (params.userId) {
-      user = await this.userRepository.findOne({ where: { id: params.userId } });
+      user = await this.userRepository.findOne({
+        where: { id: params.userId },
+      });
       if (!user) {
         throw new BadRequestException('userId informado nao foi encontrado.');
       }
@@ -101,12 +103,16 @@ export class GoogleAdsOAuthService {
       scopes,
       expires_at: expiresAt,
       context: {
-        loginCustomerId: this.configService.get<string>('GOOGLE_ADS_LOGIN_CUSTOMER_ID') ?? null,
+        loginCustomerId:
+          this.configService.get<string>('GOOGLE_ADS_LOGIN_CUSTOMER_ID') ??
+          null,
       },
     });
     await this.oauthStateRepository.save(oauthState);
 
-    const authorizationUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    const authorizationUrl = new URL(
+      'https://accounts.google.com/o/oauth2/v2/auth',
+    );
     authorizationUrl.searchParams.set('client_id', clientId);
     authorizationUrl.searchParams.set('redirect_uri', callbackUrl);
     authorizationUrl.searchParams.set('response_type', 'code');
@@ -175,10 +181,14 @@ export class GoogleAdsOAuthService {
     }
 
     const accessToken = await this.getUsableAccessToken(connection);
-    const accessibleCustomers = await this.fetchAccessibleCustomers(accessToken);
+    const accessibleCustomers =
+      await this.fetchAccessibleCustomers(accessToken);
     const accounts = await Promise.all(
       accessibleCustomers.map((resourceName) =>
-        this.fetchCustomerDetails(accessToken, this.extractCustomerId(resourceName)),
+        this.fetchCustomerDetails(
+          accessToken,
+          this.extractCustomerId(resourceName),
+        ),
       ),
     );
 
@@ -243,14 +253,15 @@ export class GoogleAdsOAuthService {
         : await this.fetchCustomerDetails(accessToken, customerId);
 
     connection.external_account_id = customer.customerId;
-    connection.external_account_name = customer.descriptiveName ?? undefined;
+    connection.external_account_name = customer.descriptiveName ?? null;
     connection.updated_at = new Date();
     connection.metadata = {
       ...(connection.metadata ?? {}),
       selectedAccount: customer,
     };
 
-    const savedConnection = await this.oauthConnectionRepository.save(connection);
+    const savedConnection =
+      await this.oauthConnectionRepository.save(connection);
 
     return {
       connectionId: savedConnection.id,
@@ -258,6 +269,41 @@ export class GoogleAdsOAuthService {
       externalAccountId: savedConnection.external_account_id ?? null,
       externalAccountName: savedConnection.external_account_name ?? null,
       metadata: savedConnection.metadata ?? null,
+    };
+  }
+
+  async disconnectConnection(connectionId: string) {
+    const connection = await this.oauthConnectionRepository.findOne({
+      where: { id: connectionId, provider: this.provider },
+    });
+
+    if (!connection) {
+      throw new NotFoundException('Conexao OAuth nao encontrada.');
+    }
+
+    const disconnectedAt = new Date();
+    connection.status = 'disconnected';
+    connection.access_token = null;
+    connection.refresh_token = null;
+    connection.token_type = null;
+    connection.expires_at = null;
+    connection.external_account_id = null;
+    connection.external_account_name = null;
+    connection.updated_at = disconnectedAt;
+    connection.metadata = {
+      ...(connection.metadata ?? {}),
+      selectedAccount: null,
+      disconnectedAt: disconnectedAt.toISOString(),
+    };
+
+    const savedConnection =
+      await this.oauthConnectionRepository.save(connection);
+
+    return {
+      connectionId: savedConnection.id,
+      provider: savedConnection.provider,
+      status: savedConnection.status,
+      disconnectedAt: disconnectedAt.toISOString(),
     };
   }
 
@@ -274,7 +320,9 @@ export class GoogleAdsOAuthService {
     }
 
     if (!params.code || !params.state) {
-      throw new BadRequestException('Parametros code e state sao obrigatorios.');
+      throw new BadRequestException(
+        'Parametros code e state sao obrigatorios.',
+      );
     }
 
     const oauthState = await this.oauthStateRepository.findOne({
@@ -328,13 +376,13 @@ export class GoogleAdsOAuthService {
 
     connection.status = 'active';
     connection.external_user_id = userInfo.sub;
-    connection.external_user_email = userInfo.email;
+    connection.external_user_email = userInfo.email ?? null;
     connection.access_token = tokenPayload.access_token;
     connection.refresh_token =
       tokenPayload.refresh_token ?? connection.refresh_token;
-    connection.token_type = tokenPayload.token_type;
+    connection.token_type = tokenPayload.token_type ?? null;
     connection.scopes = scopes;
-    connection.expires_at = expiresAt ?? undefined;
+    connection.expires_at = expiresAt;
     connection.connected_at = connection.connected_at ?? now;
     connection.last_refreshed_at = now;
     connection.metadata = {
@@ -424,12 +472,17 @@ export class GoogleAdsOAuthService {
     return (await response.json()) as GoogleTokenResponse;
   }
 
-  private async fetchUserInfo(accessToken: string): Promise<GoogleUserInfoResponse> {
-    const response = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
+  private async fetchUserInfo(
+    accessToken: string,
+  ): Promise<GoogleUserInfoResponse> {
+    const response = await fetch(
+      'https://openidconnect.googleapis.com/v1/userinfo',
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
       },
-    });
+    );
 
     if (!response.ok) {
       const body = await response.text();
@@ -442,7 +495,9 @@ export class GoogleAdsOAuthService {
   }
 
   private getGoogleScopes(): string[] {
-    const configured = this.configService.get<string>('GOOGLE_ADS_OAUTH_SCOPES');
+    const configured = this.configService.get<string>(
+      'GOOGLE_ADS_OAUTH_SCOPES',
+    );
     if (!configured) {
       return [
         'https://www.googleapis.com/auth/adwords',
@@ -458,11 +513,14 @@ export class GoogleAdsOAuthService {
       .filter(Boolean);
   }
 
-  private async getUsableAccessToken(connection: OAuthConnection): Promise<string> {
+  private async getUsableAccessToken(
+    connection: OAuthConnection,
+  ): Promise<string> {
     const expiresAt = connection.expires_at?.getTime() ?? 0;
     const now = Date.now();
     const hasValidAccessToken =
-      Boolean(connection.access_token) && (!expiresAt || expiresAt > now + 60_000);
+      Boolean(connection.access_token) &&
+      (!expiresAt || expiresAt > now + 60_000);
 
     if (hasValidAccessToken && connection.access_token) {
       return connection.access_token;
@@ -474,7 +532,9 @@ export class GoogleAdsOAuthService {
       );
     }
 
-    const tokenPayload = await this.refreshAccessToken(connection.refresh_token);
+    const tokenPayload = await this.refreshAccessToken(
+      connection.refresh_token,
+    );
     const refreshedAt = new Date();
     connection.access_token = tokenPayload.access_token;
     connection.token_type = tokenPayload.token_type ?? connection.token_type;
@@ -482,14 +542,19 @@ export class GoogleAdsOAuthService {
     connection.expires_at = tokenPayload.expires_in
       ? new Date(refreshedAt.getTime() + tokenPayload.expires_in * 1000)
       : connection.expires_at;
-    connection.scopes = this.extractScopes(tokenPayload.scope, connection.scopes);
+    connection.scopes = this.extractScopes(
+      tokenPayload.scope,
+      connection.scopes ?? undefined,
+    );
 
     await this.oauthConnectionRepository.save(connection);
 
     return connection.access_token;
   }
 
-  private async fetchAccessibleCustomers(accessToken: string): Promise<string[]> {
+  private async fetchAccessibleCustomers(
+    accessToken: string,
+  ): Promise<string[]> {
     const response = await fetch(
       `${this.getGoogleAdsApiBaseUrl()}/customers:listAccessibleCustomers`,
       {
@@ -530,9 +595,9 @@ export class GoogleAdsOAuthService {
         return this.buildInaccessibleAccount(customerId, body);
       }
 
-      const payload =
-        (await response.json()) as GoogleAdsSearchStreamResponse;
-      const customer = payload.flatMap((chunk) => chunk.results ?? [])[0]?.customer;
+      const payload = (await response.json()) as GoogleAdsSearchStreamResponse;
+      const customer = payload.flatMap((chunk) => chunk.results ?? [])[0]
+        ?.customer;
 
       return {
         resourceName: customer?.resourceName ?? `customers/${customerId}`,
@@ -558,12 +623,17 @@ export class GoogleAdsOAuthService {
         accessible: false,
         errorCode: 'UNEXPECTED_ERROR',
         errorMessage:
-          error instanceof Error ? error.message : 'Erro inesperado ao consultar conta.',
+          error instanceof Error
+            ? error.message
+            : 'Erro inesperado ao consultar conta.',
       } satisfies GoogleAdsAccountResult;
     }
   }
 
-  private buildGoogleAdsHeaders(accessToken: string, includeLoginCustomerId: boolean) {
+  private buildGoogleAdsHeaders(
+    accessToken: string,
+    includeLoginCustomerId: boolean,
+  ) {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
@@ -582,7 +652,10 @@ export class GoogleAdsOAuthService {
   }
 
   private getGoogleAdsApiBaseUrl(): string {
-    const version = this.configService.get<string>('GOOGLE_ADS_API_VERSION', 'v20');
+    const version = this.configService.get<string>(
+      'GOOGLE_ADS_API_VERSION',
+      'v20',
+    );
     return `https://googleads.googleapis.com/${version}`;
   }
 
