@@ -64,7 +64,9 @@ export class MetaAdsOAuthService {
 
     let user: User | null = null;
     if (params.userId) {
-      user = await this.userRepository.findOne({ where: { id: params.userId } });
+      user = await this.userRepository.findOne({
+        where: { id: params.userId },
+      });
       if (!user) {
         throw new BadRequestException('userId informado nao foi encontrado.');
       }
@@ -183,13 +185,14 @@ export class MetaAdsOAuthService {
 
     connection.external_account_id = account.accountId;
     connection.external_account_name =
-      params.accountName?.trim() || account.name || undefined;
+      params.accountName?.trim() || account.name || null;
     connection.metadata = {
       ...(connection.metadata ?? {}),
       selectedAccount: account,
     };
 
-    const savedConnection = await this.oauthConnectionRepository.save(connection);
+    const savedConnection =
+      await this.oauthConnectionRepository.save(connection);
 
     return {
       connectionId: savedConnection.id,
@@ -197,6 +200,41 @@ export class MetaAdsOAuthService {
       externalAccountId: savedConnection.external_account_id ?? null,
       externalAccountName: savedConnection.external_account_name ?? null,
       metadata: savedConnection.metadata ?? null,
+    };
+  }
+
+  async disconnectConnection(connectionId: string) {
+    const connection = await this.oauthConnectionRepository.findOne({
+      where: { id: connectionId, provider: this.provider },
+    });
+
+    if (!connection) {
+      throw new NotFoundException('Conexao OAuth nao encontrada.');
+    }
+
+    const disconnectedAt = new Date();
+    connection.status = 'disconnected';
+    connection.access_token = null;
+    connection.refresh_token = null;
+    connection.token_type = null;
+    connection.expires_at = null;
+    connection.external_account_id = null;
+    connection.external_account_name = null;
+    connection.updated_at = disconnectedAt;
+    connection.metadata = {
+      ...(connection.metadata ?? {}),
+      selectedAccount: null,
+      disconnectedAt: disconnectedAt.toISOString(),
+    };
+
+    const savedConnection =
+      await this.oauthConnectionRepository.save(connection);
+
+    return {
+      connectionId: savedConnection.id,
+      provider: savedConnection.provider,
+      status: savedConnection.status,
+      disconnectedAt: disconnectedAt.toISOString(),
     };
   }
 
@@ -214,7 +252,9 @@ export class MetaAdsOAuthService {
     }
 
     if (!params.code || !params.state) {
-      throw new BadRequestException('Parametros code e state sao obrigatorios.');
+      throw new BadRequestException(
+        'Parametros code e state sao obrigatorios.',
+      );
     }
 
     const oauthState = await this.oauthStateRepository.findOne({
@@ -270,12 +310,12 @@ export class MetaAdsOAuthService {
 
     connection.status = 'active';
     connection.external_user_id = me.id;
-    connection.external_user_email = me.email;
+    connection.external_user_email = me.email ?? null;
     connection.access_token = tokenPayload.access_token;
-    connection.refresh_token = undefined;
+    connection.refresh_token = null;
     connection.token_type = tokenPayload.token_type ?? 'bearer';
     connection.scopes = oauthState.scopes ?? [];
-    connection.expires_at = expiresAt ?? undefined;
+    connection.expires_at = expiresAt;
     connection.connected_at = connection.connected_at ?? now;
     connection.last_refreshed_at = now;
     connection.metadata = {
@@ -285,7 +325,8 @@ export class MetaAdsOAuthService {
       longLivedToken: true,
     };
 
-    const savedConnection = await this.oauthConnectionRepository.save(connection);
+    const savedConnection =
+      await this.oauthConnectionRepository.save(connection);
 
     return {
       provider: this.provider,
@@ -305,9 +346,7 @@ export class MetaAdsOAuthService {
     const appId = this.getRequiredConfig('META_APP_ID');
     const appSecret = this.getRequiredConfig('META_APP_SECRET');
 
-    const url = new URL(
-      `${this.getMetaGraphBaseUrl()}/oauth/access_token`,
-    );
+    const url = new URL(`${this.getMetaGraphBaseUrl()}/oauth/access_token`);
     url.searchParams.set('client_id', appId);
     url.searchParams.set('client_secret', appSecret);
     url.searchParams.set('redirect_uri', redirectUri);
@@ -330,9 +369,7 @@ export class MetaAdsOAuthService {
     const appId = this.getRequiredConfig('META_APP_ID');
     const appSecret = this.getRequiredConfig('META_APP_SECRET');
 
-    const url = new URL(
-      `${this.getMetaGraphBaseUrl()}/oauth/access_token`,
-    );
+    const url = new URL(`${this.getMetaGraphBaseUrl()}/oauth/access_token`);
     url.searchParams.set('grant_type', 'fb_exchange_token');
     url.searchParams.set('client_id', appId);
     url.searchParams.set('client_secret', appSecret);
@@ -399,7 +436,9 @@ export class MetaAdsOAuthService {
 
   private getUsableAccessToken(connection: OAuthConnection): string {
     if (!connection.access_token) {
-      throw new BadRequestException('A conexao Meta nao possui access token salvo.');
+      throw new BadRequestException(
+        'A conexao Meta nao possui access token salvo.',
+      );
     }
 
     if (
