@@ -158,6 +158,8 @@ const INSIGHTS_FIELDS = [
   'ad_id',
   'ad_name',
   'account_name',
+  'date_start',
+  'date_stop',
   'impressions',
   'clicks',
   'reach',
@@ -223,6 +225,28 @@ export class MetaBatchService {
       this.logger.warn(`Failed to parse batch item body: ${item.body}`);
       return null;
     }
+  }
+
+  private formatBatchErrorBody(body: string): string {
+    try {
+      const parsed = JSON.parse(body) as {
+        error?: { message?: string; type?: string; code?: number; error_subcode?: number };
+      };
+      if (parsed.error?.message) {
+        const parts = [
+          parsed.error.message,
+          parsed.error.type ? `type=${parsed.error.type}` : undefined,
+          parsed.error.code ? `code=${parsed.error.code}` : undefined,
+          parsed.error.error_subcode
+            ? `subcode=${parsed.error.error_subcode}`
+            : undefined,
+        ].filter(Boolean);
+        return parts.join(' ');
+      }
+    } catch {
+      return body;
+    }
+    return body;
   }
 
   private buildDateParam(opts: {
@@ -355,9 +379,24 @@ export class MetaBatchService {
     const responses = await this.executeGraphBatch(accessToken, requests);
 
     return responses.map((item, idx) => {
-      const parsed = this.parseBatchItem<MetaInsightRow>(item);
+      const accountId = params.accountIds[idx];
+      if (item.code !== 200) {
+        throw new Error(
+          `Meta insights batch failed for account ${accountId}: ${item.code} ${this.formatBatchErrorBody(item.body)}`,
+        );
+      }
+
+      let parsed: MetaPagedResponse<MetaInsightRow>;
+      try {
+        parsed = JSON.parse(item.body) as MetaPagedResponse<MetaInsightRow>;
+      } catch {
+        throw new Error(
+          `Meta insights batch returned invalid JSON for account ${accountId}: ${item.body}`,
+        );
+      }
+
       return {
-        accountId: params.accountIds[idx],
+        accountId,
         insights: parsed?.data ?? [],
       };
     });
