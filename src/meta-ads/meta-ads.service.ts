@@ -249,6 +249,46 @@ export class MetaAdsService {
       { dateFrom: params.since, dateTo: params.until },
     );
 
+    const total = await this.runInsightsExecution(execution, params, true);
+    return { total, executionId: execution.id };
+  }
+
+  async enqueueInsightsSync(params: {
+    triggeredBy?: string;
+    connectionId?: string;
+    accountIds?: string[];
+    datePreset?: string;
+    since?: string;
+    until?: string;
+    level?: 'ad' | 'adset' | 'campaign';
+    breakdowns?: string;
+  }): Promise<{ queued: true; executionId: string }> {
+    const execution = await this.startExecution(
+      'insights',
+      params.triggeredBy ?? 'http',
+      { dateFrom: params.since, dateTo: params.until },
+    );
+
+    setImmediate(() => {
+      void this.runInsightsExecution(execution, params, false);
+    });
+
+    return { queued: true, executionId: execution.id };
+  }
+
+  private async runInsightsExecution(
+    execution: MetaSyncExecution,
+    params: {
+      connectionId?: string;
+      accountIds?: string[];
+      datePreset?: string;
+      since?: string;
+      until?: string;
+      level?: 'ad' | 'adset' | 'campaign';
+      breakdowns?: string;
+    },
+    throwOnError: boolean,
+  ): Promise<number> {
     try {
       const targets = await this.resolveTargets(params);
       let total = 0;
@@ -270,11 +310,13 @@ export class MetaAdsService {
       }
 
       await this.finishExecution(execution, { records: total });
-      return { total, executionId: execution.id };
+      return total;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       await this.finishExecution(execution, { records: 0, error: msg });
-      throw err;
+      this.logger.error(`Meta insights sync failed: ${msg}`);
+      if (throwOnError) throw err;
+      return 0;
     }
   }
 
