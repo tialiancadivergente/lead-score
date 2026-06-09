@@ -275,6 +275,56 @@ export class MetaAdsController {
   }
 
   @ApiOperation({
+    summary: 'Insights Bulk Assíncrono (múltiplas contas, períodos longos)',
+    description:
+      'Divide o período em chunks de N dias e inicia um job assíncrono por conta × chunk. ' +
+      'Processa em paralelo (até 5 simultâneos) e salva automaticamente. ' +
+      'Retorna imediatamente com executionId para acompanhamento.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        connectionId: { type: 'string' },
+        accountIds: { type: 'array', items: { type: 'string' } },
+        since: { type: 'string', example: '2025-01-01' },
+        until: { type: 'string', example: '2025-05-22' },
+        level: { type: 'string', enum: ['ad', 'adset', 'campaign'], default: 'ad' },
+        breakdowns: { type: 'string', example: 'publisher_platform' },
+        chunkDays: { type: 'number', example: 30, description: 'Tamanho de cada chunk em dias (padrão: 30)' },
+      },
+      required: ['since', 'until'],
+    },
+  })
+  @Post('jobs/insights/bulk')
+  startBulkInsightsJob(
+    @Body()
+    body: {
+      connectionId?: string;
+      accountIds?: string[];
+      since: string;
+      until: string;
+      level?: string;
+      breakdowns?: string;
+      chunkDays?: number;
+    },
+  ) {
+    if (!body.since || !body.until) {
+      throw new BadRequestException('since e until são obrigatórios para bulk jobs.');
+    }
+    return this.metaAdsService.enqueueInsightsBulkAsync({
+      triggeredBy: 'http',
+      connectionId: body.connectionId,
+      accountIds: body.accountIds,
+      since: body.since,
+      until: body.until,
+      level: body.level,
+      breakdowns: body.breakdowns,
+      chunkDays: body.chunkDays,
+    });
+  }
+
+  @ApiOperation({
     summary: 'Verificar Job',
     description: 'Verifica o status de um job assíncrono de insights pelo report_run_id.',
   })

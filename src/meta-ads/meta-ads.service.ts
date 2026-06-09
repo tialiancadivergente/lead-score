@@ -276,6 +276,140 @@ export class MetaAdsService {
     return { queued: true, executionId: execution.id };
   }
 
+  async enqueueInsightsBulkAsync(params: {
+    triggeredBy?: string;
+    connectionId?: string;
+    accountIds?: string[];
+    since: string;
+    until: string;
+    level?: string;
+    breakdowns?: string;
+    chunkDays?: number;
+  }): Promise<{ queued: true; executionId: string; totalJobs: number }> {
+    const targets = await this.resolveTargets(params);
+    const chunks = this.chunkDateRange(params.since, params.until, params.chunkDays ?? 30);
+    const totalJobs = targets.reduce((sum, t) => sum + t.accountIds.length, 0) * chunks.length;
+
+    const execution = await this.startExecution(
+      'insights',
+      params.triggeredBy ?? 'http',
+      { dateFrom: params.since, dateTo: params.until },
+    );
+
+    setImmediate(() => {
+      void this.runBulkAsyncInsights(execution, targets, chunks, {
+        level: params.level ?? 'ad',
+        breakdowns: params.breakdowns,
+      });
+    });
+
+    return { queued: true, executionId: execution.id, totalJobs };
+  }
+
+  private chunkDateRange(
+    since: string,
+    until: string,
+    chunkDays: number,
+  ): Array<{ since: string; until: string }> {
+    const chunks: Array<{ since: string; until: string }> = [];
+    let current = new Date(since + 'T00:00:00Z');
+    const end = new Date(until + 'T00:00:00Z');
+
+    while (current <= end) {
+      const chunkEnd = new Date(current);
+      chunkEnd.setUTCDate(chunkEnd.getUTCDate() + chunkDays - 1);
+      if (chunkEnd > end) chunkEnd.setTime(end.getTime());
+
+      chunks.push({
+        since: current.toISOString().slice(0, 10),
+        until: chunkEnd.toISOString().slice(0, 10),
+      });
+
+      current.setUTCDate(current.getUTCDate() + chunkDays);
+    }
+
+    return chunks;
+  }
+
+  private async runBulkAsyncInsights(
+    execution: MetaSyncExecution,
+    targets: Array<{ connectionId: string; accountIds: string[] }>,
+    chunks: Array<{ since: string; until: string }>,
+    opts: { level: string; breakdowns?: string },
+  ): Promise<void> {
+    const defaultFields = [
+      'campaign_id', 'campaign_name', 'adset_id', 'adset_name',
+      'ad_id', 'ad_name', 'impressions', 'clicks', 'reach',
+      'spend', 'ctr', 'cpc', 'cpm', 'actions',
+    ];
+
+    const jobs: Array<{ connectionId: string; accountId: string; since: string; until: string }> = [];
+    for (const { connectionId, accountIds } of targets) {
+      for (const accountId of accountIds) {
+        for (const chunk of chunks) {
+          jobs.push({ connectionId, accountId, since: chunk.since, until: chunk.until });
+        }
+      }
+    }
+
+    let totalRecords = 0;
+    let failedCount = 0;
+    const queue = [...jobs];
+    const CONCURRENCY = 5;
+
+    const workers = Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, async () => {
+      while (queue.length > 0) {
+        const job = queue.shift();
+        if (!job) break;
+
+        try {
+          const { report_run_id } = await this.jobService.startInsightsJob({
+            connectionId: job.connectionId,
+            nodeId: `act_${job.accountId}`,
+            fields: defaultFields,
+            level: opts.level,
+            since: job.since,
+            until: job.until,
+            breakdowns: opts.breakdowns,
+          });
+
+          const rows = await this.jobService.waitForJobAndFetch({
+            connectionId: job.connectionId,
+            reportRunId: report_run_id,
+            maxWaitMs: 600_000,
+          });
+
+          const saved = await this.processor.saveInsights(job.accountId, rows);
+          totalRecords += saved;
+          this.logger.log(
+            `Bulk job ${job.accountId} [${job.since}→${job.until}]: ${saved} registros`,
+          );
+        } catch (err: unknown) {
+          failedCount++;
+          const msg = err instanceof Error ? err.message : String(err);
+          this.logger.error(`Bulk job failed for ${job.accountId} [${job.since}→${job.until}]: ${msg}`);
+        }
+      }
+    });
+
+    await Promise.all(workers);
+
+    execution.finished_at = new Date();
+    execution.records_processed = totalRecords;
+
+    if (failedCount === 0) {
+      execution.status = 'completed';
+    } else if (totalRecords > 0) {
+      execution.status = 'partial';
+      execution.error_message = `${failedCount} de ${jobs.length} jobs falharam`;
+    } else {
+      execution.status = 'failed';
+      execution.error_message = `Todos os ${jobs.length} jobs falharam`;
+    }
+
+    await this.executionRepo.save(execution);
+  }
+
   private async runInsightsExecution(
     execution: MetaSyncExecution,
     params: {
