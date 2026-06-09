@@ -18,6 +18,7 @@ import { MarketingSyncModule } from './marketing-sync/marketing-sync.module';
 import { HotmartModule } from './hotmart/hotmart.module';
 import { MetaAdsModule } from './meta-ads/meta-ads.module';
 import { LaunchDashboardModule } from './launch-dashboard/launch-dashboard.module';
+import { InleadWebhookModule } from './inlead-webhook/inlead-webhook.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { LaunchDashboardModule } from './launch-dashboard/launch-dashboard.modul
     HotmartModule,
     MetaAdsModule,
     LaunchDashboardModule,
+    InleadWebhookModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -50,6 +50,10 @@ import {
   CreateFullFormPayloadDto,
   CreateFullFormResponseDto,
 } from './dto/create-full-form.dto';
+import {
+  CloneFormPayloadDto,
+  CloneFormResponseDto,
+} from './dto/clone-form.dto';
 import { FormManagementService } from './form-management.service';
 
 @ApiTags('Form Management')
@@ -140,7 +144,8 @@ export class FormManagementController {
   @ApiOperation({ summary: 'Busca pergunta por id' })
   @ApiResponse({ status: 200, type: QuestionResponseDto })
   async findQuestionById(
-    @Param('questionId', new ParseUUIDPipe({ version: '4' })) questionId: string,
+    @Param('questionId', new ParseUUIDPipe({ version: '4' }))
+    questionId: string,
   ) {
     return await this.service.findQuestionById(questionId);
   }
@@ -161,7 +166,8 @@ export class FormManagementController {
   @ApiBody({ type: UpdateQuestionDto })
   @ApiResponse({ status: 200, type: QuestionResponseDto })
   async updateQuestion(
-    @Param('questionId', new ParseUUIDPipe({ version: '4' })) questionId: string,
+    @Param('questionId', new ParseUUIDPipe({ version: '4' }))
+    questionId: string,
     @Body() dto: UpdateQuestionDto,
   ) {
     return await this.service.updateQuestion(questionId, dto);
@@ -172,7 +178,8 @@ export class FormManagementController {
   @ApiOperation({ summary: 'Remove pergunta' })
   @ApiResponse({ status: 204 })
   async removeQuestion(
-    @Param('questionId', new ParseUUIDPipe({ version: '4' })) questionId: string,
+    @Param('questionId', new ParseUUIDPipe({ version: '4' }))
+    questionId: string,
   ) {
     await this.service.removeQuestion(questionId);
   }
@@ -181,7 +188,8 @@ export class FormManagementController {
   @ApiOperation({ summary: 'Lista opcoes da pergunta' })
   @ApiResponse({ status: 200, type: QuestionOptionResponseDto, isArray: true })
   async listQuestionOptions(
-    @Param('questionId', new ParseUUIDPipe({ version: '4' })) questionId: string,
+    @Param('questionId', new ParseUUIDPipe({ version: '4' }))
+    questionId: string,
   ) {
     return await this.service.listQuestionOptions(questionId);
   }
@@ -191,7 +199,8 @@ export class FormManagementController {
   @ApiBody({ type: CreateQuestionOptionDto })
   @ApiResponse({ status: 201, type: QuestionOptionResponseDto })
   async createQuestionOption(
-    @Param('questionId', new ParseUUIDPipe({ version: '4' })) questionId: string,
+    @Param('questionId', new ParseUUIDPipe({ version: '4' }))
+    questionId: string,
     @Body() dto: CreateQuestionOptionDto,
   ) {
     return await this.service.createQuestionOption(questionId, dto);
@@ -251,10 +260,15 @@ export class FormManagementController {
   async updateFormVersionQuestion(
     @Param('formVersionId', new ParseUUIDPipe({ version: '4' }))
     formVersionId: string,
-    @Param('questionId', new ParseUUIDPipe({ version: '4' })) questionId: string,
+    @Param('questionId', new ParseUUIDPipe({ version: '4' }))
+    questionId: string,
     @Body() dto: UpdateFormVersionQuestionDto,
   ) {
-    return await this.service.updateFormVersionQuestion(formVersionId, questionId, dto);
+    return await this.service.updateFormVersionQuestion(
+      formVersionId,
+      questionId,
+      dto,
+    );
   }
 
   @Delete('versions/:formVersionId/questions/:questionId')
@@ -264,7 +278,8 @@ export class FormManagementController {
   async removeFormVersionQuestion(
     @Param('formVersionId', new ParseUUIDPipe({ version: '4' }))
     formVersionId: string,
-    @Param('questionId', new ParseUUIDPipe({ version: '4' })) questionId: string,
+    @Param('questionId', new ParseUUIDPipe({ version: '4' }))
+    questionId: string,
   ) {
     await this.service.removeFormVersionQuestion(formVersionId, questionId);
   }
@@ -312,7 +327,8 @@ export class FormManagementController {
   @ApiBody({ type: UpdateLeadscoreDto })
   @ApiResponse({ status: 200, type: LeadscoreResponseDto })
   async updateScore(
-    @Param('leadscoreId', new ParseUUIDPipe({ version: '4' })) leadscoreId: string,
+    @Param('leadscoreId', new ParseUUIDPipe({ version: '4' }))
+    leadscoreId: string,
     @Body() dto: UpdateLeadscoreDto,
   ) {
     return await this.service.updateScore(leadscoreId, dto);
@@ -322,7 +338,8 @@ export class FormManagementController {
   @ApiOperation({ summary: 'Ativa lead score' })
   @ApiResponse({ status: 200, type: LeadscoreResponseDto })
   async activateScore(
-    @Param('leadscoreId', new ParseUUIDPipe({ version: '4' })) leadscoreId: string,
+    @Param('leadscoreId', new ParseUUIDPipe({ version: '4' }))
+    leadscoreId: string,
   ) {
     return await this.service.activateScore(leadscoreId);
   }
@@ -332,7 +349,8 @@ export class FormManagementController {
   @ApiOperation({ summary: 'Remove lead score' })
   @ApiResponse({ status: 204 })
   async removeScore(
-    @Param('leadscoreId', new ParseUUIDPipe({ version: '4' })) leadscoreId: string,
+    @Param('leadscoreId', new ParseUUIDPipe({ version: '4' }))
+    leadscoreId: string,
   ) {
     await this.service.removeScore(leadscoreId);
   }
@@ -345,7 +363,8 @@ export class FormManagementController {
     isArray: true,
   })
   async listScoreOptionPoints(
-    @Param('leadscoreId', new ParseUUIDPipe({ version: '4' })) leadscoreId: string,
+    @Param('leadscoreId', new ParseUUIDPipe({ version: '4' }))
+    leadscoreId: string,
   ) {
     return await this.service.listScoreOptionPoints(leadscoreId);
   }
@@ -359,7 +378,8 @@ export class FormManagementController {
     isArray: true,
   })
   async replaceScoreOptionPoints(
-    @Param('leadscoreId', new ParseUUIDPipe({ version: '4' })) leadscoreId: string,
+    @Param('leadscoreId', new ParseUUIDPipe({ version: '4' }))
+    leadscoreId: string,
     @Body() dto: ReplaceLeadscoreOptionPointsDto,
   ) {
     return await this.service.replaceScoreOptionPoints(leadscoreId, dto);
@@ -373,7 +393,8 @@ export class FormManagementController {
     isArray: true,
   })
   async listScoreRangePoints(
-    @Param('leadscoreId', new ParseUUIDPipe({ version: '4' })) leadscoreId: string,
+    @Param('leadscoreId', new ParseUUIDPipe({ version: '4' }))
+    leadscoreId: string,
   ) {
     return await this.service.listScoreRangePoints(leadscoreId);
   }
@@ -387,10 +408,21 @@ export class FormManagementController {
     isArray: true,
   })
   async replaceScoreRangePoints(
-    @Param('leadscoreId', new ParseUUIDPipe({ version: '4' })) leadscoreId: string,
+    @Param('leadscoreId', new ParseUUIDPipe({ version: '4' }))
+    leadscoreId: string,
     @Body() dto: ReplaceLeadscoreRangePointsDto,
   ) {
     return await this.service.replaceScoreRangePoints(leadscoreId, dto);
+  }
+
+  @Post('clone')
+  @ApiOperation({
+    summary: 'Duplica perguntas, opcoes e lead score de uma versao para outra',
+  })
+  @ApiBody({ type: CloneFormPayloadDto })
+  @ApiResponse({ status: 201, type: CloneFormResponseDto })
+  async clone(@Body() payload: CloneFormPayloadDto) {
+    return await this.service.clone(payload);
   }
 
   @Post('full')
