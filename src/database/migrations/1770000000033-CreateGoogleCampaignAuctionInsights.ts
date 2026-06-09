@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateGoogleCampaignAuctionInsights1770000000033
-  implements MigrationInterface
-{
+export class CreateGoogleCampaignAuctionInsights1770000000033 implements MigrationInterface {
   name = 'CreateGoogleCampaignAuctionInsights1770000000033';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

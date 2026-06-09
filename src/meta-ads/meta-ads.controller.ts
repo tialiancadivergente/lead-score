@@ -12,13 +12,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import {
-  ApiBody,
-  ApiOkResponse,
-  ApiOperation,
-  ApiQuery,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { MetaAdsService } from './meta-ads.service';
@@ -44,7 +38,16 @@ export class MetaAdsController {
         accountIds: { type: 'array', items: { type: 'string' } },
         datePreset: {
           type: 'string',
-          enum: ['today', 'yesterday', 'last_7d', 'last_14d', 'last_30d', 'last_90d', 'this_month', 'last_month'],
+          enum: [
+            'today',
+            'yesterday',
+            'last_7d',
+            'last_14d',
+            'last_30d',
+            'last_90d',
+            'this_month',
+            'last_month',
+          ],
           example: 'last_30d',
         },
         since: { type: 'string', example: '2025-05-01' },
@@ -162,7 +165,8 @@ export class MetaAdsController {
         breakdowns: {
           type: 'string',
           default: 'publisher_platform',
-          description: 'Breakdown por plataforma. Use publisher_platform para separar Facebook/Instagram.',
+          description:
+            'Breakdown por plataforma. Use publisher_platform para separar Facebook/Instagram.',
         },
       },
       required: ['connectionId'],
@@ -195,7 +199,8 @@ export class MetaAdsController {
 
   @ApiOperation({
     summary: 'Sync completo (campanhas + conjuntos + anúncios + insights)',
-    description: 'Executa todos os 4 passos em paralelo para todas as contas selecionadas.',
+    description:
+      'Executa todos os 4 passos em paralelo para todas as contas selecionadas.',
   })
   @Post('sync/all')
   syncAll(
@@ -231,7 +236,8 @@ export class MetaAdsController {
         connectionId: { type: 'string' },
         nodeId: {
           type: 'string',
-          description: 'ID do node: act_{account_id}, campaign_id, adset_id ou ad_id',
+          description:
+            'ID do node: act_{account_id}, campaign_id, adset_id ou ad_id',
         },
         since: { type: 'string', example: '2025-01-01' },
         until: { type: 'string', example: '2025-05-22' },
@@ -243,7 +249,8 @@ export class MetaAdsController {
         fields: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Campos a incluir. Padrão: impressions, clicks, spend, ctr, cpc, cpm, actions.',
+          description:
+            'Campos a incluir. Padrão: impressions, clicks, spend, ctr, cpc, cpm, actions.',
         },
         breakdowns: { type: 'string', example: 'publisher_platform' },
       },
@@ -289,9 +296,17 @@ export class MetaAdsController {
         accountIds: { type: 'array', items: { type: 'string' } },
         since: { type: 'string', example: '2025-01-01' },
         until: { type: 'string', example: '2025-05-22' },
-        level: { type: 'string', enum: ['ad', 'adset', 'campaign'], default: 'ad' },
+        level: {
+          type: 'string',
+          enum: ['ad', 'adset', 'campaign'],
+          default: 'ad',
+        },
         breakdowns: { type: 'string', example: 'publisher_platform' },
-        chunkDays: { type: 'number', example: 30, description: 'Tamanho de cada chunk em dias (padrão: 30)' },
+        chunkDays: {
+          type: 'number',
+          example: 30,
+          description: 'Tamanho de cada chunk em dias (padrão: 30)',
+        },
       },
       required: ['since', 'until'],
     },
@@ -310,7 +325,9 @@ export class MetaAdsController {
     },
   ) {
     if (!body.since || !body.until) {
-      throw new BadRequestException('since e until são obrigatórios para bulk jobs.');
+      throw new BadRequestException(
+        'since e until são obrigatórios para bulk jobs.',
+      );
     }
     return this.metaAdsService.enqueueInsightsBulkAsync({
       triggeredBy: 'http',
@@ -326,7 +343,8 @@ export class MetaAdsController {
 
   @ApiOperation({
     summary: 'Verificar Job',
-    description: 'Verifica o status de um job assíncrono de insights pelo report_run_id.',
+    description:
+      'Verifica o status de um job assíncrono de insights pelo report_run_id.',
   })
   @Get('jobs/:reportRunId/check')
   checkJob(
@@ -338,7 +356,8 @@ export class MetaAdsController {
 
   @ApiOperation({
     summary: 'Recuperar Job',
-    description: 'Recupera os resultados de um job concluído. Pode salvar automaticamente com ?save=true.',
+    description:
+      'Recupera os resultados de um job concluído. Pode salvar automaticamente com ?save=true.',
   })
   @Get('jobs/:reportRunId')
   getJob(
@@ -547,6 +566,8 @@ export class MetaAdsController {
   @UseInterceptors(FileInterceptor('file'))
   async importCsv(@UploadedFile() file: { buffer: Buffer }) {
     if (!file) throw new BadRequestException('Arquivo CSV não enviado.');
-    return this.metaAdsService.importPerformanceCsv(file.buffer.toString('utf-8'));
+    return this.metaAdsService.importPerformanceCsv(
+      file.buffer.toString('utf-8'),
+    );
   }
 }

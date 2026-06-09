@@ -15,7 +15,11 @@ export class AddSourceAccountToHotmartSaleRaw1770000000043 implements MigrationI
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_hotmart_sale_raw_source_account"`);
-    await queryRunner.query(`ALTER TABLE "hotmart_sale_raw" DROP COLUMN IF EXISTS "source_account"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_hotmart_sale_raw_source_account"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "hotmart_sale_raw" DROP COLUMN IF EXISTS "source_account"`,
+    );
   }
 }

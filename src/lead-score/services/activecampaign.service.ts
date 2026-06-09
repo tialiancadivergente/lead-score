@@ -49,10 +49,16 @@ export class LeadScoreActiveCampaignService {
       payload.email_address ??
       payload.person?.email;
     const firstName =
-      payload.firstName ?? payload.nome ?? payload.first_name ?? payload.person?.nome;
+      payload.firstName ??
+      payload.nome ??
+      payload.first_name ??
+      payload.person?.nome;
     const lastName = payload.lastName ?? payload.sobrenome ?? payload.last_name;
     const phone =
-      payload.phone ?? payload.telefone ?? payload.celular ?? payload.person?.phone;
+      payload.phone ??
+      payload.telefone ??
+      payload.celular ??
+      payload.person?.phone;
 
     return {
       contact: {
@@ -164,11 +170,16 @@ export class LeadScoreActiveCampaignService {
     if (!res.ok) return [];
 
     const json = (await this.parseJsonSafe(text)) as any;
-    const contacts = Array.isArray(json?.contacts) ? (json.contacts as any[]) : [];
+    const contacts = Array.isArray(json?.contacts)
+      ? (json.contacts as any[])
+      : [];
     return contacts as ActiveCampaignContact[];
   }
 
-  private async updateContact(contactId: string, contact: ActiveCampaignContact) {
+  private async updateContact(
+    contactId: string,
+    contact: ActiveCampaignContact,
+  ) {
     const { baseUrl, apiToken } = this.getConfig();
     const url = new URL(
       `/api/3/contacts/${encodeURIComponent(contactId)}`,
@@ -199,17 +210,23 @@ export class LeadScoreActiveCampaignService {
       throw new Error(`ActiveCampaign update erro ${res.status}: ${text}`);
     }
 
-    return (await this.parseJsonSafe(text)) as ActiveCampaignCreateContactResponse;
+    return (await this.parseJsonSafe(
+      text,
+    )) as ActiveCampaignCreateContactResponse;
   }
 
-  private async resolveCapture(payload: Record<string, any>): Promise<Capture | null> {
+  private async resolveCapture(
+    payload: Record<string, any>,
+  ): Promise<Capture | null> {
     const captureId = this.pickNonEmptyString(payload.capture_id);
     const leadRegistrationRequestId = this.pickNonEmptyString(
       payload.lead_registration_request_id,
     );
 
     if (captureId) {
-      const capture = await this.captureRepo.findOne({ where: { id: captureId } });
+      const capture = await this.captureRepo.findOne({
+        where: { id: captureId },
+      });
       if (capture) return capture;
     }
 
@@ -309,6 +326,8 @@ export class LeadScoreActiveCampaignService {
       throw new Error(`ActiveCampaign erro ${res.status}: ${text}`);
     }
 
-    return (await this.parseJsonSafe(text)) as ActiveCampaignCreateContactResponse;
+    return (await this.parseJsonSafe(
+      text,
+    )) as ActiveCampaignCreateContactResponse;
   }
 }

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CopyFormStructureFromOtimistasToOdmlDespertar1770000000040
-  implements MigrationInterface
-{
+export class CopyFormStructureFromOtimistasToOdmlDespertar1770000000040 implements MigrationInterface {
   name = 'CopyFormStructureFromOtimistasToOdmlDespertar1770000000040';
 
   private readonly sourceFormId = '7405904f-64b9-4b2e-a067-a5fa246e1d55';

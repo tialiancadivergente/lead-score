@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class SeedFormVersionQuestionResgateExAliados1770000000024
-  implements MigrationInterface
-{
+export class SeedFormVersionQuestionResgateExAliados1770000000024 implements MigrationInterface {
   name = 'SeedFormVersionQuestionResgateExAliados1770000000024';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -79,4 +77,3 @@ export class SeedFormVersionQuestionResgateExAliados1770000000024
     `);
   }
 }
-

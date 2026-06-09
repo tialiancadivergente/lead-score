@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class SeedSeasonAbr26ForLdiLaunch1770000000030
-  implements MigrationInterface
-{
+export class SeedSeasonAbr26ForLdiLaunch1770000000030 implements MigrationInterface {
   name = 'SeedSeasonAbr26ForLdiLaunch1770000000030';
 
   private readonly seasonId = '869dac13-6e0c-41a5-9964-a5ffd8ad63c1';

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class SeedFormOResgateDosExAliados1770000000021
-  implements MigrationInterface
-{
+export class SeedFormOResgateDosExAliados1770000000021 implements MigrationInterface {
   name = 'SeedFormOResgateDosExAliados1770000000021';
 
   private readonly formId = 'd588a7fc-3110-4fe5-87f2-fc5fbf74b321';

@@ -6,12 +6,7 @@ import {
   HttpStatus,
   Post,
 } from '@nestjs/common';
-import {
-  ApiBody,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { InleadActiveCampaignWebhookDto } from './dto/inlead-activecampaign-webhook.dto';
 import { InleadWebhookService } from './inlead-webhook.service';
 

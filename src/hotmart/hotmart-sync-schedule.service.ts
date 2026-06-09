@@ -62,7 +62,9 @@ export class HotmartSyncScheduleService {
     return { status: 'started' };
   }
 
-  async getActiveSchedulesForTime(hhmm: string): Promise<HotmartSyncSchedule[]> {
+  async getActiveSchedulesForTime(
+    hhmm: string,
+  ): Promise<HotmartSyncSchedule[]> {
     const todayMidnightUTC = new Date();
     todayMidnightUTC.setUTCHours(0, 0, 0, 0);
 
@@ -76,7 +78,10 @@ export class HotmartSyncScheduleService {
       .getMany();
   }
 
-  private resolveDateRange(schedule: HotmartSyncSchedule): { startDate: string; endDate: string } {
+  private resolveDateRange(schedule: HotmartSyncSchedule): {
+    startDate: string;
+    endDate: string;
+  } {
     const now = new Date();
     const endDate = now.toISOString().split('T')[0];
     if (schedule.period_preset === 'last_7d') {
@@ -92,6 +97,9 @@ export class HotmartSyncScheduleService {
       return { startDate: start.toISOString().split('T')[0], endDate };
     }
     // custom
-    return { startDate: schedule.date_from ?? endDate, endDate: schedule.date_to ?? endDate };
+    return {
+      startDate: schedule.date_from ?? endDate,
+      endDate: schedule.date_to ?? endDate,
+    };
   }
 }

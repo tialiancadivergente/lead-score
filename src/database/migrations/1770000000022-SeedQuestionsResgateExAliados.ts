@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class SeedQuestionsResgateExAliados1770000000022
-  implements MigrationInterface
-{
+export class SeedQuestionsResgateExAliados1770000000022 implements MigrationInterface {
   name = 'SeedQuestionsResgateExAliados1770000000022';
 
   private readonly formId = 'd588a7fc-3110-4fe5-87f2-fc5fbf74b321';

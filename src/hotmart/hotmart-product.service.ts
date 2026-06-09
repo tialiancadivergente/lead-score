@@ -56,20 +56,35 @@ export class HotmartProductService {
       }),
     );
 
-    return this.mapRow(await this.repo.findOne({ where: { id: saved.id }, relations: { launch: true } }) ?? saved);
+    return this.mapRow(
+      (await this.repo.findOne({
+        where: { id: saved.id },
+        relations: { launch: true },
+      })) ?? saved,
+    );
   }
 
   async update(id: string, dto: UpdateHotmartProductDto) {
-    const row = await this.repo.findOne({ where: { id }, relations: { launch: true } });
-    if (!row) throw new NotFoundException(`HotmartProduct id=${id} não encontrado.`);
+    const row = await this.repo.findOne({
+      where: { id },
+      relations: { launch: true },
+    });
+    if (!row)
+      throw new NotFoundException(`HotmartProduct id=${id} não encontrado.`);
 
     if (dto.name !== undefined) {
-      if (!dto.name.trim()) throw new BadRequestException('name não pode ser vazio.');
+      if (!dto.name.trim())
+        throw new BadRequestException('name não pode ser vazio.');
       row.name = dto.name.trim();
     }
     if (dto.product_id !== undefined) {
-      if (!Number.isInteger(Number(dto.product_id)) || Number(dto.product_id) <= 0) {
-        throw new BadRequestException('product_id deve ser um inteiro positivo.');
+      if (
+        !Number.isInteger(Number(dto.product_id)) ||
+        Number(dto.product_id) <= 0
+      ) {
+        throw new BadRequestException(
+          'product_id deve ser um inteiro positivo.',
+        );
       }
       row.product_id = Number(dto.product_id);
     }
@@ -86,17 +101,24 @@ export class HotmartProductService {
     }
 
     const saved = await this.repo.save(row);
-    return this.mapRow(await this.repo.findOne({ where: { id: saved.id }, relations: { launch: true } }) ?? saved);
+    return this.mapRow(
+      (await this.repo.findOne({
+        where: { id: saved.id },
+        relations: { launch: true },
+      })) ?? saved,
+    );
   }
 
   async remove(id: string): Promise<void> {
     const result = await this.repo.delete({ id });
-    if (!result.affected) throw new NotFoundException(`HotmartProduct id=${id} não encontrado.`);
+    if (!result.affected)
+      throw new NotFoundException(`HotmartProduct id=${id} não encontrado.`);
   }
 
   private async assertLaunchExists(launchId: string) {
     const exists = await this.launchRepo.findOne({ where: { id: launchId } });
-    if (!exists) throw new BadRequestException(`Launch id=${launchId} não encontrado.`);
+    if (!exists)
+      throw new BadRequestException(`Launch id=${launchId} não encontrado.`);
     return exists;
   }
 
@@ -108,8 +130,14 @@ export class HotmartProductService {
       name: row.name,
       product_id: Number(row.product_id),
       active: row.active,
-      created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
-      updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+      created_at:
+        row.created_at instanceof Date
+          ? row.created_at.toISOString()
+          : row.created_at,
+      updated_at:
+        row.updated_at instanceof Date
+          ? row.updated_at.toISOString()
+          : row.updated_at,
     };
   }
 }

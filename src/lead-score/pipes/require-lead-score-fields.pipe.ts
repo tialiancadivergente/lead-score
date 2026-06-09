@@ -5,9 +5,10 @@ import {
 } from '../dto/lead-score-payload.dto';
 
 @Injectable()
-export class RequireLeadScoreFieldsPipe
-  implements PipeTransform<unknown, LeadScorePayloadDto>
-{
+export class RequireLeadScoreFieldsPipe implements PipeTransform<
+  unknown,
+  LeadScorePayloadDto
+> {
   transform(value: unknown): LeadScorePayloadDto {
     if (!value || typeof value !== 'object') {
       throw new BadRequestException('Body inválido: esperado um objeto JSON.');

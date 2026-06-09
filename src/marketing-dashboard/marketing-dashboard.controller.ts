@@ -75,7 +75,9 @@ export class MarketingDashboardController {
   @ApiQuery({ name: 'dateTo', required: true, example: '2026-04-16' })
   @ApiQuery({ name: 'launchId', required: false })
   @ApiQuery({ name: 'seasonId', required: false })
-  @ApiOkResponse({ description: 'Serie temporal consolidada calculada com sucesso.' })
+  @ApiOkResponse({
+    description: 'Serie temporal consolidada calculada com sucesso.',
+  })
   @ApiBadRequestResponse({
     description: 'Parametros invalidos. dateFrom e dateTo sao obrigatorios.',
   })

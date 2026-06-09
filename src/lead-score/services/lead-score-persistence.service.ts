@@ -100,8 +100,8 @@ export class LeadScorePersistenceService {
         question_id: questionId,
         option_id: optionId,
         answer_text: answerText,
-        answer_number: hasNumber ? (answerNumberRaw as number) : undefined,
-        answer_bool: hasBool ? (answerBoolRaw as boolean) : undefined,
+        answer_number: hasNumber ? answerNumberRaw : undefined,
+        answer_bool: hasBool ? answerBoolRaw : undefined,
         answered_at: this.pickNonEmptyTrimmedString(answer, 'answered_at'),
       };
 
@@ -171,9 +171,15 @@ export class LeadScorePersistenceService {
       return;
     }
 
-    if (normalized === 'text' || normalized === 'open' || normalized === 'date') {
+    if (
+      normalized === 'text' ||
+      normalized === 'open' ||
+      normalized === 'date'
+    ) {
       if (!answer.answer_text) {
-        throw new Error(`${label} exige answer_text para pergunta ${normalized}.`);
+        throw new Error(
+          `${label} exige answer_text para pergunta ${normalized}.`,
+        );
       }
       return;
     }
@@ -228,20 +234,25 @@ export class LeadScorePersistenceService {
     }
 
     const requestIdRaw = payloadObj.requestId;
-    const requestId = typeof requestIdRaw === 'string' ? requestIdRaw : undefined;
+    const requestId =
+      typeof requestIdRaw === 'string' ? requestIdRaw : undefined;
 
     const answers = this.parseAnswers(payloadObj);
 
     return await this.formResponseRepo.manager.transaction(async (manager) => {
       const captureRepo = manager.getRepository(Capture);
       const formVersionRepo = manager.getRepository(FormVersion);
-      const formVersionQuestionRepo = manager.getRepository(FormVersionQuestion);
+      const formVersionQuestionRepo =
+        manager.getRepository(FormVersionQuestion);
       const questionOptionRepo = manager.getRepository(QuestionOption);
       const formResponseRepo = manager.getRepository(FormResponse);
       const formAnswerRepo = manager.getRepository(FormAnswer);
       const leadscoreRepo = manager.getRepository(Leadscore);
-      const leadscoreOptionPointsRepo = manager.getRepository(LeadscoreOptionPoints);
-      const leadscoreRangePointsRepo = manager.getRepository(LeadscoreRangePoints);
+      const leadscoreOptionPointsRepo = manager.getRepository(
+        LeadscoreOptionPoints,
+      );
+      const leadscoreRangePointsRepo =
+        manager.getRepository(LeadscoreRangePoints);
       const leadscoreTierRuleRepo = manager.getRepository(LeadscoreTierRule);
       const leadscoreResultRepo = manager.getRepository(LeadscoreResult);
 
@@ -328,12 +339,14 @@ export class LeadScorePersistenceService {
       const answeredByQuestion = new Set(answers.map((a) => a.question_id));
       for (const [questionId, meta] of questionMap.entries()) {
         if (meta.required && !answeredByQuestion.has(questionId)) {
-          throw new Error(`Pergunta obrigatória sem resposta: question_id=${questionId}.`);
+          throw new Error(
+            `Pergunta obrigatória sem resposta: question_id=${questionId}.`,
+          );
         }
       }
 
       const optionAnswers = answers.filter((a) => Boolean(a.option_id));
-      const optionIds = optionAnswers.map((a) => a.option_id!) as string[];
+      const optionIds = optionAnswers.map((a) => a.option_id!);
       const optionMap = new Map<string, QuestionOption>();
       if (optionIds.length > 0) {
         const options = await questionOptionRepo
@@ -401,7 +414,9 @@ export class LeadScorePersistenceService {
       const leadscore = await leadscoreRepo
         .createQueryBuilder('leadscore')
         .leftJoinAndSelect('leadscore.form_version', 'formVersion')
-        .where('formVersion.id = :formVersionId', { formVersionId: formVersion.id })
+        .where('formVersion.id = :formVersionId', {
+          formVersionId: formVersion.id,
+        })
         .andWhere('leadscore.active = true')
         .orderBy('leadscore.created_at', 'DESC')
         .getOne();
@@ -425,7 +440,10 @@ export class LeadScorePersistenceService {
 
       const optionPointMap = new Map<string, number>();
       for (const row of optionPointRows) {
-        optionPointMap.set(`${row.question.id}::${row.option.id}`, row.points ?? 0);
+        optionPointMap.set(
+          `${row.question.id}::${row.option.id}`,
+          row.points ?? 0,
+        );
       }
 
       let scoreTotal = 0;
@@ -456,8 +474,12 @@ export class LeadScorePersistenceService {
           .andWhere('question.id = :questionId', {
             questionId: answer.question_id,
           })
-          .andWhere('(lrp.min_value IS NULL OR lrp.min_value <= :value)', { value })
-          .andWhere('(lrp.max_value IS NULL OR :value < lrp.max_value)', { value })
+          .andWhere('(lrp.min_value IS NULL OR lrp.min_value <= :value)', {
+            value,
+          })
+          .andWhere('(lrp.max_value IS NULL OR :value < lrp.max_value)', {
+            value,
+          })
           .orderBy('lrp.min_value', 'DESC')
           .getOne();
 

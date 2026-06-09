@@ -1,8 +1,6 @@
 ﻿import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class SeedFormOResgateDosOtimistas1770000000008
-  implements MigrationInterface
-{
+export class SeedFormOResgateDosOtimistas1770000000008 implements MigrationInterface {
   name = 'SeedFormOResgateDosOtimistas1770000000008';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

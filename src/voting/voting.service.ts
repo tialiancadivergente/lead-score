@@ -202,9 +202,13 @@ export class VotingService {
     campaignId: string,
     dto: UpdateVotingCampaignDto,
   ): Promise<AdminVotingCampaignResponseDto> {
-    const campaign = await this.campaignRepo.findOne({ where: { id: campaignId } });
+    const campaign = await this.campaignRepo.findOne({
+      where: { id: campaignId },
+    });
     if (!campaign) {
-      throw new NotFoundException(`Campanha nao encontrada para id=${campaignId}.`);
+      throw new NotFoundException(
+        `Campanha nao encontrada para id=${campaignId}.`,
+      );
     }
 
     if (dto.slug !== undefined) {
@@ -242,7 +246,9 @@ export class VotingService {
       return this.mapCampaign(saved);
     } catch (error) {
       if (this.isUniqueViolation(error)) {
-        throw new ConflictException(`Ja existe campanha com slug="${campaign.slug}".`);
+        throw new ConflictException(
+          `Ja existe campanha com slug="${campaign.slug}".`,
+        );
       }
       throw error;
     }
@@ -256,7 +262,8 @@ export class VotingService {
 
     const slug = this.parseSlug(dto.slug, 'slug');
     const name = this.parseRequiredText(dto.name, 'name');
-    const displayOrder = this.parseOptionalInteger(dto.display_order, 'display_order') ?? 0;
+    const displayOrder =
+      this.parseOptionalInteger(dto.display_order, 'display_order') ?? 0;
     const active = this.parseOptionalBoolean(dto.active, 'active') ?? true;
 
     try {
@@ -280,7 +287,9 @@ export class VotingService {
     }
   }
 
-  async listCategories(campaignId: string): Promise<AdminVotingCategoryResponseDto[]> {
+  async listCategories(
+    campaignId: string,
+  ): Promise<AdminVotingCategoryResponseDto[]> {
     await this.mustFindCampaignById(campaignId);
 
     const categories = await this.categoryRepo.find({
@@ -301,7 +310,9 @@ export class VotingService {
     });
 
     if (!category) {
-      throw new NotFoundException(`Categoria nao encontrada para id=${categoryId}.`);
+      throw new NotFoundException(
+        `Categoria nao encontrada para id=${categoryId}.`,
+      );
     }
 
     if (dto.slug !== undefined) {
@@ -347,7 +358,9 @@ export class VotingService {
     });
 
     if (!category) {
-      throw new NotFoundException(`Categoria nao encontrada para id=${dto.category_id}.`);
+      throw new NotFoundException(
+        `Categoria nao encontrada para id=${dto.category_id}.`,
+      );
     }
 
     if (category.campaign.id !== campaign.id) {
@@ -359,7 +372,8 @@ export class VotingService {
     const name = this.parseRequiredText(dto.name, 'name');
     const storyText = this.parseOptionalText(dto.story_text);
     const photoUrl = this.parseRequiredText(dto.photo_url, 'photo_url');
-    const displayOrder = this.parseOptionalInteger(dto.display_order, 'display_order') ?? 0;
+    const displayOrder =
+      this.parseOptionalInteger(dto.display_order, 'display_order') ?? 0;
     const active = this.parseOptionalBoolean(dto.active, 'active') ?? true;
 
     const saved = await this.candidateRepo.save(
@@ -376,7 +390,9 @@ export class VotingService {
     return this.mapCandidate(saved, campaign.id);
   }
 
-  async listCandidates(campaignId: string): Promise<AdminVotingCandidateResponseDto[]> {
+  async listCandidates(
+    campaignId: string,
+  ): Promise<AdminVotingCandidateResponseDto[]> {
     await this.mustFindCampaignById(campaignId);
 
     const candidates = await this.candidateRepo.find({
@@ -388,7 +404,9 @@ export class VotingService {
       },
     });
 
-    return candidates.map((candidate) => this.mapCandidate(candidate, campaignId));
+    return candidates.map((candidate) =>
+      this.mapCandidate(candidate, campaignId),
+    );
   }
 
   async updateCandidate(
@@ -401,7 +419,9 @@ export class VotingService {
     });
 
     if (!candidate) {
-      throw new NotFoundException(`Candidato nao encontrado para id=${candidateId}.`);
+      throw new NotFoundException(
+        `Candidato nao encontrado para id=${candidateId}.`,
+      );
     }
 
     if (dto.category_id !== undefined) {
@@ -411,7 +431,9 @@ export class VotingService {
         relations: ['campaign'],
       });
       if (!category) {
-        throw new NotFoundException(`Categoria nao encontrada para id=${dto.category_id}.`);
+        throw new NotFoundException(
+          `Categoria nao encontrada para id=${dto.category_id}.`,
+        );
       }
       if (category.campaign.id !== candidate.campaign.id) {
         throw new BadRequestException(
@@ -439,14 +461,17 @@ export class VotingService {
     }
 
     if (dto.active !== undefined) {
-      candidate.active = this.parseOptionalBoolean(dto.active, 'active') ?? true;
+      candidate.active =
+        this.parseOptionalBoolean(dto.active, 'active') ?? true;
     }
 
     const saved = await this.candidateRepo.save(candidate);
     return this.mapCandidate(saved, candidate.campaign.id);
   }
 
-  async getCampaignResults(campaignId: string): Promise<VotingCampaignResultsResponseDto> {
+  async getCampaignResults(
+    campaignId: string,
+  ): Promise<VotingCampaignResultsResponseDto> {
     await this.mustFindCampaignById(campaignId);
 
     const totalVotes = await this.voteRepo.count({
@@ -499,7 +524,9 @@ export class VotingService {
     };
   }
 
-  async getPublicCampaign(slug: string): Promise<PublicVotingCampaignResponseDto> {
+  async getPublicCampaign(
+    slug: string,
+  ): Promise<PublicVotingCampaignResponseDto> {
     const normalizedSlug = this.parseSlug(slug, 'slug');
 
     const campaign = await this.campaignRepo.findOne({
@@ -536,13 +563,15 @@ export class VotingService {
       .addOrderBy('category.name', 'ASC')
       .getRawMany<PublicCategoryRaw>();
 
-    const categories: PublicVotingCampaignCategoryDto[] = categoryRows.map((row) => ({
-      id: row.id,
-      slug: row.slug,
-      name: row.name,
-      display_order: Number(row.display_order),
-      candidate_count: Number(row.candidate_count),
-    }));
+    const categories: PublicVotingCampaignCategoryDto[] = categoryRows.map(
+      (row) => ({
+        id: row.id,
+        slug: row.slug,
+        name: row.name,
+        display_order: Number(row.display_order),
+        candidate_count: Number(row.candidate_count),
+      }),
+    );
 
     const totalCandidates = categories.reduce(
       (sum, category) => sum + category.candidate_count,
@@ -665,7 +694,9 @@ export class VotingService {
 
     const now = new Date();
     if (now < campaign.starts_at || now > campaign.ends_at) {
-      throw new BadRequestException('A campanha nao esta no periodo de votacao.');
+      throw new BadRequestException(
+        'A campanha nao esta no periodo de votacao.',
+      );
     }
 
     const candidate = await this.candidateRepo.findOne({
@@ -674,15 +705,21 @@ export class VotingService {
     });
 
     if (!candidate) {
-      throw new NotFoundException(`Candidato nao encontrado para id=${dto.candidate_id}.`);
+      throw new NotFoundException(
+        `Candidato nao encontrado para id=${dto.candidate_id}.`,
+      );
     }
 
     if (candidate.campaign.id !== campaign.id) {
-      throw new BadRequestException('O candidato informado nao pertence a campanha.');
+      throw new BadRequestException(
+        'O candidato informado nao pertence a campanha.',
+      );
     }
 
     if (!candidate.active || !candidate.category.active) {
-      throw new BadRequestException('O candidato informado nao esta apto para votacao.');
+      throw new BadRequestException(
+        'O candidato informado nao esta apto para votacao.',
+      );
     }
 
     const voter = await this.findOrCreateVoter({
@@ -783,10 +820,16 @@ export class VotingService {
     }
   }
 
-  private async mustFindCampaignById(campaignId: string): Promise<VotingCampaign> {
-    const campaign = await this.campaignRepo.findOne({ where: { id: campaignId } });
+  private async mustFindCampaignById(
+    campaignId: string,
+  ): Promise<VotingCampaign> {
+    const campaign = await this.campaignRepo.findOne({
+      where: { id: campaignId },
+    });
     if (!campaign) {
-      throw new NotFoundException(`Campanha nao encontrada para id=${campaignId}.`);
+      throw new NotFoundException(
+        `Campanha nao encontrada para id=${campaignId}.`,
+      );
     }
     return campaign;
   }
@@ -825,14 +868,18 @@ export class VotingService {
     const text = this.parseRequiredText(value, fieldName);
     const parsed = new Date(text);
     if (Number.isNaN(parsed.getTime())) {
-      throw new BadRequestException(`${fieldName} deve ser uma data valida em ISO 8601.`);
+      throw new BadRequestException(
+        `${fieldName} deve ser uma data valida em ISO 8601.`,
+      );
     }
     return parsed;
   }
 
   private assertDateRange(startsAt: Date, endsAt: Date): void {
     if (startsAt > endsAt) {
-      throw new BadRequestException('starts_at deve ser menor ou igual a ends_at.');
+      throw new BadRequestException(
+        'starts_at deve ser menor ou igual a ends_at.',
+      );
     }
   }
 
@@ -846,7 +893,11 @@ export class VotingService {
     }
 
     const normalized = value.trim().toUpperCase();
-    if (!Object.values(VotingCampaignStatus).includes(normalized as VotingCampaignStatus)) {
+    if (
+      !Object.values(VotingCampaignStatus).includes(
+        normalized as VotingCampaignStatus,
+      )
+    ) {
       throw new BadRequestException(
         `status invalido. Use ${Object.values(VotingCampaignStatus).join(', ')}.`,
       );
@@ -906,14 +957,14 @@ export class VotingService {
   private normalizePhone(value: string): string {
     const digits = value.replace(/\D+/g, '');
     if (digits.length < 8 || digits.length > 15) {
-      throw new BadRequestException('phone invalido. Informe um telefone valido.');
+      throw new BadRequestException(
+        'phone invalido. Informe um telefone valido.',
+      );
     }
     return `+${digits}`;
   }
 
-  private parseMetadata(
-    value: unknown,
-  ): Record<string, unknown> | undefined {
+  private parseMetadata(value: unknown): Record<string, unknown> | undefined {
     if (value === undefined || value === null) return undefined;
     if (typeof value !== 'object' || Array.isArray(value)) {
       throw new BadRequestException('metadata deve ser um objeto JSON.');
@@ -931,8 +982,13 @@ export class VotingService {
     const normalized = ip?.trim();
     if (!normalized) return undefined;
 
-    const salt = this.config.get<string>('VOTING_IP_HASH_SALT', 'voting-default-salt');
-    return createHash('sha256').update(`${salt}:${normalized}`, 'utf8').digest('hex');
+    const salt = this.config.get<string>(
+      'VOTING_IP_HASH_SALT',
+      'voting-default-salt',
+    );
+    return createHash('sha256')
+      .update(`${salt}:${normalized}`, 'utf8')
+      .digest('hex');
   }
 
   private isUniqueViolation(error: unknown): boolean {
@@ -941,7 +997,9 @@ export class VotingService {
     return driverError?.code === '23505';
   }
 
-  private mapCampaign(campaign: VotingCampaign): AdminVotingCampaignResponseDto {
+  private mapCampaign(
+    campaign: VotingCampaign,
+  ): AdminVotingCampaignResponseDto {
     return {
       id: campaign.id,
       slug: campaign.slug,

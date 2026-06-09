@@ -42,16 +42,28 @@ export class LaunchDashboardConfig {
   @Column({ type: 'numeric', name: 'target_ctr', nullable: true })
   target_ctr?: number;
 
-  @Column({ type: 'numeric', name: 'target_survey_response_rate', nullable: true })
+  @Column({
+    type: 'numeric',
+    name: 'target_survey_response_rate',
+    nullable: true,
+  })
   target_survey_response_rate?: number;
 
-  @Column({ type: 'numeric', name: 'target_consciousness_rate', nullable: true })
+  @Column({
+    type: 'numeric',
+    name: 'target_consciousness_rate',
+    nullable: true,
+  })
   target_consciousness_rate?: number;
 
   @Column({ type: 'numeric', name: 'target_knows_elton_rate', nullable: true })
   target_knows_elton_rate?: number;
 
-  @Column({ type: 'numeric', name: 'target_knows_alliance_rate', nullable: true })
+  @Column({
+    type: 'numeric',
+    name: 'target_knows_alliance_rate',
+    nullable: true,
+  })
   target_knows_alliance_rate?: number;
 
   // ─── Question keys para métricas de consciência ───────────────────────────
@@ -59,19 +71,31 @@ export class LaunchDashboardConfig {
   @Column({ type: 'text', name: 'question_key_consciousness', nullable: true })
   question_key_consciousness?: string;
 
-  @Column({ type: 'text', name: 'positive_option_key_consciousness', nullable: true })
+  @Column({
+    type: 'text',
+    name: 'positive_option_key_consciousness',
+    nullable: true,
+  })
   positive_option_key_consciousness?: string;
 
   @Column({ type: 'text', name: 'question_key_knows_elton', nullable: true })
   question_key_knows_elton?: string;
 
-  @Column({ type: 'text', name: 'positive_option_key_knows_elton', nullable: true })
+  @Column({
+    type: 'text',
+    name: 'positive_option_key_knows_elton',
+    nullable: true,
+  })
   positive_option_key_knows_elton?: string;
 
   @Column({ type: 'text', name: 'question_key_knows_alliance', nullable: true })
   question_key_knows_alliance?: string;
 
-  @Column({ type: 'text', name: 'positive_option_key_knows_alliance', nullable: true })
+  @Column({
+    type: 'text',
+    name: 'positive_option_key_knows_alliance',
+    nullable: true,
+  })
   positive_option_key_knows_alliance?: string;
 
   @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })

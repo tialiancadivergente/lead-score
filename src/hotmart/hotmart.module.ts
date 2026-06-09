@@ -42,6 +42,11 @@ import { HotmartSyncScheduleService } from './hotmart-sync-schedule.service';
     HotmartSyncScheduleService,
     ApiKeyGuard,
   ],
-  exports: [HotmartService, HotmartProcessorService, HotmartProductService, HotmartSyncScheduleService],
+  exports: [
+    HotmartService,
+    HotmartProcessorService,
+    HotmartProductService,
+    HotmartSyncScheduleService,
+  ],
 })
 export class HotmartModule {}

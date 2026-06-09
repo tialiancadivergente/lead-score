@@ -59,19 +59,22 @@ export class MarketingDashboardService {
   async getFilters(query: MarketingDashboardFiltersQueryDto) {
     this.validateFiltersQuery(query);
 
-    const providers = await this.getDistinctMediaValues({
-      ...query,
-      provider: undefined,
-      externalAccountId: undefined,
-      externalCampaignId: undefined,
-      externalAdsetId: undefined,
-      externalAdId: undefined,
-    }, {
-      column: 'provider',
-      valueAlias: 'value',
-      labelColumn: 'provider',
-      labelAlias: 'label',
-    });
+    const providers = await this.getDistinctMediaValues(
+      {
+        ...query,
+        provider: undefined,
+        externalAccountId: undefined,
+        externalCampaignId: undefined,
+        externalAdsetId: undefined,
+        externalAdId: undefined,
+      },
+      {
+        column: 'provider',
+        valueAlias: 'value',
+        labelColumn: 'provider',
+        labelAlias: 'label',
+      },
+    );
 
     const accounts = await this.getDistinctMediaValues(query, {
       column: 'external_account_id',
@@ -151,7 +154,12 @@ export class MarketingDashboardService {
         ctr: this.divideOrNull(mediaSummary.clicks, mediaSummary.impressions),
         cpm:
           mediaSummary.impressions > 0
-            ? Number(((mediaSummary.spend * 1000) / mediaSummary.impressions).toFixed(6))
+            ? Number(
+                (
+                  (mediaSummary.spend * 1000) /
+                  mediaSummary.impressions
+                ).toFixed(6),
+              )
             : null,
         cpl: this.divideOrNull(mediaSummary.spend, registrations),
       },
@@ -169,33 +177,34 @@ export class MarketingDashboardService {
       registrationRows.map((row) => [row.date, row.registrations]),
     );
 
-    const timeseries = this.listDatesBetween(query.dateFrom!, query.dateTo!).map(
-      (date) => {
-        const media = mediaByDate.get(date) ?? {
-          spend: 0,
-          impressions: 0,
-          clicks: 0,
-          conversions: 0,
-        };
-        const registrations = registrationsByDate.get(date) ?? 0;
+    const timeseries = this.listDatesBetween(
+      query.dateFrom!,
+      query.dateTo!,
+    ).map((date) => {
+      const media = mediaByDate.get(date) ?? {
+        spend: 0,
+        impressions: 0,
+        clicks: 0,
+        conversions: 0,
+      };
+      const registrations = registrationsByDate.get(date) ?? 0;
 
-        return {
-          date,
-          spend: media.spend,
-          impressions: media.impressions,
-          clicks: media.clicks,
-          conversions: media.conversions,
-          registrations,
-          cpc: this.divideOrNull(media.spend, media.clicks),
-          ctr: this.divideOrNull(media.clicks, media.impressions),
-          cpm:
-            media.impressions > 0
-              ? Number(((media.spend * 1000) / media.impressions).toFixed(6))
-              : null,
-          cpl: this.divideOrNull(media.spend, registrations),
-        };
-      },
-    );
+      return {
+        date,
+        spend: media.spend,
+        impressions: media.impressions,
+        clicks: media.clicks,
+        conversions: media.conversions,
+        registrations,
+        cpc: this.divideOrNull(media.spend, media.clicks),
+        ctr: this.divideOrNull(media.clicks, media.impressions),
+        cpm:
+          media.impressions > 0
+            ? Number(((media.spend * 1000) / media.impressions).toFixed(6))
+            : null,
+        cpl: this.divideOrNull(media.spend, registrations),
+      };
+    });
 
     return {
       filters: this.buildFiltersResponse(query),
@@ -261,14 +270,19 @@ export class MarketingDashboardService {
   }
 
   private validateFiltersQuery(query: MarketingDashboardFiltersQueryDto) {
-    if ((query.dateFrom && !query.dateTo) || (!query.dateFrom && query.dateTo)) {
+    if (
+      (query.dateFrom && !query.dateTo) ||
+      (!query.dateFrom && query.dateTo)
+    ) {
       throw new BadRequestException(
         'dateFrom e dateTo devem ser enviados juntos no endpoint de filtros.',
       );
     }
 
     if (query.dateFrom && !this.isIsoDate(query.dateFrom)) {
-      throw new BadRequestException('dateFrom deve estar no formato YYYY-MM-DD.');
+      throw new BadRequestException(
+        'dateFrom deve estar no formato YYYY-MM-DD.',
+      );
     }
 
     if (query.dateTo && !this.isIsoDate(query.dateTo)) {
@@ -282,11 +296,15 @@ export class MarketingDashboardService {
       10,
     );
     const rawPageSize = Number.parseInt(
-      query.pageSize ?? String(MarketingDashboardService.DEFAULT_TABLE_PAGE_SIZE),
+      query.pageSize ??
+        String(MarketingDashboardService.DEFAULT_TABLE_PAGE_SIZE),
       10,
     );
     const pageSize = Math.min(
-      Math.max(rawPageSize || MarketingDashboardService.DEFAULT_TABLE_PAGE_SIZE, 1),
+      Math.max(
+        rawPageSize || MarketingDashboardService.DEFAULT_TABLE_PAGE_SIZE,
+        1,
+      ),
       MarketingDashboardService.MAX_TABLE_PAGE_SIZE,
     );
 
@@ -299,7 +317,7 @@ export class MarketingDashboardService {
 
   private parseTableSorting(query: MarketingDashboardTableQueryDto) {
     const sortBy = query.sortBy ?? 'spend';
-    const sortOrder = (query.sortOrder ?? 'desc').toLowerCase();
+    const sortOrder = (query.sortOrder ?? 'desc').toLowerCase() as 'asc' | 'desc';
 
     if (!MarketingDashboardService.TABLE_SORT_FIELDS.has(sortBy)) {
       throw new BadRequestException(
@@ -313,7 +331,7 @@ export class MarketingDashboardService {
 
     return {
       sortBy,
-      sortOrder: sortOrder as 'asc' | 'desc',
+      sortOrder: sortOrder,
     };
   }
 
@@ -341,7 +359,9 @@ export class MarketingDashboardService {
     };
   }
 
-  private async getRegistrationsCount(query: MarketingDashboardSummaryQueryDto) {
+  private async getRegistrationsCount(
+    query: MarketingDashboardSummaryQueryDto,
+  ) {
     const captureQb = this.captureRepository.createQueryBuilder('capture');
 
     captureQb.where((qb) => {
@@ -577,10 +597,7 @@ export class MarketingDashboardService {
       .getRawMany<{ externalAdId: string; registrations: string }>();
 
     return new Map(
-      rows.map((row) => [
-        row.externalAdId,
-        Number(row.registrations ?? '0'),
-      ]),
+      rows.map((row) => [row.externalAdId, Number(row.registrations ?? '0')]),
     );
   }
 
@@ -726,13 +743,17 @@ export class MarketingDashboardService {
     let hasWhere = false;
 
     if (query.dateFrom) {
-      qb.where(`${alias}.report_date >= :dateFrom`, { dateFrom: query.dateFrom });
+      qb.where(`${alias}.report_date >= :dateFrom`, {
+        dateFrom: query.dateFrom,
+      });
       hasWhere = true;
     }
 
     if (query.dateTo) {
       if (hasWhere) {
-        qb.andWhere(`${alias}.report_date <= :dateTo`, { dateTo: query.dateTo });
+        qb.andWhere(`${alias}.report_date <= :dateTo`, {
+          dateTo: query.dateTo,
+        });
       } else {
         qb.where(`${alias}.report_date <= :dateTo`, { dateTo: query.dateTo });
         hasWhere = true;
@@ -740,9 +761,13 @@ export class MarketingDashboardService {
     }
 
     if (query.provider) {
-      (hasWhere ? qb.andWhere : qb.where).call(qb, `${alias}.provider = :provider`, {
-        provider: query.provider,
-      });
+      (hasWhere ? qb.andWhere : qb.where).call(
+        qb,
+        `${alias}.provider = :provider`,
+        {
+          provider: query.provider,
+        },
+      );
       hasWhere = true;
     }
 
@@ -751,7 +776,7 @@ export class MarketingDashboardService {
         qb,
         `${alias}.external_account_id = :externalAccountId`,
         {
-        externalAccountId: query.externalAccountId,
+          externalAccountId: query.externalAccountId,
         },
       );
       hasWhere = true;
@@ -762,7 +787,7 @@ export class MarketingDashboardService {
         qb,
         `${alias}.external_campaign_id = :externalCampaignId`,
         {
-        externalCampaignId: query.externalCampaignId,
+          externalCampaignId: query.externalCampaignId,
         },
       );
       hasWhere = true;
@@ -773,7 +798,7 @@ export class MarketingDashboardService {
         qb,
         `${alias}.external_adset_id = :externalAdsetId`,
         {
-        externalAdsetId: query.externalAdsetId,
+          externalAdsetId: query.externalAdsetId,
         },
       );
       hasWhere = true;
@@ -784,17 +809,18 @@ export class MarketingDashboardService {
         qb,
         `${alias}.external_ad_id = :externalAdId`,
         {
-        externalAdId: query.externalAdId,
+          externalAdId: query.externalAdId,
         },
       );
     }
   }
 
-  private divideOrNull(
-    numerator: number,
-    denominator: number,
-  ): number | null {
-    if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) {
+  private divideOrNull(numerator: number, denominator: number): number | null {
+    if (
+      !Number.isFinite(numerator) ||
+      !Number.isFinite(denominator) ||
+      denominator <= 0
+    ) {
       return null;
     }
 
@@ -875,12 +901,18 @@ export class MarketingDashboardService {
       return (leftValue - rightValue) * factor;
     }
 
-    const comparison = String(leftValue).localeCompare(String(rightValue), 'pt-BR', {
-      sensitivity: 'base',
-    });
+    const comparison = String(leftValue).localeCompare(
+      String(rightValue),
+      'pt-BR',
+      {
+        sensitivity: 'base',
+      },
+    );
 
     if (comparison === 0) {
-      return (left.externalAdId.localeCompare(right.externalAdId) || 0) * factor;
+      return (
+        (left.externalAdId.localeCompare(right.externalAdId) || 0) * factor
+      );
     }
 
     return comparison * factor;

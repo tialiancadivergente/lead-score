@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddExternalCampaignIdToCampaign1770000000019
-  implements MigrationInterface
-{
+export class AddExternalCampaignIdToCampaign1770000000019 implements MigrationInterface {
   name = 'AddExternalCampaignIdToCampaign1770000000019';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

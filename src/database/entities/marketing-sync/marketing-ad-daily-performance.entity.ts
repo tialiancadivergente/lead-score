@@ -51,7 +51,13 @@ export class MarketingAdDailyPerformance {
   @Column({ type: 'bigint', name: 'clicks', default: '0' })
   clicks!: string;
 
-  @Column({ type: 'numeric', name: 'spend', precision: 18, scale: 6, default: 0 })
+  @Column({
+    type: 'numeric',
+    name: 'spend',
+    precision: 18,
+    scale: 6,
+    default: 0,
+  })
   spend!: string;
 
   @Column({

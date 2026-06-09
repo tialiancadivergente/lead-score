@@ -8,9 +8,13 @@ import {
 } from 'typeorm';
 
 @Entity({ name: 'marketing_sync_configuration' })
-@Index('UQ_marketing_sync_configuration_sync_key_provider', ['sync_key', 'provider'], {
-  unique: true,
-})
+@Index(
+  'UQ_marketing_sync_configuration_sync_key_provider',
+  ['sync_key', 'provider'],
+  {
+    unique: true,
+  },
+)
 export class MarketingSyncConfiguration {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -27,7 +31,11 @@ export class MarketingSyncConfiguration {
   @Column({ type: 'boolean', name: 'schedule_enabled', default: false })
   schedule_enabled!: boolean;
 
-  @Column({ type: 'integer', name: 'schedule_interval_minutes', nullable: true })
+  @Column({
+    type: 'integer',
+    name: 'schedule_interval_minutes',
+    nullable: true,
+  })
   schedule_interval_minutes?: number | null;
 
   @Column({ type: 'jsonb', name: 'config', nullable: true })

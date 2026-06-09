@@ -39,7 +39,10 @@ describe('HotmartProductService', () => {
     repo.save.mockImplementation(async (value: HotmartProduct) => value);
     launchRepo.findOne.mockResolvedValue(newLaunch);
 
-    const service = new HotmartProductService(repo as never, launchRepo as never);
+    const service = new HotmartProductService(
+      repo as never,
+      launchRepo as never,
+    );
 
     const result = await service.update(row.id, { launch_id: newLaunch.id });
 
@@ -83,7 +86,10 @@ describe('HotmartProductService', () => {
       }));
     repo.save.mockImplementation(async (value: HotmartProduct) => value);
 
-    const service = new HotmartProductService(repo as never, launchRepo as never);
+    const service = new HotmartProductService(
+      repo as never,
+      launchRepo as never,
+    );
 
     const result = await service.update(row.id, { launch_id: null });
 
@@ -113,7 +119,10 @@ describe('HotmartProductService', () => {
     } as HotmartProduct);
     launchRepo.findOne.mockResolvedValue(null);
 
-    const service = new HotmartProductService(repo as never, launchRepo as never);
+    const service = new HotmartProductService(
+      repo as never,
+      launchRepo as never,
+    );
 
     await expect(
       service.update('product-id', { launch_id: 'missing-launch' }),

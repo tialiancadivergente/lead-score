@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateInleadWebhookActivecampaignLog1770000000060
-  implements MigrationInterface
-{
+export class CreateInleadWebhookActivecampaignLog1770000000060 implements MigrationInterface {
   name = 'CreateInleadWebhookActivecampaignLog1770000000060';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

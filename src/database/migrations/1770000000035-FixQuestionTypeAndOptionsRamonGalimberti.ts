@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class FixQuestionTypeAndOptionsRamonGalimberti1770000000035
-  implements MigrationInterface
-{
+export class FixQuestionTypeAndOptionsRamonGalimberti1770000000035 implements MigrationInterface {
   name = 'FixQuestionTypeAndOptionsRamonGalimberti1770000000035';
 
   private readonly formId = '9ebd852f-c59a-4217-8530-f7831e44d02d';

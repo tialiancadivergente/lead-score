@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class NormalizeCaptureUtmSourceAndPlatform1770000000016
-  implements MigrationInterface
-{
+export class NormalizeCaptureUtmSourceAndPlatform1770000000016 implements MigrationInterface {
   name = 'NormalizeCaptureUtmSourceAndPlatform1770000000016';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

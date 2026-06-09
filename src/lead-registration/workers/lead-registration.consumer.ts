@@ -62,7 +62,7 @@ export class LeadRegistrationConsumer implements OnModuleInit {
             Record<string, any>)
         : {};
 
-    const payload = (typed.payload ?? typed ?? {}) as Record<string, any>;
+    const payload = typed.payload ?? typed ?? {};
     const requestId = String(typed.requestId ?? message.messageId ?? 'unknown');
 
     this.logger.debug(

@@ -53,7 +53,11 @@ export class VotingAdminController {
 
   @Get('campaigns')
   @ApiOperation({ summary: 'Lista campanhas com totais' })
-  @ApiResponse({ status: 200, type: AdminVotingCampaignListItemDto, isArray: true })
+  @ApiResponse({
+    status: 200,
+    type: AdminVotingCampaignListItemDto,
+    isArray: true,
+  })
   async listCampaigns() {
     return await this.votingService.listCampaigns();
   }
@@ -63,7 +67,8 @@ export class VotingAdminController {
   @ApiBody({ type: UpdateVotingCampaignDto })
   @ApiResponse({ status: 200, type: AdminVotingCampaignResponseDto })
   async updateCampaign(
-    @Param('campaignId', new ParseUUIDPipe({ version: '4' })) campaignId: string,
+    @Param('campaignId', new ParseUUIDPipe({ version: '4' }))
+    campaignId: string,
     @Body() dto: UpdateVotingCampaignDto,
   ) {
     return await this.votingService.updateCampaign(campaignId, dto);
@@ -74,7 +79,8 @@ export class VotingAdminController {
   @ApiBody({ type: CreateVotingCategoryDto })
   @ApiResponse({ status: 201, type: AdminVotingCategoryResponseDto })
   async createCategory(
-    @Param('campaignId', new ParseUUIDPipe({ version: '4' })) campaignId: string,
+    @Param('campaignId', new ParseUUIDPipe({ version: '4' }))
+    campaignId: string,
     @Body() dto: CreateVotingCategoryDto,
   ) {
     return await this.votingService.createCategory(campaignId, dto);
@@ -82,9 +88,14 @@ export class VotingAdminController {
 
   @Get('campaigns/:campaignId/categories')
   @ApiOperation({ summary: 'Lista categorias da campanha' })
-  @ApiResponse({ status: 200, type: AdminVotingCategoryResponseDto, isArray: true })
+  @ApiResponse({
+    status: 200,
+    type: AdminVotingCategoryResponseDto,
+    isArray: true,
+  })
   async listCategories(
-    @Param('campaignId', new ParseUUIDPipe({ version: '4' })) campaignId: string,
+    @Param('campaignId', new ParseUUIDPipe({ version: '4' }))
+    campaignId: string,
   ) {
     return await this.votingService.listCategories(campaignId);
   }
@@ -94,7 +105,8 @@ export class VotingAdminController {
   @ApiBody({ type: UpdateVotingCategoryDto })
   @ApiResponse({ status: 200, type: AdminVotingCategoryResponseDto })
   async updateCategory(
-    @Param('categoryId', new ParseUUIDPipe({ version: '4' })) categoryId: string,
+    @Param('categoryId', new ParseUUIDPipe({ version: '4' }))
+    categoryId: string,
     @Body() dto: UpdateVotingCategoryDto,
   ) {
     return await this.votingService.updateCategory(categoryId, dto);
@@ -105,7 +117,8 @@ export class VotingAdminController {
   @ApiBody({ type: CreateVotingCandidateDto })
   @ApiResponse({ status: 201, type: AdminVotingCandidateResponseDto })
   async createCandidate(
-    @Param('campaignId', new ParseUUIDPipe({ version: '4' })) campaignId: string,
+    @Param('campaignId', new ParseUUIDPipe({ version: '4' }))
+    campaignId: string,
     @Body() dto: CreateVotingCandidateDto,
   ) {
     return await this.votingService.createCandidate(campaignId, dto);
@@ -113,9 +126,14 @@ export class VotingAdminController {
 
   @Get('campaigns/:campaignId/candidates')
   @ApiOperation({ summary: 'Lista candidatos da campanha' })
-  @ApiResponse({ status: 200, type: AdminVotingCandidateResponseDto, isArray: true })
+  @ApiResponse({
+    status: 200,
+    type: AdminVotingCandidateResponseDto,
+    isArray: true,
+  })
   async listCandidates(
-    @Param('campaignId', new ParseUUIDPipe({ version: '4' })) campaignId: string,
+    @Param('campaignId', new ParseUUIDPipe({ version: '4' }))
+    campaignId: string,
   ) {
     return await this.votingService.listCandidates(campaignId);
   }
@@ -125,7 +143,8 @@ export class VotingAdminController {
   @ApiBody({ type: UpdateVotingCandidateDto })
   @ApiResponse({ status: 200, type: AdminVotingCandidateResponseDto })
   async updateCandidate(
-    @Param('candidateId', new ParseUUIDPipe({ version: '4' })) candidateId: string,
+    @Param('candidateId', new ParseUUIDPipe({ version: '4' }))
+    candidateId: string,
     @Body() dto: UpdateVotingCandidateDto,
   ) {
     return await this.votingService.updateCandidate(candidateId, dto);
@@ -135,7 +154,8 @@ export class VotingAdminController {
   @ApiOperation({ summary: 'Resumo de votos da campanha' })
   @ApiResponse({ status: 200, type: VotingCampaignResultsResponseDto })
   async getCampaignResults(
-    @Param('campaignId', new ParseUUIDPipe({ version: '4' })) campaignId: string,
+    @Param('campaignId', new ParseUUIDPipe({ version: '4' }))
+    campaignId: string,
   ): Promise<VotingCampaignResultsResponseDto> {
     return await this.votingService.getCampaignResults(campaignId);
   }

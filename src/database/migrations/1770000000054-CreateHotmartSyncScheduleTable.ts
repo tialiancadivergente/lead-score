@@ -6,7 +6,13 @@ export class CreateHotmartSyncScheduleTable1770000000054 implements MigrationInt
       new Table({
         name: 'hotmart_sync_schedule',
         columns: [
-          { name: 'id', type: 'uuid', isPrimary: true, generationStrategy: 'uuid', default: 'gen_random_uuid()' },
+          {
+            name: 'id',
+            type: 'uuid',
+            isPrimary: true,
+            generationStrategy: 'uuid',
+            default: 'gen_random_uuid()',
+          },
           { name: 'name', type: 'text', isNullable: true },
           { name: 'period_preset', type: 'text' },
           { name: 'date_from', type: 'text', isNullable: true },

@@ -10,10 +10,16 @@ export class FormResponseDto {
   @ApiProperty({ nullable: true, example: 'quiz' })
   type!: string | null;
 
-  @ApiProperty({ nullable: true, example: '4c88a392-6e6f-417e-822a-5be7221900fd' })
+  @ApiProperty({
+    nullable: true,
+    example: '4c88a392-6e6f-417e-822a-5be7221900fd',
+  })
   launch_id!: string | null;
 
-  @ApiProperty({ nullable: true, example: 'b2aee9b9-bb96-4cd7-b7e4-5fde7ac352de' })
+  @ApiProperty({
+    nullable: true,
+    example: 'b2aee9b9-bb96-4cd7-b7e4-5fde7ac352de',
+  })
   season_id!: string | null;
 
   @ApiProperty({ example: '2026-03-01T00:00:00.000Z' })

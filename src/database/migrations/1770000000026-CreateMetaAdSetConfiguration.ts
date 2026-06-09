@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateMetaAdSetConfiguration1770000000026
-  implements MigrationInterface
-{
+export class CreateMetaAdSetConfiguration1770000000026 implements MigrationInterface {
   name = 'CreateMetaAdSetConfiguration1770000000026';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

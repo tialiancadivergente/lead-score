@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { MarketingSyncService } from './marketing-sync.service';
 
 @Injectable()
@@ -9,9 +14,7 @@ export class MarketingDashboardSchedulerService
   private timeoutRef?: NodeJS.Timeout;
   private isRunning = false;
 
-  constructor(
-    private readonly marketingSyncService: MarketingSyncService,
-  ) {}
+  constructor(private readonly marketingSyncService: MarketingSyncService) {}
 
   async onModuleInit() {
     const configuration =
@@ -59,7 +62,9 @@ export class MarketingDashboardSchedulerService
 
     try {
       const result = await this.marketingSyncService.scheduleHourlyTodayJobs(
-        configuration.provider ? { provider: configuration.provider } : undefined,
+        configuration.provider
+          ? { provider: configuration.provider }
+          : undefined,
       );
       this.logger.log(
         `Scheduler de marketing dashboard executado com sucesso. source=${configuration.source} provider=${configuration.provider ?? 'all'} selectedAccounts=${result.selectedAccounts} enqueuedJobs=${result.enqueuedJobs} skippedJobs=${result.skippedJobs} targetDate=${result.targetDate}`,
@@ -80,8 +85,11 @@ export class MarketingDashboardSchedulerService
       clearTimeout(this.timeoutRef);
     }
 
-    this.timeoutRef = setTimeout(() => {
-      void this.runScheduledTick();
-    }, intervalMinutes * 60 * 1000);
+    this.timeoutRef = setTimeout(
+      () => {
+        void this.runScheduledTick();
+      },
+      intervalMinutes * 60 * 1000,
+    );
   }
 }

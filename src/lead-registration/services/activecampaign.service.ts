@@ -34,9 +34,13 @@ export class ActiveCampaignService {
     return trimmed.length ? trimmed : undefined;
   }
 
-  private extractCustomFields(payload: Record<string, any>): Record<string, any> {
+  private extractCustomFields(
+    payload: Record<string, any>,
+  ): Record<string, any> {
     const utmsRaw =
-      payload?.utms && typeof payload.utms === 'object' && !Array.isArray(payload.utms)
+      payload?.utms &&
+      typeof payload.utms === 'object' &&
+      !Array.isArray(payload.utms)
         ? (payload.utms as Record<string, any>)
         : {};
 
@@ -75,7 +79,9 @@ export class ActiveCampaignService {
     return out;
   }
 
-  private normalizePayload(payload: Record<string, any>): { contact: ActiveCampaignContact } {
+  private normalizePayload(payload: Record<string, any>): {
+    contact: ActiveCampaignContact;
+  } {
     const payloadContact =
       payload?.contact &&
       typeof payload.contact === 'object' &&
@@ -98,12 +104,12 @@ export class ActiveCampaignService {
     const customFields = this.extractCustomFields(payload);
 
     // Primeiro: todos os pares de customFields viram itens em fieldValues
-    const fieldValues: ActiveCampaignFieldValue[] = Object.entries(customFields).map(
-      ([fieldId, value]) => ({
-        field: String(fieldId),
-        value: value === null || value === undefined ? '' : String(value),
-      }),
-    );
+    const fieldValues: ActiveCampaignFieldValue[] = Object.entries(
+      customFields,
+    ).map(([fieldId, value]) => ({
+      field: String(fieldId),
+      value: value === null || value === undefined ? '' : String(value),
+    }));
 
     // Depois: so campos padrao mapeados para chaves de customFields
     const standardFieldMap: Record<string, string> = {
@@ -316,7 +322,9 @@ export class ActiveCampaignService {
     return await this.createContactTag(contactId, tagId);
   }
 
-  private async fetchContactsByEmail(email: string): Promise<ActiveCampaignContact[]> {
+  private async fetchContactsByEmail(
+    email: string,
+  ): Promise<ActiveCampaignContact[]> {
     const { baseUrl, apiToken } = this.getConfig();
 
     const attempts = [
@@ -349,7 +357,9 @@ export class ActiveCampaignService {
     return [];
   }
 
-  private async fetchContactsByPhone(phone: string): Promise<ActiveCampaignContact[]> {
+  private async fetchContactsByPhone(
+    phone: string,
+  ): Promise<ActiveCampaignContact[]> {
     const { baseUrl, apiToken } = this.getConfig();
     const url = new URL(
       `/api/3/contacts?search=${encodeURIComponent(phone)}`,
@@ -373,7 +383,10 @@ export class ActiveCampaignService {
     return contacts as ActiveCampaignContact[];
   }
 
-  private async updateContact(contactId: string, contact: ActiveCampaignContact) {
+  private async updateContact(
+    contactId: string,
+    contact: ActiveCampaignContact,
+  ) {
     const { baseUrl, apiToken } = this.getConfig();
     const url = new URL(
       `/api/3/contacts/${encodeURIComponent(contactId)}`,
@@ -403,7 +416,9 @@ export class ActiveCampaignService {
       throw new Error(`ActiveCampaign update erro ${res.status}: ${text}`);
     }
 
-    return (await this.parseJsonSafe(text)) as ActiveCampaignCreateContactResponse;
+    return (await this.parseJsonSafe(
+      text,
+    )) as ActiveCampaignCreateContactResponse;
   }
 
   async createContact(payload: Record<string, any>) {
@@ -445,14 +460,21 @@ export class ActiveCampaignService {
 
         const existingId = candidates?.[0]?.id;
         if (existingId) {
-          const updated = await this.updateContact(existingId, normalized.contact);
+          const updated = await this.updateContact(
+            existingId,
+            normalized.contact,
+          );
           const contactTag = await this.attachTagFromPayload(
             payload,
             updated,
             existingId,
           );
 
-          if (updated && typeof updated === 'object' && !Array.isArray(updated)) {
+          if (
+            updated &&
+            typeof updated === 'object' &&
+            !Array.isArray(updated)
+          ) {
             return {
               ...(updated as Record<string, any>),
               contactTag,
@@ -468,7 +490,9 @@ export class ActiveCampaignService {
       throw new Error(`ActiveCampaign erro ${res.status}: ${text}`);
     }
 
-    const json = (await this.parseJsonSafe(text)) as ActiveCampaignCreateContactResponse;
+    const json = (await this.parseJsonSafe(
+      text,
+    )) as ActiveCampaignCreateContactResponse;
     const contactTag = await this.attachTagFromPayload(payload, json);
 
     if (json && typeof json === 'object' && !Array.isArray(json)) {

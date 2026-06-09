@@ -1,11 +1,13 @@
-import { Body, Controller, Get, Param, Put, Query, UseGuards } from '@nestjs/common';
 import {
-  ApiOkResponse,
-  ApiOperation,
-  ApiParam,
-  ApiQuery,
-  ApiTags,
-} from '@nestjs/swagger';
+  Body,
+  Controller,
+  Get,
+  Param,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { LaunchDashboardQueryDto } from './dto/launch-dashboard-query.dto';
 import { UpsertLaunchDashboardConfigDto } from './dto/upsert-launch-dashboard-config.dto';
@@ -27,14 +29,18 @@ export class LaunchDashboardController {
 
   // ─── Config ───────────────────────────────────────────────────────────────
 
-  @ApiOperation({ summary: 'Retorna configuração do dashboard para o lançamento' })
+  @ApiOperation({
+    summary: 'Retorna configuração do dashboard para o lançamento',
+  })
   @ApiParam({ name: 'launchId', type: 'string' })
   @Get('config/:launchId')
   getConfig(@Param('launchId') launchId: string) {
     return this.service.getConfig(launchId);
   }
 
-  @ApiOperation({ summary: 'Cria ou atualiza configuração do dashboard para o lançamento' })
+  @ApiOperation({
+    summary: 'Cria ou atualiza configuração do dashboard para o lançamento',
+  })
   @ApiParam({ name: 'launchId', type: 'string' })
   @Put('config/:launchId')
   upsertConfig(
@@ -46,7 +52,10 @@ export class LaunchDashboardController {
 
   // ─── Available questions ──────────────────────────────────────────────────
 
-  @ApiOperation({ summary: 'Lista perguntas disponíveis e suas opções para configuração de consciência' })
+  @ApiOperation({
+    summary:
+      'Lista perguntas disponíveis e suas opções para configuração de consciência',
+  })
   @Get('available-questions')
   getAvailableQuestions() {
     return this.service.getAvailableQuestions();
@@ -98,7 +107,9 @@ export class LaunchDashboardController {
 
   // ─── Awareness metrics ────────────────────────────────────────────────────
 
-  @ApiOperation({ summary: 'Métricas de consciência e engajamento com pesquisa (formulário)' })
+  @ApiOperation({
+    summary: 'Métricas de consciência e engajamento com pesquisa (formulário)',
+  })
   @ApiQuery({ name: 'launchId', required: false })
   @ApiQuery({ name: 'seasonId', required: false })
   @ApiQuery({ name: 'dateFrom', required: true, example: '2026-04-01' })
@@ -110,7 +121,9 @@ export class LaunchDashboardController {
 
   // ─── Tier distribution ────────────────────────────────────────────────────
 
-  @ApiOperation({ summary: 'Distribuição de leads por faixa de leadscore (A+, A, B, C, D, E)' })
+  @ApiOperation({
+    summary: 'Distribuição de leads por faixa de leadscore (A+, A, B, C, D, E)',
+  })
   @ApiQuery({ name: 'launchId', required: false })
   @ApiQuery({ name: 'seasonId', required: false })
   @ApiQuery({ name: 'dateFrom', required: true, example: '2026-04-01' })

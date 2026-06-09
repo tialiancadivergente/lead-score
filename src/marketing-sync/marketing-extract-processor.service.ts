@@ -180,9 +180,7 @@ export class MarketingExtractProcessorService {
           'Content-Type': 'application/json',
           'developer-token':
             this.config.get<string>('GOOGLE_ADS_DEVELOPER_TOKEN') ?? '',
-          ...(loginCustomerId
-            ? { 'login-customer-id': loginCustomerId }
-            : {}),
+          ...(loginCustomerId ? { 'login-customer-id': loginCustomerId } : {}),
         },
         body: JSON.stringify({
           query: [
@@ -639,7 +637,8 @@ export class MarketingExtractProcessorService {
     const safeFraction = fractionPart.padEnd(Number(this.numericScale), '0');
     const scaledFraction = safeFraction.slice(0, Number(this.numericScale));
     const scaled =
-      BigInt(safeWhole) * this.numericMultiplier + BigInt(scaledFraction || '0');
+      BigInt(safeWhole) * this.numericMultiplier +
+      BigInt(scaledFraction || '0');
 
     return negative ? -scaled : scaled;
   }

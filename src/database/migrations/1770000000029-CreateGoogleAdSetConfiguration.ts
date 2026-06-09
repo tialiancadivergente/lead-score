@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateGoogleAdSetConfiguration1770000000029
-  implements MigrationInterface
-{
+export class CreateGoogleAdSetConfiguration1770000000029 implements MigrationInterface {
   name = 'CreateGoogleAdSetConfiguration1770000000029';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

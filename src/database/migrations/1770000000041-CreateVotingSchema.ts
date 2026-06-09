@@ -198,14 +198,22 @@ export class CreateVotingSchema1770000000041 implements MigrationInterface {
     await queryRunner.query(`DROP INDEX "public"."IDX_voting_vote_campaign"`);
     await queryRunner.query(`DROP TABLE "voting_vote"`);
 
-    await queryRunner.query(`DROP INDEX "public"."IDX_voting_voter_phone_normalized"`);
-    await queryRunner.query(`DROP INDEX "public"."IDX_voting_voter_email_normalized"`);
+    await queryRunner.query(
+      `DROP INDEX "public"."IDX_voting_voter_phone_normalized"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX "public"."IDX_voting_voter_email_normalized"`,
+    );
     await queryRunner.query(`DROP TABLE "voting_voter"`);
 
-    await queryRunner.query(`DROP INDEX "public"."IDX_voting_candidate_campaign_active_order"`);
+    await queryRunner.query(
+      `DROP INDEX "public"."IDX_voting_candidate_campaign_active_order"`,
+    );
     await queryRunner.query(`DROP TABLE "voting_candidate"`);
 
-    await queryRunner.query(`DROP INDEX "public"."IDX_voting_category_campaign_slug"`);
+    await queryRunner.query(
+      `DROP INDEX "public"."IDX_voting_category_campaign_slug"`,
+    );
     await queryRunner.query(`DROP TABLE "voting_category"`);
 
     await queryRunner.query(`DROP INDEX "public"."IDX_voting_campaign_slug"`);

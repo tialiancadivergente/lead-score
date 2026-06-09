@@ -9,7 +9,7 @@ import { FormVersion } from '../../database/entities/form/form-version.entity';
 import { FormVersionQuestion } from '../../database/entities/form/form-version-question.entity';
 import { Leadscore } from '../../database/entities/leadscore/leadscore.entity';
 
-type RawQuestionRow = {
+type _RawQuestionRow = {
   question_id: string;
   question_key: string;
   question_text: string | null;
@@ -54,7 +54,7 @@ export class LeadScoreQuestionsService {
       .orderBy('leadscore.created_at', 'DESC')
       .getOne();
 
-    const rows = (await this.formVersionQuestionRepo.query(
+    const rows = await this.formVersionQuestionRepo.query(
       `
       SELECT
         q.id AS question_id,
@@ -81,7 +81,7 @@ export class LeadScoreQuestionsService {
       ORDER BY fvq.display_order ASC, qo.display_order ASC
       `,
       [formVersionId, activeLeadscore?.id ?? null],
-    )) as RawQuestionRow[];
+    );
 
     const questionMap = new Map<string, LeadScoreQuestionDto>();
 
@@ -110,7 +110,9 @@ export class LeadScoreQuestionsService {
           option_key: optionKey,
           option_text: row.option_text ?? undefined,
           answer_value:
-            optionPoints === undefined ? undefined : row.option_text ?? optionKey,
+            optionPoints === undefined
+              ? undefined
+              : (row.option_text ?? optionKey),
           points: optionPoints,
           display_order: Number(row.option_display_order ?? 0),
         });

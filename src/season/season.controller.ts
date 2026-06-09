@@ -57,7 +57,9 @@ export class SeasonController {
     type: ListSeasonItemDto,
     isArray: true,
   })
-  async listAll(@Query() query: ListSeasonQueryDto): Promise<ListSeasonItemDto[]> {
+  async listAll(
+    @Query() query: ListSeasonQueryDto,
+  ): Promise<ListSeasonItemDto[]> {
     return await this.seasonService.listAll(query);
   }
 
@@ -111,7 +113,8 @@ export class SeasonController {
   @Patch(':id')
   @ApiOperation({
     summary: 'Edita season',
-    description: 'Atualiza name, active e/ou launch_id de uma season existente.',
+    description:
+      'Atualiza name, active e/ou launch_id de uma season existente.',
   })
   @ApiBody({ type: UpdateSeasonDto })
   @ApiResponse({

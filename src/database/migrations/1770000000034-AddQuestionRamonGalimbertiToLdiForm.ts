@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddQuestionRamonGalimbertiToLdiForm1770000000034
-  implements MigrationInterface
-{
+export class AddQuestionRamonGalimbertiToLdiForm1770000000034 implements MigrationInterface {
   name = 'AddQuestionRamonGalimbertiToLdiForm1770000000034';
 
   private readonly formId = '9ebd852f-c59a-4217-8530-f7831e44d02d';

@@ -55,4 +55,3 @@ export class SeedLeadscoreOra1770000000026 implements MigrationInterface {
     `);
   }
 }
-

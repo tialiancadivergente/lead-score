@@ -2,9 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ServiceBusReceivedMessage } from '@azure/service-bus';
 import { ServiceBusService } from '../service-bus/service-bus.service';
-import {
-  MarketingExtractQueueMessage,
-} from './marketing-sync.service';
+import { MarketingExtractQueueMessage } from './marketing-sync.service';
 import { MarketingExtractProcessorService } from './marketing-extract-processor.service';
 
 @Injectable()
@@ -58,7 +56,8 @@ export class MarketingSyncConsumer implements OnModuleInit {
     const rawBody = message.body as unknown;
     const typed =
       rawBody && typeof rawBody === 'object'
-        ? (rawBody as Partial<MarketingExtractQueueMessage> & Record<string, any>)
+        ? (rawBody as Partial<MarketingExtractQueueMessage> &
+            Record<string, any>)
         : {};
 
     const jobId = String(typed.jobId ?? '');

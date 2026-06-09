@@ -21,4 +21,3 @@ export class SeedIdentifierType1769999999999 implements MigrationInterface {
     `);
   }
 }
-

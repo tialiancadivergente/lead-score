@@ -71,8 +71,13 @@ export class LaunchDashboardService {
     return this.configRepo.findOne({ where: { launch_id: launchId } });
   }
 
-  async upsertConfig(launchId: string, dto: UpsertLaunchDashboardConfigDto): Promise<LaunchDashboardConfig> {
-    let config = await this.configRepo.findOne({ where: { launch_id: launchId } });
+  async upsertConfig(
+    launchId: string,
+    dto: UpsertLaunchDashboardConfigDto,
+  ): Promise<LaunchDashboardConfig> {
+    let config = await this.configRepo.findOne({
+      where: { launch_id: launchId },
+    });
 
     if (!config) {
       config = this.configRepo.create({ launch_id: launchId });
@@ -81,22 +86,36 @@ export class LaunchDashboardService {
     config.target_spend = dto.targetSpend ?? config.target_spend;
     config.target_leads = dto.targetLeads ?? config.target_leads;
     config.target_cpl = dto.targetCpl ?? config.target_cpl;
-    config.target_connect_rate = dto.targetConnectRate ?? config.target_connect_rate;
-    config.target_page_conversion = dto.targetPageConversion ?? config.target_page_conversion;
+    config.target_connect_rate =
+      dto.targetConnectRate ?? config.target_connect_rate;
+    config.target_page_conversion =
+      dto.targetPageConversion ?? config.target_page_conversion;
     config.target_cpc = dto.targetCpc ?? config.target_cpc;
     config.target_cpm = dto.targetCpm ?? config.target_cpm;
     config.target_ctr = dto.targetCtr ?? config.target_ctr;
-    config.target_survey_response_rate = dto.targetSurveyResponseRate ?? config.target_survey_response_rate;
-    config.target_consciousness_rate = dto.targetConsciousnessRate ?? config.target_consciousness_rate;
-    config.target_knows_elton_rate = dto.targetKnowsEltonRate ?? config.target_knows_elton_rate;
-    config.target_knows_alliance_rate = dto.targetKnowsAllianceRate ?? config.target_knows_alliance_rate;
+    config.target_survey_response_rate =
+      dto.targetSurveyResponseRate ?? config.target_survey_response_rate;
+    config.target_consciousness_rate =
+      dto.targetConsciousnessRate ?? config.target_consciousness_rate;
+    config.target_knows_elton_rate =
+      dto.targetKnowsEltonRate ?? config.target_knows_elton_rate;
+    config.target_knows_alliance_rate =
+      dto.targetKnowsAllianceRate ?? config.target_knows_alliance_rate;
 
-    config.question_key_consciousness = dto.questionKeyConsciousness ?? config.question_key_consciousness;
-    config.positive_option_key_consciousness = dto.positiveOptionKeyConsciousness ?? config.positive_option_key_consciousness;
-    config.question_key_knows_elton = dto.questionKeyKnowsElton ?? config.question_key_knows_elton;
-    config.positive_option_key_knows_elton = dto.positiveOptionKeyKnowsElton ?? config.positive_option_key_knows_elton;
-    config.question_key_knows_alliance = dto.questionKeyKnowsAlliance ?? config.question_key_knows_alliance;
-    config.positive_option_key_knows_alliance = dto.positiveOptionKeyKnowsAlliance ?? config.positive_option_key_knows_alliance;
+    config.question_key_consciousness =
+      dto.questionKeyConsciousness ?? config.question_key_consciousness;
+    config.positive_option_key_consciousness =
+      dto.positiveOptionKeyConsciousness ??
+      config.positive_option_key_consciousness;
+    config.question_key_knows_elton =
+      dto.questionKeyKnowsElton ?? config.question_key_knows_elton;
+    config.positive_option_key_knows_elton =
+      dto.positiveOptionKeyKnowsElton ?? config.positive_option_key_knows_elton;
+    config.question_key_knows_alliance =
+      dto.questionKeyKnowsAlliance ?? config.question_key_knows_alliance;
+    config.positive_option_key_knows_alliance =
+      dto.positiveOptionKeyKnowsAlliance ??
+      config.positive_option_key_knows_alliance;
 
     return this.configRepo.save(config);
   }
@@ -111,11 +130,14 @@ export class LaunchDashboardService {
       .addOrderBy('qo.display_order', 'ASC')
       .getMany();
 
-    const map = new Map<string, {
-      questionKey: string;
-      questionText: string | null;
-      options: { optionKey: string; optionText: string | null }[];
-    }>();
+    const map = new Map<
+      string,
+      {
+        questionKey: string;
+        questionText: string | null;
+        options: { optionKey: string; optionText: string | null }[];
+      }
+    >();
 
     for (const opt of rows) {
       const key = opt.question.question_key;
@@ -168,7 +190,11 @@ export class LaunchDashboardService {
 
     const dates = this.dateRange(query.dateFrom!, query.dateTo!);
     const timeseries = dates.map((date) => {
-      const m = mediaByDate.get(date) ?? { spend: 0, impressions: 0, clicks: 0 };
+      const m = mediaByDate.get(date) ?? {
+        spend: 0,
+        impressions: 0,
+        clicks: 0,
+      };
       const leads = leadsByDate.get(date) ?? 0;
       const sales = salesByDate.get(date) ?? 0;
 
@@ -241,29 +267,30 @@ export class LaunchDashboardService {
     const surveyResponseRate =
       totalLeads > 0 ? Number((totalResponses / totalLeads).toFixed(6)) : null;
 
-    const [consciousnessCount, knowsEltonCount, knowsAllianceCount] = await Promise.all([
-      config?.question_key_consciousness
-        ? this.queryPositiveAnswerCount(
-            query,
-            config.question_key_consciousness,
-            config.positive_option_key_consciousness,
-          )
-        : Promise.resolve(null),
-      config?.question_key_knows_elton
-        ? this.queryPositiveAnswerCount(
-            query,
-            config.question_key_knows_elton,
-            config.positive_option_key_knows_elton,
-          )
-        : Promise.resolve(null),
-      config?.question_key_knows_alliance
-        ? this.queryPositiveAnswerCount(
-            query,
-            config.question_key_knows_alliance,
-            config.positive_option_key_knows_alliance,
-          )
-        : Promise.resolve(null),
-    ]);
+    const [consciousnessCount, knowsEltonCount, knowsAllianceCount] =
+      await Promise.all([
+        config?.question_key_consciousness
+          ? this.queryPositiveAnswerCount(
+              query,
+              config.question_key_consciousness,
+              config.positive_option_key_consciousness,
+            )
+          : Promise.resolve(null),
+        config?.question_key_knows_elton
+          ? this.queryPositiveAnswerCount(
+              query,
+              config.question_key_knows_elton,
+              config.positive_option_key_knows_elton,
+            )
+          : Promise.resolve(null),
+        config?.question_key_knows_alliance
+          ? this.queryPositiveAnswerCount(
+              query,
+              config.question_key_knows_alliance,
+              config.positive_option_key_knows_alliance,
+            )
+          : Promise.resolve(null),
+      ]);
 
     const rate = (count: number | null) =>
       count !== null && totalResponses > 0
@@ -285,8 +312,11 @@ export class LaunchDashboardService {
     };
   }
 
-  private async queryFormResponseCount(query: LaunchDashboardQueryDto): Promise<number> {
-    const qb = this.formResponseRepo.createQueryBuilder('fr')
+  private async queryFormResponseCount(
+    query: LaunchDashboardQueryDto,
+  ): Promise<number> {
+    const qb = this.formResponseRepo
+      .createQueryBuilder('fr')
       .innerJoin(Capture, 'c', 'c.id = fr.capture_id')
       .andWhere('fr.capture_id IS NOT NULL');
     this.applyFormResponseFilters(qb, query);
@@ -301,7 +331,8 @@ export class LaunchDashboardService {
     questionKey: string,
     positiveOptionKey?: string,
   ): Promise<number> {
-    const qb = this.formAnswerRepo.createQueryBuilder('fa')
+    const qb = this.formAnswerRepo
+      .createQueryBuilder('fa')
       .innerJoin(FormResponse, 'fr', 'fr.id = fa.form_response_id')
       .innerJoin(Capture, 'c', 'c.id = fr.capture_id')
       .innerJoin(
@@ -380,9 +411,8 @@ export class LaunchDashboardService {
         tier: r.tier,
         tierName: r.tierName,
         count: Number(r.count),
-        percentage: total > 0
-          ? Number(((Number(r.count) / total) * 100).toFixed(2))
-          : 0,
+        percentage:
+          total > 0 ? Number(((Number(r.count) / total) * 100).toFixed(2)) : 0,
       })),
       total,
     };
@@ -390,17 +420,31 @@ export class LaunchDashboardService {
 
   // ─── Media queries ────────────────────────────────────────────────────────
 
-  private async queryMediaAggregated(query: LaunchDashboardQueryDto): Promise<MediaAgg> {
+  private async queryMediaAggregated(
+    query: LaunchDashboardQueryDto,
+  ): Promise<MediaAgg> {
     const qb = this.perfRepo.createQueryBuilder('p');
     this.applyMediaFilters(qb, query);
 
     const row = await qb
       .select('COALESCE(SUM(CAST(p.spend AS NUMERIC)), 0)', 'spend')
-      .addSelect('COALESCE(SUM(CAST(p.impressions AS BIGINT)), 0)', 'impressions')
+      .addSelect(
+        'COALESCE(SUM(CAST(p.impressions AS BIGINT)), 0)',
+        'impressions',
+      )
       .addSelect('COALESCE(SUM(CAST(p.clicks AS BIGINT)), 0)', 'clicks')
-      .addSelect('COALESCE(SUM(CAST(p.inline_link_clicks AS BIGINT)), 0)', 'inlineLinkClicks')
-      .addSelect('COALESCE(SUM(CAST(p.landing_page_views AS BIGINT)), 0)', 'landingPageViews')
-      .addSelect('COALESCE(SUM(CAST(p.initiate_checkouts AS BIGINT)), 0)', 'initiateCheckouts')
+      .addSelect(
+        'COALESCE(SUM(CAST(p.inline_link_clicks AS BIGINT)), 0)',
+        'inlineLinkClicks',
+      )
+      .addSelect(
+        'COALESCE(SUM(CAST(p.landing_page_views AS BIGINT)), 0)',
+        'landingPageViews',
+      )
+      .addSelect(
+        'COALESCE(SUM(CAST(p.initiate_checkouts AS BIGINT)), 0)',
+        'initiateCheckouts',
+      )
       .getRawOne<Record<string, string>>();
 
     return {
@@ -420,7 +464,10 @@ export class LaunchDashboardService {
     const rows = await qb
       .select("TO_CHAR(p.report_date, 'YYYY-MM-DD')", 'date')
       .addSelect('COALESCE(SUM(CAST(p.spend AS NUMERIC)), 0)', 'spend')
-      .addSelect('COALESCE(SUM(CAST(p.impressions AS BIGINT)), 0)', 'impressions')
+      .addSelect(
+        'COALESCE(SUM(CAST(p.impressions AS BIGINT)), 0)',
+        'impressions',
+      )
       .addSelect('COALESCE(SUM(CAST(p.clicks AS BIGINT)), 0)', 'clicks')
       .groupBy('p.report_date')
       .orderBy('p.report_date', 'ASC')
@@ -434,7 +481,9 @@ export class LaunchDashboardService {
     }));
   }
 
-  private async queryMediaByAd(query: LaunchDashboardQueryDto): Promise<FunnelAdRow[]> {
+  private async queryMediaByAd(
+    query: LaunchDashboardQueryDto,
+  ): Promise<FunnelAdRow[]> {
     const qb = this.perfRepo.createQueryBuilder('p');
     this.applyMediaFilters(qb, query);
 
@@ -448,11 +497,23 @@ export class LaunchDashboardService {
       .addSelect('MAX(p.external_account_id)', 'externalAccountId')
       .addSelect('MAX(p.account_name)', 'accountName')
       .addSelect('COALESCE(SUM(CAST(p.spend AS NUMERIC)), 0)', 'spend')
-      .addSelect('COALESCE(SUM(CAST(p.impressions AS BIGINT)), 0)', 'impressions')
+      .addSelect(
+        'COALESCE(SUM(CAST(p.impressions AS BIGINT)), 0)',
+        'impressions',
+      )
       .addSelect('COALESCE(SUM(CAST(p.clicks AS BIGINT)), 0)', 'clicks')
-      .addSelect('COALESCE(SUM(CAST(p.inline_link_clicks AS BIGINT)), 0)', 'inlineLinkClicks')
-      .addSelect('COALESCE(SUM(CAST(p.landing_page_views AS BIGINT)), 0)', 'landingPageViews')
-      .addSelect('COALESCE(SUM(CAST(p.initiate_checkouts AS BIGINT)), 0)', 'initiateCheckouts')
+      .addSelect(
+        'COALESCE(SUM(CAST(p.inline_link_clicks AS BIGINT)), 0)',
+        'inlineLinkClicks',
+      )
+      .addSelect(
+        'COALESCE(SUM(CAST(p.landing_page_views AS BIGINT)), 0)',
+        'landingPageViews',
+      )
+      .addSelect(
+        'COALESCE(SUM(CAST(p.initiate_checkouts AS BIGINT)), 0)',
+        'initiateCheckouts',
+      )
       .groupBy('p.external_ad_id')
       .orderBy('SUM(CAST(p.spend AS NUMERIC))', 'DESC')
       .getRawMany<Record<string, string>>();
@@ -509,7 +570,9 @@ export class LaunchDashboardService {
 
   // ─── Capture / leads queries ──────────────────────────────────────────────
 
-  private async queryLeadsCount(query: LaunchDashboardQueryDto): Promise<number> {
+  private async queryLeadsCount(
+    query: LaunchDashboardQueryDto,
+  ): Promise<number> {
     const qb = this.captureRepo.createQueryBuilder('c');
     this.applyCaptureFilters(qb, query);
     qb.andWhere('c.person_id IS NOT NULL');
@@ -530,7 +593,7 @@ export class LaunchDashboardService {
         'date',
       )
       .addSelect('COUNT(DISTINCT c.person_id)', 'leads')
-      .groupBy("DATE(COALESCE(c.occurred_at, c.created_at))")
+      .groupBy('DATE(COALESCE(c.occurred_at, c.created_at))')
       .orderBy('date', 'ASC')
       .getRawMany<{ date: string; leads: string }>();
 
@@ -608,7 +671,7 @@ export class LaunchDashboardService {
       )
       .addSelect('COUNT(DISTINCT hs.id)', 'sales')
       .andWhere('COALESCE(hs.approved_date, hs.order_date) IS NOT NULL')
-      .groupBy("DATE(COALESCE(hs.approved_date, hs.order_date))")
+      .groupBy('DATE(COALESCE(hs.approved_date, hs.order_date))')
       .orderBy('date', 'ASC')
       .getRawMany<{ date: string; sales: string }>();
 
@@ -640,7 +703,11 @@ export class LaunchDashboardService {
   private buildDirectSalesQb(query: LaunchDashboardQueryDto) {
     const qb = this.saleRepo
       .createQueryBuilder('hs')
-      .innerJoin(HotmartProduct, 'hp', 'hp.product_id = hs.product_id AND hp.active = true')
+      .innerJoin(
+        HotmartProduct,
+        'hp',
+        'hp.product_id = hs.product_id AND hp.active = true',
+      )
       .andWhere(`hs.purchase_status IN ('APPROVED', 'COMPLETE')`);
 
     if (query.launchId) {
@@ -724,7 +791,11 @@ export class LaunchDashboardService {
   }
 
   private div(numerator: number, denominator: number): number | null {
-    if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) {
+    if (
+      !Number.isFinite(numerator) ||
+      !Number.isFinite(denominator) ||
+      denominator <= 0
+    ) {
       return null;
     }
     return Number((numerator / denominator).toFixed(6));
@@ -738,7 +809,9 @@ export class LaunchDashboardService {
       !/^\d{4}-\d{2}-\d{2}$/.test(query.dateFrom) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(query.dateTo)
     ) {
-      throw new BadRequestException('dateFrom e dateTo devem estar no formato YYYY-MM-DD.');
+      throw new BadRequestException(
+        'dateFrom e dateTo devem estar no formato YYYY-MM-DD.',
+      );
     }
   }
 

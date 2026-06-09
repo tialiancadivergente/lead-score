@@ -94,8 +94,12 @@ export class FormService {
     const launchId = this.parseOptionalUuid(dto.launch_id, 'launch_id');
     const seasonId = this.parseOptionalUuid(dto.season_id, 'season_id');
 
-    const launch = launchId ? await this.mustFindLaunchById(launchId) : undefined;
-    const season = seasonId ? await this.mustFindSeasonById(seasonId) : undefined;
+    const launch = launchId
+      ? await this.mustFindLaunchById(launchId)
+      : undefined;
+    const season = seasonId
+      ? await this.mustFindSeasonById(seasonId)
+      : undefined;
     this.assertLaunchSeasonConsistency(launch, season);
 
     const saved = await this.formRepo.save(

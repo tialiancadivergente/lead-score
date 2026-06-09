@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class SeedLeadscoreTierRuleOro1770000000012
-  implements MigrationInterface
-{
+export class SeedLeadscoreTierRuleOro1770000000012 implements MigrationInterface {
   name = 'SeedLeadscoreTierRuleOro1770000000012';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

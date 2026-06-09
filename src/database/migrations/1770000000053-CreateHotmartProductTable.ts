@@ -15,8 +15,12 @@ export class CreateHotmartProductTable1770000000053 implements MigrationInterfac
         CONSTRAINT "FK_hotmart_product_launch" FOREIGN KEY ("launch_id") REFERENCES "launch"("id") ON DELETE SET NULL
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_hotmart_product_launch_id" ON "hotmart_product" ("launch_id")`);
-    await queryRunner.query(`CREATE INDEX "IDX_hotmart_product_product_id" ON "hotmart_product" ("product_id")`);
+    await queryRunner.query(
+      `CREATE INDEX "IDX_hotmart_product_launch_id" ON "hotmart_product" ("launch_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_hotmart_product_product_id" ON "hotmart_product" ("product_id")`,
+    );
   }
 
   async down(queryRunner: QueryRunner): Promise<void> {

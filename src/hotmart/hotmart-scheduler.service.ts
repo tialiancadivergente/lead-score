@@ -55,9 +55,12 @@ export class HotmartSchedulerService implements OnModuleInit, OnModuleDestroy {
 
     // Run DB-configured schedules matching the current HH:MM
     try {
-      const schedules = await this.hotmartSyncScheduleService.getActiveSchedulesForTime(hhmm);
+      const schedules =
+        await this.hotmartSyncScheduleService.getActiveSchedulesForTime(hhmm);
       for (const schedule of schedules) {
-        this.logger.log(`Executando agendamento DB: ${schedule.id} (${schedule.name ?? 'sem nome'}) às ${hhmm}`);
+        this.logger.log(
+          `Executando agendamento DB: ${schedule.id} (${schedule.name ?? 'sem nome'}) às ${hhmm}`,
+        );
         await this.hotmartSyncScheduleService.runNow(schedule.id);
       }
     } catch (err) {

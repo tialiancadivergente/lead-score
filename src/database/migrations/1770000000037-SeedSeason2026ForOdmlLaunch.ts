@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class SeedSeason2026ForOdmlLaunch1770000000037
-  implements MigrationInterface
-{
+export class SeedSeason2026ForOdmlLaunch1770000000037 implements MigrationInterface {
   name = 'SeedSeason2026ForOdmlLaunch1770000000037';
 
   private readonly seasonId = '6839a5b3-d1c4-4b02-8c73-4a04cf0337f2';

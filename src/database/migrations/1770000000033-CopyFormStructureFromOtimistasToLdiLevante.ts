@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CopyFormStructureFromOtimistasToLdiLevante1770000000033
-  implements MigrationInterface
-{
+export class CopyFormStructureFromOtimistasToLdiLevante1770000000033 implements MigrationInterface {
   name = 'CopyFormStructureFromOtimistasToLdiLevante1770000000033';
 
   private readonly sourceFormId = '7405904f-64b9-4b2e-a067-a5fa246e1d55';

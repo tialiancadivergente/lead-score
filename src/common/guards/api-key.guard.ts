@@ -29,7 +29,10 @@ export class ApiKeyGuard implements CanActivate {
       ? headerValue[0]
       : headerValue;
 
-    if (typeof providedApiKey !== 'string' || providedApiKey !== expectedApiKey) {
+    if (
+      typeof providedApiKey !== 'string' ||
+      providedApiKey !== expectedApiKey
+    ) {
       throw new UnauthorizedException('API key inválida.');
     }
 

@@ -4,7 +4,13 @@ import { MetaInsightRow } from './meta-batch.service';
 
 export type AsyncJobStatus = {
   id: string;
-  async_status: 'Job Not Started' | 'Job Started' | 'Job Running' | 'Job Complete' | 'Job Failed' | 'Job Skipped';
+  async_status:
+    | 'Job Not Started'
+    | 'Job Started'
+    | 'Job Running'
+    | 'Job Complete'
+    | 'Job Failed'
+    | 'Job Skipped';
   async_percent_completion: number;
   date_start?: string;
   date_stop?: string;
@@ -37,9 +43,10 @@ export class MetaJobService {
     until: string;
     breakdowns?: string;
   }): Promise<StartInsightsJobResult> {
-    const accessToken = await this.metaOAuthService.getAuthorizedAccessTokenForConnection(
-      params.connectionId,
-    );
+    const accessToken =
+      await this.metaOAuthService.getAuthorizedAccessTokenForConnection(
+        params.connectionId,
+      );
 
     const url = `${this.getBaseUrl()}/${params.nodeId}/insights`;
     const body = new URLSearchParams();
@@ -63,7 +70,9 @@ export class MetaJobService {
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`Failed to start insights job: ${response.status} ${text}`);
+      throw new Error(
+        `Failed to start insights job: ${response.status} ${text}`,
+      );
     }
 
     const json = (await response.json()) as StartInsightsJobResult;
@@ -78,9 +87,10 @@ export class MetaJobService {
     connectionId: string;
     reportRunId: string;
   }): Promise<AsyncJobStatus> {
-    const accessToken = await this.metaOAuthService.getAuthorizedAccessTokenForConnection(
-      params.connectionId,
-    );
+    const accessToken =
+      await this.metaOAuthService.getAuthorizedAccessTokenForConnection(
+        params.connectionId,
+      );
 
     const url = new URL(`${this.getBaseUrl()}/${params.reportRunId}`);
     url.searchParams.set('access_token', accessToken);
@@ -102,20 +112,21 @@ export class MetaJobService {
     reportRunId: string;
     limit?: number;
   }): Promise<MetaInsightRow[]> {
-    const accessToken = await this.metaOAuthService.getAuthorizedAccessTokenForConnection(
-      params.connectionId,
-    );
+    const accessToken =
+      await this.metaOAuthService.getAuthorizedAccessTokenForConnection(
+        params.connectionId,
+      );
 
-    const url = new URL(
-      `${this.getBaseUrl()}/${params.reportRunId}/insights`,
-    );
+    const url = new URL(`${this.getBaseUrl()}/${params.reportRunId}/insights`);
     url.searchParams.set('access_token', accessToken);
     url.searchParams.set('limit', String(params.limit ?? 500));
 
     const response = await fetch(url.toString());
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`Failed to retrieve job results: ${response.status} ${text}`);
+      throw new Error(
+        `Failed to retrieve job results: ${response.status} ${text}`,
+      );
     }
 
     const json = (await response.json()) as { data: MetaInsightRow[] };

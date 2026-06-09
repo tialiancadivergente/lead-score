@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddExternalAdIdToCapture1770000000022
-  implements MigrationInterface
-{
+export class AddExternalAdIdToCapture1770000000022 implements MigrationInterface {
   name = 'AddExternalAdIdToCapture1770000000022';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

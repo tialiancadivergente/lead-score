@@ -152,7 +152,9 @@ export class MarketingSyncService {
   }
 
   async refreshAccountsForProvider(provider?: string) {
-    const where = provider ? { provider, status: 'active' } : { status: 'active' };
+    const where = provider
+      ? { provider, status: 'active' }
+      : { status: 'active' };
     const connections = await this.oauthConnectionRepository.find({ where });
 
     const results: RefreshAccountsResult[] = [];
@@ -216,7 +218,9 @@ export class MarketingSyncService {
     if (provider == null) {
       existingQuery.andWhere('configuration.provider IS NULL');
     } else {
-      existingQuery.andWhere('configuration.provider = :provider', { provider });
+      existingQuery.andWhere('configuration.provider = :provider', {
+        provider,
+      });
     }
 
     const existing = await existingQuery.getOne();
@@ -284,11 +288,16 @@ export class MarketingSyncService {
 
     return {
       source: 'env',
-      enabled: this.config.get<string>('MARKETING_DASHBOARD_SCHEDULER_ENABLED', 'false') ===
-        'true',
+      enabled:
+        this.config.get<string>(
+          'MARKETING_DASHBOARD_SCHEDULER_ENABLED',
+          'false',
+        ) === 'true',
       scheduleEnabled:
-        this.config.get<string>('MARKETING_DASHBOARD_SCHEDULER_ENABLED', 'false') ===
-        'true',
+        this.config.get<string>(
+          'MARKETING_DASHBOARD_SCHEDULER_ENABLED',
+          'false',
+        ) === 'true',
       intervalMinutes: this.normalizeScheduleInterval(
         Number(
           this.config.get<string>(
@@ -641,7 +650,10 @@ export class MarketingSyncService {
 
         await this.enqueueJob(finalJob.id, 'scheduler:hourly');
         enqueuedJobs += 1;
-      } else if (existing.status === 'failed' || existing.status === 'completed') {
+      } else if (
+        existing.status === 'failed' ||
+        existing.status === 'completed'
+      ) {
         existing.status = 'pending';
         existing.started_at = undefined;
         existing.completed_at = undefined;
@@ -886,24 +898,29 @@ export class MarketingSyncService {
       'metadata_json',
     ];
 
-    const csv = [headers, ...rows.map((row) => [
-      row.provider,
-      row.external_account_id,
-      row.account_name ?? '',
-      row.external_campaign_id ?? '',
-      row.campaign_name ?? '',
-      row.external_adset_id ?? '',
-      row.adset_name ?? '',
-      row.external_ad_id,
-      row.ad_name ?? '',
-      row.report_date,
-      row.impressions,
-      row.clicks,
-      row.spend,
-      row.conversions ?? '',
-      row.metadata ? JSON.stringify(row.metadata) : '',
-    ])]
-      .map((row) => row.map((value) => this.escapeCsv(String(value ?? ''))).join(','))
+    const csv = [
+      headers,
+      ...rows.map((row) => [
+        row.provider,
+        row.external_account_id,
+        row.account_name ?? '',
+        row.external_campaign_id ?? '',
+        row.campaign_name ?? '',
+        row.external_adset_id ?? '',
+        row.adset_name ?? '',
+        row.external_ad_id,
+        row.ad_name ?? '',
+        row.report_date,
+        row.impressions,
+        row.clicks,
+        row.spend,
+        row.conversions ?? '',
+        row.metadata ? JSON.stringify(row.metadata) : '',
+      ]),
+    ]
+      .map((row) =>
+        row.map((value) => this.escapeCsv(String(value ?? ''))).join(','),
+      )
       .join('\r\n');
 
     return `\uFEFF${csv}`;
@@ -972,7 +989,8 @@ export class MarketingSyncService {
         });
 
       entity.account_name = row.account_name?.trim() || undefined;
-      entity.external_campaign_id = row.external_campaign_id?.trim() || undefined;
+      entity.external_campaign_id =
+        row.external_campaign_id?.trim() || undefined;
       entity.campaign_name = row.campaign_name?.trim() || undefined;
       entity.external_adset_id = row.external_adset_id?.trim() || undefined;
       entity.adset_name = row.adset_name?.trim() || undefined;
@@ -980,7 +998,9 @@ export class MarketingSyncService {
       entity.impressions = row.impressions;
       entity.clicks = row.clicks;
       entity.spend = row.spend;
-      entity.conversions = row.conversions?.trim() ? row.conversions : undefined;
+      entity.conversions = row.conversions?.trim()
+        ? row.conversions
+        : undefined;
       entity.metadata = row.metadata_json?.trim()
         ? this.safeParseJson(row.metadata_json)
         : undefined;
@@ -1059,7 +1079,8 @@ export class MarketingSyncService {
       return payload.accounts.map((account) => ({
         externalAccountId: String(account.customerId),
         externalAccountName: account.descriptiveName ?? account.customerId,
-        parentExternalAccountId: this.googleAdsOAuthService.getConfiguredLoginCustomerId(),
+        parentExternalAccountId:
+          this.googleAdsOAuthService.getConfiguredLoginCustomerId(),
         isManager: Boolean(account.manager),
         accessible: account.accessible !== false,
         metadata: account as Record<string, unknown>,
@@ -1249,7 +1270,9 @@ export class MarketingSyncService {
     }
   }
 
-  private async rebuildCampaignPerformanceFromAdRows(affectedKeys: Set<string>) {
+  private async rebuildCampaignPerformanceFromAdRows(
+    affectedKeys: Set<string>,
+  ) {
     for (const key of affectedKeys) {
       const [provider, externalAccountId, reportDate] = key.split('|');
 
@@ -1333,8 +1356,7 @@ export class MarketingSyncService {
       provider: configuration.provider ?? null,
       enabled: configuration.enabled,
       scheduleEnabled: configuration.schedule_enabled,
-      scheduleIntervalMinutes:
-        configuration.schedule_interval_minutes ?? null,
+      scheduleIntervalMinutes: configuration.schedule_interval_minutes ?? null,
       config: configuration.config ?? null,
       metadata: configuration.metadata ?? null,
       createdAt: configuration.created_at.toISOString(),

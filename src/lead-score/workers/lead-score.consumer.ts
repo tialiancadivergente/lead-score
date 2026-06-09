@@ -53,12 +53,12 @@ export class LeadScoreConsumer implements OnModuleInit {
     const rawBody = message.body as unknown;
     const typed =
       rawBody && typeof rawBody === 'object'
-        ? ((rawBody as Partial<LeadScoreQueueMessage>) as Partial<
+        ? (rawBody as Partial<LeadScoreQueueMessage> as Partial<
             LeadScoreQueueMessage & Record<string, any>
           >)
         : {};
 
-    const payload = (typed.payload ?? typed ?? {}) as Record<string, any>;
+    const payload = typed.payload ?? typed ?? {};
     const requestId = String(typed.requestId ?? message.messageId ?? 'unknown');
 
     this.logger.debug(
@@ -103,7 +103,9 @@ export class LeadScoreConsumer implements OnModuleInit {
         `Falha ao persistir lead score (requestId=${requestId}): ${error instanceof Error ? error.message : String(error)}`,
         error instanceof Error ? error.stack : undefined,
       );
-      throw new Error(`Falha ao processar lead score (requestId=${requestId}).`);
+      throw new Error(
+        `Falha ao processar lead score (requestId=${requestId}).`,
+      );
     }
   }
 }

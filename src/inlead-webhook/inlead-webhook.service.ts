@@ -67,7 +67,10 @@ export class InleadWebhookService {
     return undefined;
   }
 
-  private normalizeEnvelope(rawPayload: unknown, requestHeaders: Record<string, any>) {
+  private normalizeEnvelope(
+    rawPayload: unknown,
+    requestHeaders: Record<string, any>,
+  ) {
     const raw = Array.isArray(rawPayload) ? rawPayload[0] : rawPayload;
     const envelope = this.asRecord(raw);
     const nestedBody = this.asRecord(envelope.body);
@@ -148,7 +151,10 @@ export class InleadWebhookService {
         sourceBody.utm_campaign,
         sourceBody['tracking.utm_campaign'],
       ),
-      utm_id: this.firstString(sourceBody.utm_id, sourceBody['tracking.utm_id']),
+      utm_id: this.firstString(
+        sourceBody.utm_id,
+        sourceBody['tracking.utm_id'],
+      ),
       utm_term: this.firstString(
         sourceBody.utm_term,
         sourceBody['tracking.utm_term'],

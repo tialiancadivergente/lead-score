@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class SeedFormODespertarDaMulherLivre1770000000038
-  implements MigrationInterface
-{
+export class SeedFormODespertarDaMulherLivre1770000000038 implements MigrationInterface {
   name = 'SeedFormODespertarDaMulherLivre1770000000038';
 
   private readonly formName = 'O Despertar da Mulher Livre';

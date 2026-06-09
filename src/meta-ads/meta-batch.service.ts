@@ -82,8 +82,14 @@ export type MetaInsightRow = {
   video_p50_watched_actions?: Array<{ action_type: string; value: string }>;
   video_p75_watched_actions?: Array<{ action_type: string; value: string }>;
   video_p100_watched_actions?: Array<{ action_type: string; value: string }>;
-  video_thruplay_watched_actions?: Array<{ action_type: string; value: string }>;
-  video_avg_time_watched_actions?: Array<{ action_type: string; value: string }>;
+  video_thruplay_watched_actions?: Array<{
+    action_type: string;
+    value: string;
+  }>;
+  video_avg_time_watched_actions?: Array<{
+    action_type: string;
+    value: string;
+  }>;
   video_30_sec_watched_actions?: Array<{ action_type: string; value: string }>;
   video_continuous_2_sec_watched_actions?: Array<{
     action_type: string;
@@ -214,7 +220,9 @@ export class MetaBatchService {
     return (await response.json()) as BatchResponseItem[];
   }
 
-  private parseBatchItem<T>(item: BatchResponseItem): MetaPagedResponse<T> | null {
+  private parseBatchItem<T>(
+    item: BatchResponseItem,
+  ): MetaPagedResponse<T> | null {
     if (item.code !== 200) {
       this.logger.warn(`Batch item returned code ${item.code}: ${item.body}`);
       return null;
@@ -230,7 +238,12 @@ export class MetaBatchService {
   private formatBatchErrorBody(body: string): string {
     try {
       const parsed = JSON.parse(body) as {
-        error?: { message?: string; type?: string; code?: number; error_subcode?: number };
+        error?: {
+          message?: string;
+          type?: string;
+          code?: number;
+          error_subcode?: number;
+        };
       };
       if (parsed.error?.message) {
         const parts = [
@@ -267,9 +280,10 @@ export class MetaBatchService {
     since?: string;
     until?: string;
   }): Promise<Array<{ accountId: string; campaigns: MetaCampaignRow[] }>> {
-    const accessToken = await this.metaOAuthService.getAuthorizedAccessTokenForConnection(
-      params.connectionId,
-    );
+    const accessToken =
+      await this.metaOAuthService.getAuthorizedAccessTokenForConnection(
+        params.connectionId,
+      );
 
     const dateParam = this.buildDateParam(params);
     const requests: BatchRequest[] = params.accountIds.map((accountId) => ({
@@ -295,9 +309,10 @@ export class MetaBatchService {
     since?: string;
     until?: string;
   }): Promise<Array<{ accountId: string; adsets: MetaAdsetRow[] }>> {
-    const accessToken = await this.metaOAuthService.getAuthorizedAccessTokenForConnection(
-      params.connectionId,
-    );
+    const accessToken =
+      await this.metaOAuthService.getAuthorizedAccessTokenForConnection(
+        params.connectionId,
+      );
 
     const dateParam = this.buildDateParam(params);
     const requests: BatchRequest[] = params.accountIds.map((accountId) => ({
@@ -323,9 +338,10 @@ export class MetaBatchService {
     since?: string;
     until?: string;
   }): Promise<Array<{ accountId: string; ads: MetaAdRow[] }>> {
-    const accessToken = await this.metaOAuthService.getAuthorizedAccessTokenForConnection(
-      params.connectionId,
-    );
+    const accessToken =
+      await this.metaOAuthService.getAuthorizedAccessTokenForConnection(
+        params.connectionId,
+      );
 
     const dateParam = this.buildDateParam(params);
     const requests: BatchRequest[] = params.accountIds.map((accountId) => ({
@@ -354,9 +370,10 @@ export class MetaBatchService {
     breakdowns?: string;
     timeIncrement?: number;
   }): Promise<Array<{ accountId: string; insights: MetaInsightRow[] }>> {
-    const accessToken = await this.metaOAuthService.getAuthorizedAccessTokenForConnection(
-      params.connectionId,
-    );
+    const accessToken =
+      await this.metaOAuthService.getAuthorizedAccessTokenForConnection(
+        params.connectionId,
+      );
 
     const level = params.level ?? 'ad';
     const timeIncrement = params.timeIncrement ?? 1;

@@ -13,7 +13,9 @@ export class UpdateVotingCandidateDto {
   })
   story_text?: string;
 
-  @ApiPropertyOptional({ example: 'https://cdn.site.com/candidates/fernanda.jpg' })
+  @ApiPropertyOptional({
+    example: 'https://cdn.site.com/candidates/fernanda.jpg',
+  })
   photo_url?: string;
 
   @ApiPropertyOptional({ example: 1 })

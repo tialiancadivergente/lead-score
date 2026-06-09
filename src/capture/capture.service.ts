@@ -168,7 +168,9 @@ export class CaptureService {
       relations: ['form_version'],
     });
     if (!capture) {
-      throw new NotFoundException(`Capture nao encontrada para id=${captureId}.`);
+      throw new NotFoundException(
+        `Capture nao encontrada para id=${captureId}.`,
+      );
     }
 
     const formResponse = await this.formResponseRepo
@@ -238,14 +240,18 @@ export class CaptureService {
     };
   }
 
-  async listCaptures(query: ListCaptureQueryDto): Promise<CaptureListResponseDto> {
+  async listCaptures(
+    query: ListCaptureQueryDto,
+  ): Promise<CaptureListResponseDto> {
     const startedAt = Date.now();
     const page = this.parsePositiveInt(query.page, 1, 'page');
     const perPage = Math.min(
       this.parsePositiveInt(query.per_page, 50, 'per_page'),
       200,
     );
-    this.logger.log(`List capture started (page=${page}, per_page=${perPage}).`);
+    this.logger.log(
+      `List capture started (page=${page}, per_page=${perPage}).`,
+    );
 
     const filters = this.parseFilters(query);
 
@@ -280,12 +286,17 @@ export class CaptureService {
     const startedAt = Date.now();
     this.logger.log('Capture CSV export started.');
 
-    const items = await this.listCaptureItems(query, { includeQuizDetails: true });
+    const items = await this.listCaptureItems(query, {
+      includeQuizDetails: true,
+    });
     const columns = CaptureService.EXPORT_COLUMNS;
     const { questionHeaders, answersByCapture } =
       await this.resolveQuizAnswersByCapture(items.map((item) => item.id));
 
-    const headerRow = [...columns.map((column) => column.header), ...questionHeaders];
+    const headerRow = [
+      ...columns.map((column) => column.header),
+      ...questionHeaders,
+    ];
     const dataRows = items.map((item) => {
       const baseColumns = columns.map((column) =>
         this.toExportCaptureValue(item, column.key),
@@ -312,11 +323,16 @@ export class CaptureService {
     const startedAt = Date.now();
     this.logger.log('Capture Excel export started.');
 
-    const items = await this.listCaptureItems(query, { includeQuizDetails: true });
+    const items = await this.listCaptureItems(query, {
+      includeQuizDetails: true,
+    });
     const columns = CaptureService.EXPORT_COLUMNS;
     const { questionHeaders, answersByCapture } =
       await this.resolveQuizAnswersByCapture(items.map((item) => item.id));
-    const headers = [...columns.map((column) => column.header), ...questionHeaders];
+    const headers = [
+      ...columns.map((column) => column.header),
+      ...questionHeaders,
+    ];
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('captures');
 
@@ -483,7 +499,9 @@ export class CaptureService {
     this.applyFilters(qb, filters);
 
     if (pagination) {
-      qb.offset((pagination.page - 1) * pagination.perPage).limit(pagination.perPage);
+      qb.offset((pagination.page - 1) * pagination.perPage).limit(
+        pagination.perPage,
+      );
     }
 
     return qb;
@@ -506,7 +524,9 @@ export class CaptureService {
     }
 
     if (filters.launchId) {
-      qb.andWhere('capture.launch_id = :launchId', { launchId: filters.launchId });
+      qb.andWhere('capture.launch_id = :launchId', {
+        launchId: filters.launchId,
+      });
     }
 
     if (filters.temperatureId) {
@@ -516,7 +536,9 @@ export class CaptureService {
     }
 
     if (filters.seasonId) {
-      qb.andWhere('capture.season_id = :seasonId', { seasonId: filters.seasonId });
+      qb.andWhere('capture.season_id = :seasonId', {
+        seasonId: filters.seasonId,
+      });
     }
 
     if (filters.quizAnswered === true) {
@@ -546,9 +568,7 @@ export class CaptureService {
       rows.map((row) => row.person_id).filter((id): id is string => !!id),
     );
     const quizDetailsByCapture = includeQuizDetails
-      ? await this.resolveLatestQuizDetailsByCapture(
-          rows.map((row) => row.id),
-        )
+      ? await this.resolveLatestQuizDetailsByCapture(rows.map((row) => row.id))
       : new Map<string, CaptureQuizExportDetail>();
 
     return rows.map((row) => ({
@@ -649,11 +669,10 @@ export class CaptureService {
     for (const captureIdBatch of captureIdBatches) {
       const latestResponses = await this.formResponseRepo
         .createQueryBuilder('fr')
-        .select([
-          'fr.id AS form_response_id',
-          'fr.capture_id AS capture_id',
-        ])
-        .where('fr.capture_id IN (:...captureIds)', { captureIds: captureIdBatch })
+        .select(['fr.id AS form_response_id', 'fr.capture_id AS capture_id'])
+        .where('fr.capture_id IN (:...captureIds)', {
+          captureIds: captureIdBatch,
+        })
         .orderBy('fr.capture_id', 'ASC')
         .addOrderBy('fr.submitted_at', 'DESC', 'NULLS LAST')
         .addOrderBy('fr.created_at', 'DESC')
@@ -668,7 +687,10 @@ export class CaptureService {
       if (!formResponseByCapture.size) continue;
 
       const captureByFormResponse = new Map<string, string>();
-      for (const [captureId, formResponseId] of formResponseByCapture.entries()) {
+      for (const [
+        captureId,
+        formResponseId,
+      ] of formResponseByCapture.entries()) {
         captureByFormResponse.set(formResponseId, captureId);
       }
 
@@ -704,14 +726,17 @@ export class CaptureService {
           const captureId = captureByFormResponse.get(answer.form_response_id);
           if (!captureId) continue;
 
-          const questionKey = answer.question_key ?? answer.question_text ?? 'question';
-          const questionLabel = answer.question_text ?? answer.question_key ?? 'Pergunta';
+          const questionKey =
+            answer.question_key ?? answer.question_text ?? 'question';
+          const questionLabel =
+            answer.question_text ?? answer.question_key ?? 'Pergunta';
           if (!questionLabelsByKey.has(questionKey)) {
             questionLabelsByKey.set(questionKey, questionLabel);
           }
 
           const value = this.formatQuizAnswerValue(answer);
-          const answerMap = answersByCapture.get(captureId) ?? new Map<string, string>();
+          const answerMap =
+            answersByCapture.get(captureId) ?? new Map<string, string>();
           answerMap.set(questionLabel, value);
           answersByCapture.set(captureId, answerMap);
         }
@@ -738,11 +763,10 @@ export class CaptureService {
     for (const captureIdBatch of captureIdBatches) {
       const latestResponses = await this.formResponseRepo
         .createQueryBuilder('fr')
-        .select([
-          'fr.id AS form_response_id',
-          'fr.capture_id AS capture_id',
-        ])
-        .where('fr.capture_id IN (:...captureIds)', { captureIds: captureIdBatch })
+        .select(['fr.id AS form_response_id', 'fr.capture_id AS capture_id'])
+        .where('fr.capture_id IN (:...captureIds)', {
+          captureIds: captureIdBatch,
+        })
         .orderBy('fr.capture_id', 'ASC')
         .addOrderBy('fr.submitted_at', 'DESC', 'NULLS LAST')
         .addOrderBy('fr.created_at', 'DESC')
@@ -817,7 +841,8 @@ export class CaptureService {
 
         const groupedAnswers = new Map<string, string[]>();
         for (const answer of formAnswers) {
-          const questionLabel = answer.question_text ?? answer.question_key ?? 'Pergunta';
+          const questionLabel =
+            answer.question_text ?? answer.question_key ?? 'Pergunta';
           const value = this.formatQuizAnswerValue(answer);
           const piece = value ? `${questionLabel}: ${value}` : questionLabel;
           const list = groupedAnswers.get(answer.form_response_id) ?? [];
@@ -830,7 +855,10 @@ export class CaptureService {
         }
       }
 
-      for (const [captureId, formResponseId] of formResponseByCapture.entries()) {
+      for (const [
+        captureId,
+        formResponseId,
+      ] of formResponseByCapture.entries()) {
         const score = scoreByFormResponse.get(formResponseId);
         out.set(captureId, {
           quiz_answered: true,
@@ -846,7 +874,10 @@ export class CaptureService {
 
   private async resolvePersonContacts(personIds: string[]) {
     const uniquePersonIds = [...new Set(personIds)];
-    const out = new Map<string, { email: string | null; phone: string | null }>();
+    const out = new Map<
+      string,
+      { email: string | null; phone: string | null }
+    >();
 
     if (!uniquePersonIds.length) return out;
 

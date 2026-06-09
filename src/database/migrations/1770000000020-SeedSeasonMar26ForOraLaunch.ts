@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class SeedSeasonMar26ForOraLaunch1770000000020
-  implements MigrationInterface
-{
+export class SeedSeasonMar26ForOraLaunch1770000000020 implements MigrationInterface {
   name = 'SeedSeasonMar26ForOraLaunch1770000000020';
 
   private readonly seasonId = '5fef4f21-2d2d-4fc2-bfdc-4de3f1094568';

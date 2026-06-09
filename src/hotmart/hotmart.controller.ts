@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { HotmartProcessorService } from './hotmart-processor.service';
@@ -139,7 +149,9 @@ export class HotmartController {
   // ── Produtos Hotmart (config de mapeamento launch→produto) ────────────────
 
   @UseGuards(ApiKeyGuard)
-  @ApiOperation({ summary: 'Lista configurações de produtos Hotmart por launch' })
+  @ApiOperation({
+    summary: 'Lista configurações de produtos Hotmart por launch',
+  })
   @Get('products')
   listProducts() {
     return this.hotmartProductService.listAll();
@@ -165,9 +177,11 @@ export class HotmartController {
     @Body() body: Record<string, unknown>,
   ) {
     return this.hotmartProductService.update(id, {
-      launch_id: body.launch_id === null ? null : body.launch_id as string | undefined,
+      launch_id:
+        body.launch_id === null ? null : (body.launch_id as string | undefined),
       name: body.name as string | undefined,
-      product_id: body.product_id === undefined ? undefined : Number(body.product_id),
+      product_id:
+        body.product_id === undefined ? undefined : Number(body.product_id),
       active: body.active === undefined ? undefined : Boolean(body.active),
     });
   }
@@ -211,7 +225,9 @@ export class HotmartController {
   }
 
   @UseGuards(ApiKeyGuard)
-  @ApiOperation({ summary: 'Executa agendamento de sync Hotmart imediatamente' })
+  @ApiOperation({
+    summary: 'Executa agendamento de sync Hotmart imediatamente',
+  })
   @Post('sync-schedules/:id/run')
   runScheduleNow(@Param('id') id: string) {
     return this.hotmartSyncScheduleService.runNow(id);

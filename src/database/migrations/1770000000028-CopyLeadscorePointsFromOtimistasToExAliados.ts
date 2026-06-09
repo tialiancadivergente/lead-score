@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CopyLeadscorePointsFromOtimistasToExAliados1770000000028
-  implements MigrationInterface
-{
+export class CopyLeadscorePointsFromOtimistasToExAliados1770000000028 implements MigrationInterface {
   name = 'CopyLeadscorePointsFromOtimistasToExAliados1770000000028';
 
   private readonly sourceFormId = '7405904f-64b9-4b2e-a067-a5fa246e1d55';
@@ -106,4 +104,3 @@ export class CopyLeadscorePointsFromOtimistasToExAliados1770000000028
     `);
   }
 }
-

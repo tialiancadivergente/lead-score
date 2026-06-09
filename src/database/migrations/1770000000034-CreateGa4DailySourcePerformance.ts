@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateGa4DailySourcePerformance1770000000034
-  implements MigrationInterface
-{
+export class CreateGa4DailySourcePerformance1770000000034 implements MigrationInterface {
   name = 'CreateGa4DailySourcePerformance1770000000034';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

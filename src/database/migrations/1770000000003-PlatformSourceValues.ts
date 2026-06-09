@@ -29,4 +29,3 @@ export class PlatformSourceValues1770000000003 implements MigrationInterface {
     `);
   }
 }
-

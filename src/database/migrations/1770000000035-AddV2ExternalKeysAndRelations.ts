@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddV2ExternalKeysAndRelations1770000000035
-  implements MigrationInterface
-{
+export class AddV2ExternalKeysAndRelations1770000000035 implements MigrationInterface {
   name = 'AddV2ExternalKeysAndRelations1770000000035';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

@@ -283,7 +283,7 @@ export class HotmartService {
         const rawFields = this.extractRawFields(payload);
         await this.rawRepo.update(existing.id, {
           event,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
           payload: payload as any,
           import_status: 'pending',
           processed_at: undefined as unknown as Date,
@@ -365,7 +365,6 @@ export class HotmartService {
     }
 
     if (toInsert.length) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await this.rawRepo.insert(toInsert as any[]);
       for (const identifier of result.identifiers) {
         this.triggerProcessing(identifier['id'] as string);
@@ -377,7 +376,6 @@ export class HotmartService {
         toUpdate.map(async (u) => {
           const rawFields = this.extractRawFields(u.payload);
           await this.rawRepo.update(u.id, {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             payload: u.payload as any,
             import_status: 'pending',
             processed_at: undefined as unknown as Date,

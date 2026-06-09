@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateMarketingSyncConfiguration1770000000039
-  implements MigrationInterface
-{
+export class CreateMarketingSyncConfiguration1770000000039 implements MigrationInterface {
   name = 'CreateMarketingSyncConfiguration1770000000039';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

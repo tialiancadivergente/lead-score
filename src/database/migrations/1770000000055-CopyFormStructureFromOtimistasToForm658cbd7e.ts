@@ -1,8 +1,6 @@
 ﻿import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CopyFormStructureFromOtimistasToForm658cbd7e1770000000055
-  implements MigrationInterface
-{
+export class CopyFormStructureFromOtimistasToForm658cbd7e1770000000055 implements MigrationInterface {
   name = 'CopyFormStructureFromOtimistasToForm658cbd7e1770000000055';
 
   private readonly sourceFormId = '7405904f-64b9-4b2e-a067-a5fa246e1d55';
@@ -702,4 +700,3 @@ export class CopyFormStructureFromOtimistasToForm658cbd7e1770000000055
     `);
   }
 }
-

@@ -1,18 +1,6 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  Between,
-  FindOptionsWhere,
-  ILike,
-  IsNull,
-  Not,
-  Repository,
-} from 'typeorm';
+import { FindOptionsWhere, Repository } from 'typeorm';
 import { OAuthConnection } from '../database/entities/integrations/oauth-connection.entity';
 import { MarketingConnectionAccount } from '../database/entities/marketing-sync/marketing-connection-account.entity';
 import { MetaAdPerformance } from '../database/entities/meta-ads/meta-ad-performance.entity';
@@ -287,8 +275,13 @@ export class MetaAdsService {
     chunkDays?: number;
   }): Promise<{ queued: true; executionId: string; totalJobs: number }> {
     const targets = await this.resolveTargets(params);
-    const chunks = this.chunkDateRange(params.since, params.until, params.chunkDays ?? 30);
-    const totalJobs = targets.reduce((sum, t) => sum + t.accountIds.length, 0) * chunks.length;
+    const chunks = this.chunkDateRange(
+      params.since,
+      params.until,
+      params.chunkDays ?? 30,
+    );
+    const totalJobs =
+      targets.reduce((sum, t) => sum + t.accountIds.length, 0) * chunks.length;
 
     const execution = await this.startExecution(
       'insights',
@@ -312,7 +305,7 @@ export class MetaAdsService {
     chunkDays: number,
   ): Array<{ since: string; until: string }> {
     const chunks: Array<{ since: string; until: string }> = [];
-    let current = new Date(since + 'T00:00:00Z');
+    const current = new Date(since + 'T00:00:00Z');
     const end = new Date(until + 'T00:00:00Z');
 
     while (current <= end) {
@@ -338,16 +331,37 @@ export class MetaAdsService {
     opts: { level: string; breakdowns?: string },
   ): Promise<void> {
     const defaultFields = [
-      'campaign_id', 'campaign_name', 'adset_id', 'adset_name',
-      'ad_id', 'ad_name', 'impressions', 'clicks', 'reach',
-      'spend', 'ctr', 'cpc', 'cpm', 'actions',
+      'campaign_id',
+      'campaign_name',
+      'adset_id',
+      'adset_name',
+      'ad_id',
+      'ad_name',
+      'impressions',
+      'clicks',
+      'reach',
+      'spend',
+      'ctr',
+      'cpc',
+      'cpm',
+      'actions',
     ];
 
-    const jobs: Array<{ connectionId: string; accountId: string; since: string; until: string }> = [];
+    const jobs: Array<{
+      connectionId: string;
+      accountId: string;
+      since: string;
+      until: string;
+    }> = [];
     for (const { connectionId, accountIds } of targets) {
       for (const accountId of accountIds) {
         for (const chunk of chunks) {
-          jobs.push({ connectionId, accountId, since: chunk.since, until: chunk.until });
+          jobs.push({
+            connectionId,
+            accountId,
+            since: chunk.since,
+            until: chunk.until,
+          });
         }
       }
     }
@@ -357,40 +371,48 @@ export class MetaAdsService {
     const queue = [...jobs];
     const CONCURRENCY = 5;
 
-    const workers = Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, async () => {
-      while (queue.length > 0) {
-        const job = queue.shift();
-        if (!job) break;
+    const workers = Array.from(
+      { length: Math.min(CONCURRENCY, jobs.length) },
+      async () => {
+        while (queue.length > 0) {
+          const job = queue.shift();
+          if (!job) break;
 
-        try {
-          const { report_run_id } = await this.jobService.startInsightsJob({
-            connectionId: job.connectionId,
-            nodeId: `act_${job.accountId}`,
-            fields: defaultFields,
-            level: opts.level,
-            since: job.since,
-            until: job.until,
-            breakdowns: opts.breakdowns,
-          });
+          try {
+            const { report_run_id } = await this.jobService.startInsightsJob({
+              connectionId: job.connectionId,
+              nodeId: `act_${job.accountId}`,
+              fields: defaultFields,
+              level: opts.level,
+              since: job.since,
+              until: job.until,
+              breakdowns: opts.breakdowns,
+            });
 
-          const rows = await this.jobService.waitForJobAndFetch({
-            connectionId: job.connectionId,
-            reportRunId: report_run_id,
-            maxWaitMs: 600_000,
-          });
+            const rows = await this.jobService.waitForJobAndFetch({
+              connectionId: job.connectionId,
+              reportRunId: report_run_id,
+              maxWaitMs: 600_000,
+            });
 
-          const saved = await this.processor.saveInsights(job.accountId, rows);
-          totalRecords += saved;
-          this.logger.log(
-            `Bulk job ${job.accountId} [${job.since}→${job.until}]: ${saved} registros`,
-          );
-        } catch (err: unknown) {
-          failedCount++;
-          const msg = err instanceof Error ? err.message : String(err);
-          this.logger.error(`Bulk job failed for ${job.accountId} [${job.since}→${job.until}]: ${msg}`);
+            const saved = await this.processor.saveInsights(
+              job.accountId,
+              rows,
+            );
+            totalRecords += saved;
+            this.logger.log(
+              `Bulk job ${job.accountId} [${job.since}→${job.until}]: ${saved} registros`,
+            );
+          } catch (err: unknown) {
+            failedCount++;
+            const msg = err instanceof Error ? err.message : String(err);
+            this.logger.error(
+              `Bulk job failed for ${job.accountId} [${job.since}→${job.until}]: ${msg}`,
+            );
+          }
         }
-      }
-    });
+      },
+    );
 
     await Promise.all(workers);
 
@@ -462,7 +484,12 @@ export class MetaAdsService {
     datePreset?: string;
     since?: string;
     until?: string;
-  }): Promise<{ campaigns: number; adsets: number; ads: number; insights: number }> {
+  }): Promise<{
+    campaigns: number;
+    adsets: number;
+    ads: number;
+    insights: number;
+  }> {
     const [c, a, ad, i] = await Promise.allSettled([
       this.syncCampaigns(params),
       this.syncAdsets(params),
@@ -490,9 +517,20 @@ export class MetaAdsService {
     breakdowns?: string;
   }): Promise<{ report_run_id: string }> {
     const defaultFields = [
-      'campaign_id', 'campaign_name', 'adset_id', 'adset_name',
-      'ad_id', 'ad_name', 'impressions', 'clicks', 'reach',
-      'spend', 'ctr', 'cpc', 'cpm', 'actions',
+      'campaign_id',
+      'campaign_name',
+      'adset_id',
+      'adset_name',
+      'ad_id',
+      'ad_name',
+      'impressions',
+      'clicks',
+      'reach',
+      'spend',
+      'ctr',
+      'cpc',
+      'cpm',
+      'actions',
     ];
     return this.jobService.startInsightsJob({
       connectionId: params.connectionId,
@@ -612,13 +650,28 @@ export class MetaAdsService {
   }) {
     const qb = this.performanceRepo.createQueryBuilder('p');
 
-    if (params.accountId) qb.andWhere('p.external_account_id = :accountId', { accountId: params.accountId });
-    if (params.campaignId) qb.andWhere('p.external_campaign_id = :campaignId', { campaignId: params.campaignId });
-    if (params.adsetId) qb.andWhere('p.external_adset_id = :adsetId', { adsetId: params.adsetId });
-    if (params.adId) qb.andWhere('p.external_ad_id = :adId', { adId: params.adId });
-    if (params.platform) qb.andWhere('p.publisher_platform = :platform', { platform: params.platform });
-    if (params.dateFrom) qb.andWhere('p.report_date >= :dateFrom', { dateFrom: params.dateFrom });
-    if (params.dateTo) qb.andWhere('p.report_date <= :dateTo', { dateTo: params.dateTo });
+    if (params.accountId)
+      qb.andWhere('p.external_account_id = :accountId', {
+        accountId: params.accountId,
+      });
+    if (params.campaignId)
+      qb.andWhere('p.external_campaign_id = :campaignId', {
+        campaignId: params.campaignId,
+      });
+    if (params.adsetId)
+      qb.andWhere('p.external_adset_id = :adsetId', {
+        adsetId: params.adsetId,
+      });
+    if (params.adId)
+      qb.andWhere('p.external_ad_id = :adId', { adId: params.adId });
+    if (params.platform)
+      qb.andWhere('p.publisher_platform = :platform', {
+        platform: params.platform,
+      });
+    if (params.dateFrom)
+      qb.andWhere('p.report_date >= :dateFrom', { dateFrom: params.dateFrom });
+    if (params.dateTo)
+      qb.andWhere('p.report_date <= :dateTo', { dateTo: params.dateTo });
 
     qb.orderBy('p.report_date', 'DESC')
       .take(params.limit ?? 500)
@@ -643,16 +696,36 @@ export class MetaAdsService {
       .addSelect('SUM(p.reach::bigint)', 'total_reach')
       .addSelect('SUM(p.spend::numeric)', 'total_spend')
       .addSelect('SUM(p.leads::numeric)', 'total_leads')
-      .addSelect('SUM(p.landing_page_views::bigint)', 'total_landing_page_views')
-      .addSelect('SUM(p.initiate_checkouts::bigint)', 'total_initiate_checkouts')
+      .addSelect(
+        'SUM(p.landing_page_views::bigint)',
+        'total_landing_page_views',
+      )
+      .addSelect(
+        'SUM(p.initiate_checkouts::bigint)',
+        'total_initiate_checkouts',
+      )
       .addSelect('SUM(p.purchases::bigint)', 'total_purchases')
-      .addSelect('SUM(p.video_thruplay_watched::bigint)', 'total_video_thruplay');
+      .addSelect(
+        'SUM(p.video_thruplay_watched::bigint)',
+        'total_video_thruplay',
+      );
 
-    if (params.accountId) qb.andWhere('p.external_account_id = :accountId', { accountId: params.accountId });
-    if (params.campaignId) qb.andWhere('p.external_campaign_id = :campaignId', { campaignId: params.campaignId });
-    if (params.platform) qb.andWhere('p.publisher_platform = :platform', { platform: params.platform });
-    if (params.dateFrom) qb.andWhere('p.report_date >= :dateFrom', { dateFrom: params.dateFrom });
-    if (params.dateTo) qb.andWhere('p.report_date <= :dateTo', { dateTo: params.dateTo });
+    if (params.accountId)
+      qb.andWhere('p.external_account_id = :accountId', {
+        accountId: params.accountId,
+      });
+    if (params.campaignId)
+      qb.andWhere('p.external_campaign_id = :campaignId', {
+        campaignId: params.campaignId,
+      });
+    if (params.platform)
+      qb.andWhere('p.publisher_platform = :platform', {
+        platform: params.platform,
+      });
+    if (params.dateFrom)
+      qb.andWhere('p.report_date >= :dateFrom', { dateFrom: params.dateFrom });
+    if (params.dateTo)
+      qb.andWhere('p.report_date <= :dateTo', { dateTo: params.dateTo });
 
     const raw = await qb.getRawOne<Record<string, string>>();
 
@@ -661,8 +734,14 @@ export class MetaAdsService {
     const linkClicks = parseInt(raw?.['total_link_clicks'] ?? '0', 10);
     const spend = parseFloat(raw?.['total_spend'] ?? '0');
     const leads = parseFloat(raw?.['total_leads'] ?? '0');
-    const landingPageViews = parseInt(raw?.['total_landing_page_views'] ?? '0', 10);
-    const initiateCheckouts = parseInt(raw?.['total_initiate_checkouts'] ?? '0', 10);
+    const landingPageViews = parseInt(
+      raw?.['total_landing_page_views'] ?? '0',
+      10,
+    );
+    const initiateCheckouts = parseInt(
+      raw?.['total_initiate_checkouts'] ?? '0',
+      10,
+    );
     const purchases = parseInt(raw?.['total_purchases'] ?? '0', 10);
     const videoThruplay = parseInt(raw?.['total_video_thruplay'] ?? '0', 10);
 
@@ -681,8 +760,12 @@ export class MetaAdsService {
       ctr: impressions > 0 ? ((clicks / impressions) * 100).toFixed(4) : null,
       cpc: clicks > 0 ? (spend / clicks).toFixed(4) : null,
       cpm: impressions > 0 ? ((spend / impressions) * 1000).toFixed(4) : null,
-      connect_rate: linkClicks > 0 ? (landingPageViews / linkClicks).toFixed(4) : null,
-      checkout_rate: landingPageViews > 0 ? (initiateCheckouts / landingPageViews).toFixed(4) : null,
+      connect_rate:
+        linkClicks > 0 ? (landingPageViews / linkClicks).toFixed(4) : null,
+      checkout_rate:
+        landingPageViews > 0
+          ? (initiateCheckouts / landingPageViews).toFixed(4)
+          : null,
       cpl: leads > 0 ? (spend / leads).toFixed(4) : null,
     };
   }
@@ -706,11 +789,22 @@ export class MetaAdsService {
       .groupBy('p.report_date')
       .orderBy('p.report_date', 'ASC');
 
-    if (params.accountId) qb.andWhere('p.external_account_id = :accountId', { accountId: params.accountId });
-    if (params.campaignId) qb.andWhere('p.external_campaign_id = :campaignId', { campaignId: params.campaignId });
-    if (params.platform) qb.andWhere('p.publisher_platform = :platform', { platform: params.platform });
-    if (params.dateFrom) qb.andWhere('p.report_date >= :dateFrom', { dateFrom: params.dateFrom });
-    if (params.dateTo) qb.andWhere('p.report_date <= :dateTo', { dateTo: params.dateTo });
+    if (params.accountId)
+      qb.andWhere('p.external_account_id = :accountId', {
+        accountId: params.accountId,
+      });
+    if (params.campaignId)
+      qb.andWhere('p.external_campaign_id = :campaignId', {
+        campaignId: params.campaignId,
+      });
+    if (params.platform)
+      qb.andWhere('p.publisher_platform = :platform', {
+        platform: params.platform,
+      });
+    if (params.dateFrom)
+      qb.andWhere('p.report_date >= :dateFrom', { dateFrom: params.dateFrom });
+    if (params.dateTo)
+      qb.andWhere('p.report_date <= :dateTo', { dateTo: params.dateTo });
 
     const rows = await qb.getRawMany<Record<string, string>>();
 
@@ -754,10 +848,18 @@ export class MetaAdsService {
       .groupBy('p.external_campaign_id')
       .orderBy('SUM(p.spend::numeric)', 'DESC');
 
-    if (params.accountId) qb.andWhere('p.external_account_id = :accountId', { accountId: params.accountId });
-    if (params.platform) qb.andWhere('p.publisher_platform = :platform', { platform: params.platform });
-    if (params.dateFrom) qb.andWhere('p.report_date >= :dateFrom', { dateFrom: params.dateFrom });
-    if (params.dateTo) qb.andWhere('p.report_date <= :dateTo', { dateTo: params.dateTo });
+    if (params.accountId)
+      qb.andWhere('p.external_account_id = :accountId', {
+        accountId: params.accountId,
+      });
+    if (params.platform)
+      qb.andWhere('p.publisher_platform = :platform', {
+        platform: params.platform,
+      });
+    if (params.dateFrom)
+      qb.andWhere('p.report_date >= :dateFrom', { dateFrom: params.dateFrom });
+    if (params.dateTo)
+      qb.andWhere('p.report_date <= :dateTo', { dateTo: params.dateTo });
 
     const rows = await qb.getRawMany<Record<string, string>>();
 
@@ -874,13 +976,17 @@ export class MetaAdsService {
     return [header, ...rows].join('\n');
   }
 
-  async importPerformanceCsv(csvContent: string): Promise<{ imported: number; skipped: number }> {
+  async importPerformanceCsv(
+    csvContent: string,
+  ): Promise<{ imported: number; skipped: number }> {
     const lines = csvContent.split(/\r?\n/).filter((l) => l.trim());
     if (lines.length < 2) {
       throw new Error('CSV sem linhas de dados.');
     }
 
-    const headers = this.parseCsvLine(lines[0]).map((h) => h.trim().toLowerCase());
+    const headers = this.parseCsvLine(lines[0]).map((h) =>
+      h.trim().toLowerCase(),
+    );
     const idx = (name: string) => headers.indexOf(name);
 
     let imported = 0;
@@ -888,7 +994,10 @@ export class MetaAdsService {
 
     for (let i = 1; i < lines.length; i++) {
       const cols = this.parseCsvLine(lines[i]);
-      if (cols.length < 2) { skipped++; continue; }
+      if (cols.length < 2) {
+        skipped++;
+        continue;
+      }
 
       const get = (col: string) => cols[idx(col)]?.trim() ?? '';
 
@@ -896,12 +1005,16 @@ export class MetaAdsService {
       const adId = get('anuncio_id');
       const reportDate = get('data');
 
-      if (!accountId || !adId || !reportDate) { skipped++; continue; }
+      if (!accountId || !adId || !reportDate) {
+        skipped++;
+        continue;
+      }
 
       const platform = get('plataforma') || 'total';
       const llc = parseInt(get('cliques_link') || '0', 10);
       const lpv = parseInt(get('visualizacoes_pagina') || '0', 10);
-      const connectRate = llc > 0 ? String(lpv / llc) : (get('connect_rate') || null);
+      const connectRate =
+        llc > 0 ? String(lpv / llc) : get('connect_rate') || null;
 
       await this.performanceRepo.upsert(
         {
@@ -930,7 +1043,12 @@ export class MetaAdsService {
           connect_rate: connectRate ?? undefined,
         } as any,
         {
-          conflictPaths: ['external_account_id', 'external_ad_id', 'report_date', 'publisher_platform'],
+          conflictPaths: [
+            'external_account_id',
+            'external_ad_id',
+            'report_date',
+            'publisher_platform',
+          ],
           skipUpdateIfNoValuesChanged: false,
         },
       );
@@ -947,8 +1065,12 @@ export class MetaAdsService {
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
       if (ch === '"') {
-        if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
-        else { inQuotes = !inQuotes; }
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
       } else if (ch === ',' && !inQuotes) {
         result.push(current);
         current = '';
@@ -966,8 +1088,14 @@ export class MetaAdsService {
     connectionId?: string;
     accountIds?: string[];
   }): Promise<Array<{ connectionId: string; accountIds: string[] }>> {
-    if (params.accountIds && params.accountIds.length > 0 && params.connectionId) {
-      return [{ connectionId: params.connectionId, accountIds: params.accountIds }];
+    if (
+      params.accountIds &&
+      params.accountIds.length > 0 &&
+      params.connectionId
+    ) {
+      return [
+        { connectionId: params.connectionId, accountIds: params.accountIds },
+      ];
     }
 
     const selected = await this.getSelectedMetaAccountIds(params.connectionId);

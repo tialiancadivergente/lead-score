@@ -61,21 +61,51 @@ export class MetaAdPerformance {
   inline_link_clicks?: string;
 
   // Cost
-  @Column({ type: 'numeric', name: 'spend', precision: 18, scale: 6, default: 0 })
+  @Column({
+    type: 'numeric',
+    name: 'spend',
+    precision: 18,
+    scale: 6,
+    default: 0,
+  })
   spend!: string;
 
   // Meta-computed metrics
-  @Column({ type: 'numeric', name: 'ctr', precision: 18, scale: 6, nullable: true })
+  @Column({
+    type: 'numeric',
+    name: 'ctr',
+    precision: 18,
+    scale: 6,
+    nullable: true,
+  })
   ctr?: string;
 
-  @Column({ type: 'numeric', name: 'cpc', precision: 18, scale: 6, nullable: true })
+  @Column({
+    type: 'numeric',
+    name: 'cpc',
+    precision: 18,
+    scale: 6,
+    nullable: true,
+  })
   cpc?: string;
 
-  @Column({ type: 'numeric', name: 'cpm', precision: 18, scale: 6, nullable: true })
+  @Column({
+    type: 'numeric',
+    name: 'cpm',
+    precision: 18,
+    scale: 6,
+    nullable: true,
+  })
   cpm?: string;
 
   // Conversion actions (extracted from actions array)
-  @Column({ type: 'numeric', name: 'leads', precision: 18, scale: 6, default: 0 })
+  @Column({
+    type: 'numeric',
+    name: 'leads',
+    precision: 18,
+    scale: 6,
+    default: 0,
+  })
   leads!: string;
 
   @Column({ type: 'bigint', name: 'landing_page_views', default: '0' })
@@ -118,7 +148,11 @@ export class MetaAdPerformance {
   @Column({ type: 'bigint', name: 'video_30s_watched', nullable: true })
   video_30s_watched?: string;
 
-  @Column({ type: 'bigint', name: 'video_continuous_2s_watched', nullable: true })
+  @Column({
+    type: 'bigint',
+    name: 'video_continuous_2s_watched',
+    nullable: true,
+  })
   video_continuous_2s_watched?: string;
 
   // Derived metric: landing_page_views / inline_link_clicks

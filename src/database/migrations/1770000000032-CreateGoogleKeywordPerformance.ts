@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateGoogleKeywordPerformance1770000000032
-  implements MigrationInterface
-{
+export class CreateGoogleKeywordPerformance1770000000032 implements MigrationInterface {
   name = 'CreateGoogleKeywordPerformance1770000000032';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

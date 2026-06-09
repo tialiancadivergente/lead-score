@@ -75,15 +75,16 @@ export class LeadScoreController {
   })
   @ApiBody({ type: LeadScorePayloadDto })
   @ApiResponse({ status: 202, description: 'Mensagem enfileirada' })
-  async start(@Body(new RequireLeadScoreFieldsPipe()) dto: LeadScorePayloadDto) {
+  async start(
+    @Body(new RequireLeadScoreFieldsPipe()) dto: LeadScorePayloadDto,
+  ) {
     return await this.leadScore.enqueueLeadScore(dto as Record<string, any>);
   }
 
   @Post('activecampaign')
   @ApiOperation({
     summary: 'Envia respostas do quiz para ActiveCampaign (manual)',
-    description:
-      'Endpoint auxiliar para testes/uso manual.',
+    description: 'Endpoint auxiliar para testes/uso manual.',
   })
   @ApiBody({ type: LeadScorePayloadDto })
   @ApiResponse({ status: 201, description: 'Processado no ActiveCampaign' })

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class RestoreCaptureUtmSourceFromMetadata1770000000017
-  implements MigrationInterface
-{
+export class RestoreCaptureUtmSourceFromMetadata1770000000017 implements MigrationInterface {
   name = 'RestoreCaptureUtmSourceFromMetadata1770000000017';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

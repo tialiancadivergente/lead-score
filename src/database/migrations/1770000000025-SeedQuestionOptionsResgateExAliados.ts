@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class SeedQuestionOptionsResgateExAliados1770000000025
-  implements MigrationInterface
-{
+export class SeedQuestionOptionsResgateExAliados1770000000025 implements MigrationInterface {
   name = 'SeedQuestionOptionsResgateExAliados1770000000025';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -216,4 +214,3 @@ export class SeedQuestionOptionsResgateExAliados1770000000025
     `);
   }
 }
-

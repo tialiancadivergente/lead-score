@@ -17,7 +17,10 @@ export class UpdateVotingCampaignDto {
   @ApiPropertyOptional({ example: '2026-04-30T23:59:59.999Z' })
   ends_at?: string;
 
-  @ApiPropertyOptional({ enum: VotingCampaignStatus, example: VotingCampaignStatus.PUBLISHED })
+  @ApiPropertyOptional({
+    enum: VotingCampaignStatus,
+    example: VotingCampaignStatus.PUBLISHED,
+  })
   status?: VotingCampaignStatus;
 
   @ApiPropertyOptional({ example: true })

@@ -110,7 +110,9 @@ export class LeadPersistenceService {
     payload: Record<string, unknown>,
   ): string | undefined {
     const utms =
-      payload.utms && typeof payload.utms === 'object' && !Array.isArray(payload.utms)
+      payload.utms &&
+      typeof payload.utms === 'object' &&
+      !Array.isArray(payload.utms)
         ? (payload.utms as Record<string, unknown>)
         : undefined;
 
@@ -399,8 +401,7 @@ export class LeadPersistenceService {
             this.pickString(payloadObj, 'utm_term') ?? existing.utm_term;
           existing.utm_id =
             this.pickString(payloadObj, 'utm_id') ?? existing.utm_id;
-          existing.tag_id =
-            tagId ?? existing.tag_id;
+          existing.tag_id = tagId ?? existing.tag_id;
           const utmsJsonb = this.buildUtmsJsonb(payloadObj);
           if (utmsJsonb) existing.utms = utmsJsonb;
 

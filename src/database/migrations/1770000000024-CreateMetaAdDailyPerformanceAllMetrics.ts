@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateMetaAdDailyPerformanceAllMetrics1770000000024
-  implements MigrationInterface
-{
+export class CreateMetaAdDailyPerformanceAllMetrics1770000000024 implements MigrationInterface {
   name = 'CreateMetaAdDailyPerformanceAllMetrics1770000000024';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

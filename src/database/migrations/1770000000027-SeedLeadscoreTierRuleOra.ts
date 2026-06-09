@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class SeedLeadscoreTierRuleOra1770000000027
-  implements MigrationInterface
-{
+export class SeedLeadscoreTierRuleOra1770000000027 implements MigrationInterface {
   name = 'SeedLeadscoreTierRuleOra1770000000027';
 
   private readonly leadscoreId = '24246136-44fb-42e8-ba0b-c68d37fe70bc';
@@ -52,4 +50,3 @@ export class SeedLeadscoreTierRuleOra1770000000027
     `);
   }
 }
-

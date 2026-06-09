@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateGoogleAdAssetPerformance1770000000031
-  implements MigrationInterface
-{
+export class CreateGoogleAdAssetPerformance1770000000031 implements MigrationInterface {
   name = 'CreateGoogleAdAssetPerformance1770000000031';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

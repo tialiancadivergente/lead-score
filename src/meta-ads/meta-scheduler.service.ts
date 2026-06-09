@@ -17,7 +17,9 @@ export class MetaSchedulerService implements OnModuleInit {
       this.configService.get<string>('META_SCHEDULER_ENABLED') === 'true';
 
     if (!enabled) {
-      this.logger.log('Meta Ads scheduler disabled (META_SCHEDULER_ENABLED != true)');
+      this.logger.log(
+        'Meta Ads scheduler disabled (META_SCHEDULER_ENABLED != true)',
+      );
       return;
     }
 
