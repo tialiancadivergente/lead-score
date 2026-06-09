@@ -10,11 +10,13 @@ import { FormVersion } from '../database/entities/form/form-version.entity';
 import { Question } from '../database/entities/form/question.entity';
 import { QuestionOption } from '../database/entities/form/question-option.entity';
 import { FormVersionQuestion } from '../database/entities/form/form-version-question.entity';
+import { FormResponse } from '../database/entities/form/form-response.entity';
 import { Launch } from '../database/entities/marketing/launch.entity';
 import { Season } from '../database/entities/marketing/season.entity';
 import { Leadscore } from '../database/entities/leadscore/leadscore.entity';
 import { LeadscoreOptionPoints } from '../database/entities/leadscore/leadscore-option-points.entity';
 import { LeadscoreRangePoints } from '../database/entities/leadscore/leadscore-range-points.entity';
+import { LeadscoreTierRule } from '../database/entities/leadscore/leadscore-tier-rule.entity';
 import {
   AddFormVersionQuestionDto,
   CreateFormVersionDto,
@@ -45,6 +47,10 @@ import {
   CreateFullFormPayloadDto,
   CreateFullFormResponseDto,
 } from './dto/create-full-form.dto';
+import {
+  CloneFormPayloadDto,
+  CloneFormResponseDto,
+} from './dto/clone-form.dto';
 import { FormResponseDto } from './dto/form-response.dto';
 
 @Injectable()
@@ -87,7 +93,9 @@ export class FormManagementService {
     return versions.map((row) => this.mapFormVersion(row));
   }
 
-  async findVersionById(formVersionId: string): Promise<FormVersionResponseDto> {
+  async findVersionById(
+    formVersionId: string,
+  ): Promise<FormVersionResponseDto> {
     const version = await this.mustFindFormVersionById(formVersionId);
     return this.mapFormVersion(version);
   }
@@ -168,7 +176,9 @@ export class FormManagementService {
     return this.mapFormVersion(saved);
   }
 
-  async activateVersion(formVersionId: string): Promise<FormVersionResponseDto> {
+  async activateVersion(
+    formVersionId: string,
+  ): Promise<FormVersionResponseDto> {
     const version = await this.mustFindFormVersionById(formVersionId);
 
     const saved = await this.formVersionRepo.manager.transaction(
@@ -216,7 +226,10 @@ export class FormManagementService {
     dto: CreateQuestionDto,
   ): Promise<QuestionResponseDto> {
     const form = await this.mustFindFormById(formId);
-    const questionKey = this.parseRequiredText(dto.question_key, 'question_key');
+    const questionKey = this.parseRequiredText(
+      dto.question_key,
+      'question_key',
+    );
     const questionText = this.parseOptionalText(dto.question_text);
     const inputType = this.parseOptionalText(dto.input_type);
 
@@ -250,7 +263,10 @@ export class FormManagementService {
     }
 
     if (dto.question_key !== undefined) {
-      question.question_key = this.parseRequiredText(dto.question_key, 'question_key');
+      question.question_key = this.parseRequiredText(
+        dto.question_key,
+        'question_key',
+      );
     }
 
     if (dto.question_text !== undefined) {
@@ -268,11 +284,15 @@ export class FormManagementService {
   async removeQuestion(questionId: string): Promise<void> {
     const result = await this.questionRepo.delete({ id: questionId });
     if (!result.affected) {
-      throw new NotFoundException(`Question nao encontrada para id=${questionId}.`);
+      throw new NotFoundException(
+        `Question nao encontrada para id=${questionId}.`,
+      );
     }
   }
 
-  async listQuestionOptions(questionId: string): Promise<QuestionOptionResponseDto[]> {
+  async listQuestionOptions(
+    questionId: string,
+  ): Promise<QuestionOptionResponseDto[]> {
     await this.mustFindQuestionById(questionId);
 
     const options = await this.questionOptionRepo.find({
@@ -331,7 +351,10 @@ export class FormManagementService {
     }
 
     if (dto.display_order !== undefined) {
-      option.display_order = this.parseInteger(dto.display_order, 'display_order');
+      option.display_order = this.parseInteger(
+        dto.display_order,
+        'display_order',
+      );
     }
 
     const saved = await this.questionOptionRepo.save(option);
@@ -386,7 +409,8 @@ export class FormManagementService {
     const displayOrder =
       this.parseOptionalInteger(dto.display_order, 'display_order') ??
       (await this.nextFormVersionQuestionOrder(formVersionId));
-    const required = this.parseOptionalBoolean(dto.required, 'required') ?? false;
+    const required =
+      this.parseOptionalBoolean(dto.required, 'required') ?? false;
 
     await this.formVersionQuestionRepo.save(
       this.formVersionQuestionRepo.create({
@@ -397,7 +421,10 @@ export class FormManagementService {
       }),
     );
 
-    const created = await this.mustFindFormVersionQuestion(formVersionId, questionId);
+    const created = await this.mustFindFormVersionQuestion(
+      formVersionId,
+      questionId,
+    );
     return this.mapFormVersionQuestion(created);
   }
 
@@ -406,7 +433,10 @@ export class FormManagementService {
     questionId: string,
     dto: UpdateFormVersionQuestionDto,
   ): Promise<FormVersionQuestionResponseDto> {
-    const relation = await this.mustFindFormVersionQuestion(formVersionId, questionId);
+    const relation = await this.mustFindFormVersionQuestion(
+      formVersionId,
+      questionId,
+    );
 
     if (dto.display_order === undefined && dto.required === undefined) {
       throw new BadRequestException(
@@ -415,19 +445,29 @@ export class FormManagementService {
     }
 
     if (dto.display_order !== undefined) {
-      relation.display_order = this.parseInteger(dto.display_order, 'display_order');
+      relation.display_order = this.parseInteger(
+        dto.display_order,
+        'display_order',
+      );
     }
 
     if (dto.required !== undefined) {
-      relation.required = this.parseOptionalBoolean(dto.required, 'required') ?? false;
+      relation.required =
+        this.parseOptionalBoolean(dto.required, 'required') ?? false;
     }
 
     const saved = await this.formVersionQuestionRepo.save(relation);
     return this.mapFormVersionQuestion(saved);
   }
 
-  async removeFormVersionQuestion(formVersionId: string, questionId: string): Promise<void> {
-    const relation = await this.mustFindFormVersionQuestion(formVersionId, questionId);
+  async removeFormVersionQuestion(
+    formVersionId: string,
+    questionId: string,
+  ): Promise<void> {
+    const relation = await this.mustFindFormVersionQuestion(
+      formVersionId,
+      questionId,
+    );
     await this.formVersionQuestionRepo.delete({ id: relation.id });
   }
 
@@ -507,23 +547,25 @@ export class FormManagementService {
     const name = this.parseRequiredText(dto.name, 'name');
     const active = this.parseOptionalBoolean(dto.active, 'active') ?? true;
 
-    const saved = await this.leadscoreRepo.manager.transaction(async (manager) => {
-      const leadscoreRepo = manager.getRepository(Leadscore);
-      if (active) {
-        await leadscoreRepo.update(
-          { form_version: { id: formVersionId } },
-          { active: false },
-        );
-      }
+    const saved = await this.leadscoreRepo.manager.transaction(
+      async (manager) => {
+        const leadscoreRepo = manager.getRepository(Leadscore);
+        if (active) {
+          await leadscoreRepo.update(
+            { form_version: { id: formVersionId } },
+            { active: false },
+          );
+        }
 
-      return await leadscoreRepo.save(
-        leadscoreRepo.create({
-          form_version: formVersion,
-          name,
-          active,
-        }),
-      );
-    });
+        return await leadscoreRepo.save(
+          leadscoreRepo.create({
+            form_version: formVersion,
+            name,
+            active,
+          }),
+        );
+      },
+    );
 
     return this.mapLeadscore(saved);
   }
@@ -545,19 +587,22 @@ export class FormManagementService {
     }
 
     if (dto.active !== undefined) {
-      leadscore.active = this.parseOptionalBoolean(dto.active, 'active') ?? false;
+      leadscore.active =
+        this.parseOptionalBoolean(dto.active, 'active') ?? false;
     }
 
-    const saved = await this.leadscoreRepo.manager.transaction(async (manager) => {
-      const leadscoreRepo = manager.getRepository(Leadscore);
-      if (leadscore.active) {
-        await leadscoreRepo.update(
-          { form_version: { id: leadscore.form_version.id } },
-          { active: false },
-        );
-      }
-      return await leadscoreRepo.save(leadscore);
-    });
+    const saved = await this.leadscoreRepo.manager.transaction(
+      async (manager) => {
+        const leadscoreRepo = manager.getRepository(Leadscore);
+        if (leadscore.active) {
+          await leadscoreRepo.update(
+            { form_version: { id: leadscore.form_version.id } },
+            { active: false },
+          );
+        }
+        return await leadscoreRepo.save(leadscore);
+      },
+    );
 
     return this.mapLeadscore(saved);
   }
@@ -565,15 +610,17 @@ export class FormManagementService {
   async activateScore(leadscoreId: string): Promise<LeadscoreResponseDto> {
     const leadscore = await this.mustFindLeadscoreById(leadscoreId);
 
-    const saved = await this.leadscoreRepo.manager.transaction(async (manager) => {
-      const leadscoreRepo = manager.getRepository(Leadscore);
-      await leadscoreRepo.update(
-        { form_version: { id: leadscore.form_version.id } },
-        { active: false },
-      );
-      leadscore.active = true;
-      return await leadscoreRepo.save(leadscore);
-    });
+    const saved = await this.leadscoreRepo.manager.transaction(
+      async (manager) => {
+        const leadscoreRepo = manager.getRepository(Leadscore);
+        await leadscoreRepo.update(
+          { form_version: { id: leadscore.form_version.id } },
+          { active: false },
+        );
+        leadscore.active = true;
+        return await leadscoreRepo.save(leadscore);
+      },
+    );
 
     return this.mapLeadscore(saved);
   }
@@ -581,7 +628,9 @@ export class FormManagementService {
   async removeScore(leadscoreId: string): Promise<void> {
     const result = await this.leadscoreRepo.delete({ id: leadscoreId });
     if (!result.affected) {
-      throw new NotFoundException(`Leadscore nao encontrado para id=${leadscoreId}.`);
+      throw new NotFoundException(
+        `Leadscore nao encontrado para id=${leadscoreId}.`,
+      );
     }
   }
 
@@ -635,8 +684,12 @@ export class FormManagementService {
       );
     }
 
-    const questionIds = Array.from(new Set(parsedItems.map((item) => item.question_id)));
-    const optionIds = Array.from(new Set(parsedItems.map((item) => item.option_id)));
+    const questionIds = Array.from(
+      new Set(parsedItems.map((item) => item.question_id)),
+    );
+    const optionIds = Array.from(
+      new Set(parsedItems.map((item) => item.option_id)),
+    );
 
     const questions = await this.questionRepo.find({
       where: { id: In(questionIds) },
@@ -659,7 +712,9 @@ export class FormManagementService {
         );
       }
       if (!option) {
-        throw new NotFoundException(`Option nao encontrada para id=${item.option_id}.`);
+        throw new NotFoundException(
+          `Option nao encontrada para id=${item.option_id}.`,
+        );
       }
       if (question.form.id !== formId) {
         throw new BadRequestException(
@@ -673,21 +728,23 @@ export class FormManagementService {
       }
     }
 
-    await this.leadscoreOptionPointsRepo.manager.transaction(async (manager) => {
-      const optionPointsRepo = manager.getRepository(LeadscoreOptionPoints);
-      await optionPointsRepo.delete({ leadscore: { id: leadscoreId } });
-      if (!parsedItems.length) return;
+    await this.leadscoreOptionPointsRepo.manager.transaction(
+      async (manager) => {
+        const optionPointsRepo = manager.getRepository(LeadscoreOptionPoints);
+        await optionPointsRepo.delete({ leadscore: { id: leadscoreId } });
+        if (!parsedItems.length) return;
 
-      const entities = parsedItems.map((item) =>
-        optionPointsRepo.create({
-          leadscore,
-          question: questionById.get(item.question_id)!,
-          option: optionById.get(item.option_id)!,
-          points: item.points,
-        }),
-      );
-      await optionPointsRepo.save(entities);
-    });
+        const entities = parsedItems.map((item) =>
+          optionPointsRepo.create({
+            leadscore,
+            question: questionById.get(item.question_id)!,
+            option: optionById.get(item.option_id)!,
+            points: item.points,
+          }),
+        );
+        await optionPointsRepo.save(entities);
+      },
+    );
 
     return await this.listScoreOptionPoints(leadscoreId);
   }
@@ -735,7 +792,9 @@ export class FormManagementService {
         maxValue !== undefined &&
         minValue > maxValue
       ) {
-        throw new BadRequestException('min_value nao pode ser maior que max_value.');
+        throw new BadRequestException(
+          'min_value nao pode ser maior que max_value.',
+        );
       }
       return {
         question_id: this.parseRequiredUuid(item.question_id, 'question_id'),
@@ -745,7 +804,9 @@ export class FormManagementService {
       };
     });
 
-    const questionIds = Array.from(new Set(parsedItems.map((item) => item.question_id)));
+    const questionIds = Array.from(
+      new Set(parsedItems.map((item) => item.question_id)),
+    );
     const questions = await this.questionRepo.find({
       where: { id: In(questionIds) },
       relations: ['form'],
@@ -786,7 +847,357 @@ export class FormManagementService {
     return await this.listScoreRangePoints(leadscoreId);
   }
 
-  async createFull(payload: CreateFullFormPayloadDto): Promise<CreateFullFormResponseDto> {
+  async clone(payload: CloneFormPayloadDto): Promise<CloneFormResponseDto> {
+    const sourceFormId = this.parseRequiredUuid(
+      payload.source_form_id,
+      'source_form_id',
+    );
+    const sourceFormVersionId = this.parseRequiredUuid(
+      payload.source_form_version_id,
+      'source_form_version_id',
+    );
+    const targetFormId = this.parseRequiredUuid(
+      payload.target_form_id,
+      'target_form_id',
+    );
+    const requestedTargetFormVersionId = this.parseRequiredUuid(
+      payload.target_form_version_id,
+      'target_form_version_id',
+    );
+
+    return await this.formRepo.manager.transaction(async (manager) => {
+      const formRepo = manager.getRepository(Form);
+      const formVersionRepo = manager.getRepository(FormVersion);
+      const questionRepo = manager.getRepository(Question);
+      const questionOptionRepo = manager.getRepository(QuestionOption);
+      const formVersionQuestionRepo =
+        manager.getRepository(FormVersionQuestion);
+      const formResponseRepo = manager.getRepository(FormResponse);
+      const leadscoreRepo = manager.getRepository(Leadscore);
+      const leadscoreOptionPointsRepo = manager.getRepository(
+        LeadscoreOptionPoints,
+      );
+      const leadscoreRangePointsRepo =
+        manager.getRepository(LeadscoreRangePoints);
+      const leadscoreTierRuleRepo = manager.getRepository(LeadscoreTierRule);
+
+      const sourceForm = await formRepo.findOne({
+        where: { id: sourceFormId },
+        relations: ['launch', 'season'],
+      });
+      if (!sourceForm) {
+        throw new NotFoundException(
+          `Form origem nao encontrado para id=${sourceFormId}.`,
+        );
+      }
+
+      const targetForm = await formRepo.findOne({
+        where: { id: targetFormId },
+        relations: ['launch', 'season'],
+      });
+      if (!targetForm) {
+        throw new NotFoundException(
+          `Form destino nao encontrado para id=${targetFormId}.`,
+        );
+      }
+
+      const sourceVersion = await formVersionRepo.findOne({
+        where: { id: sourceFormVersionId },
+        relations: ['form'],
+      });
+      if (!sourceVersion) {
+        throw new NotFoundException(
+          `FormVersion origem nao encontrada para id=${sourceFormVersionId}.`,
+        );
+      }
+      if (sourceVersion.form.id !== sourceFormId) {
+        throw new BadRequestException(
+          `source_form_version_id ${sourceFormVersionId} nao pertence ao source_form_id ${sourceFormId}.`,
+        );
+      }
+
+      const requestedTargetVersion = await formVersionRepo.findOne({
+        where: { id: requestedTargetFormVersionId },
+        relations: ['form'],
+      });
+      if (!requestedTargetVersion) {
+        throw new NotFoundException(
+          `FormVersion destino nao encontrada para id=${requestedTargetFormVersionId}.`,
+        );
+      }
+      if (requestedTargetVersion.form.id !== targetFormId) {
+        throw new BadRequestException(
+          `target_form_version_id ${requestedTargetFormVersionId} nao pertence ao target_form_id ${targetFormId}.`,
+        );
+      }
+
+      const targetQuestionLinksCount = await formVersionQuestionRepo.count({
+        where: { form_version: { id: requestedTargetFormVersionId } },
+      });
+      const targetScoresCount = await leadscoreRepo.count({
+        where: { form_version: { id: requestedTargetFormVersionId } },
+      });
+      const targetResponsesCount = await formResponseRepo.count({
+        where: { form_version: { id: requestedTargetFormVersionId } },
+      });
+      const createdNewVersion =
+        targetQuestionLinksCount > 0 ||
+        targetScoresCount > 0 ||
+        targetResponsesCount > 0;
+
+      let targetVersion = requestedTargetVersion;
+      if (createdNewVersion) {
+        if (requestedTargetVersion.active) {
+          await formVersionRepo.update(
+            { form: { id: targetFormId } },
+            { active: false },
+          );
+        }
+
+        targetVersion = await formVersionRepo.save(
+          formVersionRepo.create({
+            form: targetForm,
+            version_number: await this.nextFormVersionNumber(
+              manager,
+              targetFormId,
+            ),
+            active: requestedTargetVersion.active,
+          }),
+        );
+      }
+
+      const sourceQuestionLinks = await formVersionQuestionRepo.find({
+        where: { form_version: { id: sourceFormVersionId } },
+        relations: ['question', 'question.form', 'form_version'],
+        order: { display_order: 'ASC', created_at: 'ASC' },
+      });
+      const sourceScores = await leadscoreRepo.find({
+        where: { form_version: { id: sourceFormVersionId } },
+        relations: ['form_version'],
+        order: { created_at: 'ASC' },
+      });
+      const sourceScoreIds = sourceScores.map((score) => score.id);
+
+      const sourceOptionPoints = sourceScoreIds.length
+        ? await leadscoreOptionPointsRepo.find({
+            where: { leadscore: { id: In(sourceScoreIds) } },
+            relations: ['leadscore', 'question', 'option'],
+            order: { created_at: 'ASC' },
+          })
+        : [];
+      const sourceRangePoints = sourceScoreIds.length
+        ? await leadscoreRangePointsRepo.find({
+            where: { leadscore: { id: In(sourceScoreIds) } },
+            relations: ['leadscore', 'question'],
+            order: { created_at: 'ASC' },
+          })
+        : [];
+      const sourceTierRules = sourceScoreIds.length
+        ? await leadscoreTierRuleRepo.find({
+            where: { leadscore: { id: In(sourceScoreIds) } },
+            relations: ['leadscore', 'tier'],
+            order: { created_at: 'ASC' },
+          })
+        : [];
+
+      const sourceQuestionIdSet = new Set<string>();
+      for (const link of sourceQuestionLinks) {
+        sourceQuestionIdSet.add(link.question.id);
+      }
+      for (const point of sourceOptionPoints) {
+        sourceQuestionIdSet.add(point.question.id);
+      }
+      for (const point of sourceRangePoints) {
+        sourceQuestionIdSet.add(point.question.id);
+      }
+
+      const sourceQuestionIds = Array.from(sourceQuestionIdSet);
+      const sourceQuestions = sourceQuestionIds.length
+        ? await questionRepo.find({
+            where: { id: In(sourceQuestionIds) },
+            relations: ['form'],
+          })
+        : [];
+      const sourceQuestionById = new Map(
+        sourceQuestions.map((question) => [question.id, question]),
+      );
+
+      for (const questionId of sourceQuestionIds) {
+        const question = sourceQuestionById.get(questionId);
+        if (!question) {
+          throw new NotFoundException(
+            `Question origem nao encontrada para id=${questionId}.`,
+          );
+        }
+        if (question.form.id !== sourceForm.id) {
+          throw new BadRequestException(
+            `Question origem ${questionId} nao pertence ao source_form_id ${sourceForm.id}.`,
+          );
+        }
+      }
+
+      const questionBySourceId = new Map<string, Question>();
+      for (const sourceQuestionId of sourceQuestionIds) {
+        const sourceQuestion = sourceQuestionById.get(sourceQuestionId)!;
+        const targetQuestion = await questionRepo.save(
+          questionRepo.create({
+            form: targetForm,
+            question_key: sourceQuestion.question_key,
+            question_text: sourceQuestion.question_text,
+            input_type: sourceQuestion.input_type,
+          }),
+        );
+        questionBySourceId.set(sourceQuestion.id, targetQuestion);
+      }
+
+      const sourceOptions = sourceQuestionIds.length
+        ? await questionOptionRepo.find({
+            where: { question: { id: In(sourceQuestionIds) } },
+            relations: ['question'],
+          })
+        : [];
+      sourceOptions.sort((a, b) => {
+        if (a.question.id !== b.question.id) {
+          return a.question.id.localeCompare(b.question.id);
+        }
+        if (a.display_order !== b.display_order) {
+          return a.display_order - b.display_order;
+        }
+        return a.created_at.getTime() - b.created_at.getTime();
+      });
+
+      const optionBySourceId = new Map<string, QuestionOption>();
+      for (const sourceOption of sourceOptions) {
+        const targetQuestion = questionBySourceId.get(sourceOption.question.id);
+        if (!targetQuestion) continue;
+
+        const targetOption = await questionOptionRepo.save(
+          questionOptionRepo.create({
+            question: targetQuestion,
+            option_key: sourceOption.option_key,
+            option_text: sourceOption.option_text,
+            display_order: sourceOption.display_order,
+          }),
+        );
+        optionBySourceId.set(sourceOption.id, targetOption);
+      }
+
+      const targetQuestionLinks = sourceQuestionLinks.map((link) => {
+        const targetQuestion = questionBySourceId.get(link.question.id);
+        if (!targetQuestion) {
+          throw new BadRequestException(
+            `Nao foi possivel clonar a question ${link.question.id}.`,
+          );
+        }
+
+        return formVersionQuestionRepo.create({
+          form_version: targetVersion,
+          question: targetQuestion,
+          display_order: link.display_order,
+          required: link.required,
+        });
+      });
+      if (targetQuestionLinks.length) {
+        await formVersionQuestionRepo.save(targetQuestionLinks);
+      }
+
+      const scoreBySourceId = new Map<string, Leadscore>();
+      for (const sourceScore of sourceScores) {
+        const targetScore = await leadscoreRepo.save(
+          leadscoreRepo.create({
+            form_version: targetVersion,
+            name: sourceScore.name,
+            active: sourceScore.active,
+          }),
+        );
+        scoreBySourceId.set(sourceScore.id, targetScore);
+      }
+
+      const targetOptionPoints = sourceOptionPoints.map((point) => {
+        const targetScore = scoreBySourceId.get(point.leadscore.id);
+        const targetQuestion = questionBySourceId.get(point.question.id);
+        const targetOption = optionBySourceId.get(point.option.id);
+
+        if (!targetScore || !targetQuestion || !targetOption) {
+          throw new BadRequestException(
+            `Nao foi possivel clonar pontos por opcao para leadscore=${point.leadscore.id}, question=${point.question.id}, option=${point.option.id}.`,
+          );
+        }
+
+        return leadscoreOptionPointsRepo.create({
+          leadscore: targetScore,
+          question: targetQuestion,
+          option: targetOption,
+          points: point.points,
+        });
+      });
+      if (targetOptionPoints.length) {
+        await leadscoreOptionPointsRepo.save(targetOptionPoints);
+      }
+
+      const targetRangePoints = sourceRangePoints.map((point) => {
+        const targetScore = scoreBySourceId.get(point.leadscore.id);
+        const targetQuestion = questionBySourceId.get(point.question.id);
+
+        if (!targetScore || !targetQuestion) {
+          throw new BadRequestException(
+            `Nao foi possivel clonar pontos por faixa para leadscore=${point.leadscore.id}, question=${point.question.id}.`,
+          );
+        }
+
+        return leadscoreRangePointsRepo.create({
+          leadscore: targetScore,
+          question: targetQuestion,
+          min_value: point.min_value,
+          max_value: point.max_value,
+          points: point.points,
+        });
+      });
+      if (targetRangePoints.length) {
+        await leadscoreRangePointsRepo.save(targetRangePoints);
+      }
+
+      const targetTierRules = sourceTierRules.map((rule) => {
+        const targetScore = scoreBySourceId.get(rule.leadscore.id);
+        if (!targetScore) {
+          throw new BadRequestException(
+            `Nao foi possivel clonar regra de tier para leadscore=${rule.leadscore.id}.`,
+          );
+        }
+
+        return leadscoreTierRuleRepo.create({
+          leadscore: targetScore,
+          tier: rule.tier,
+          min_score: rule.min_score,
+          max_score: rule.max_score,
+        });
+      });
+      if (targetTierRules.length) {
+        await leadscoreTierRuleRepo.save(targetTierRules);
+      }
+
+      return {
+        source_form_id: sourceFormId,
+        source_form_version_id: sourceFormVersionId,
+        target_form_id: targetFormId,
+        requested_target_form_version_id: requestedTargetFormVersionId,
+        target_form_version_id: targetVersion.id,
+        created_new_version: createdNewVersion,
+        target_version: this.mapFormVersion(targetVersion),
+        questions_count: sourceQuestionIds.length,
+        question_links_count: targetQuestionLinks.length,
+        options_count: optionBySourceId.size,
+        scores_count: scoreBySourceId.size,
+        option_points_count: targetOptionPoints.length,
+        range_points_count: targetRangePoints.length,
+        tier_rules_count: targetTierRules.length,
+      };
+    });
+  }
+
+  async createFull(
+    payload: CreateFullFormPayloadDto,
+  ): Promise<CreateFullFormResponseDto> {
     const name = this.parseRequiredText(payload.name, 'name');
     const type = this.parseOptionalText(payload.type);
     const launchId = this.parseOptionalUuid(payload.launch_id, 'launch_id');
@@ -796,7 +1207,8 @@ export class FormManagementService {
       'version_number',
     );
     const versionActive =
-      this.parseOptionalBoolean(payload.version_active, 'version_active') ?? true;
+      this.parseOptionalBoolean(payload.version_active, 'version_active') ??
+      true;
 
     if (!Array.isArray(payload.questions) || payload.questions.length === 0) {
       throw new BadRequestException(
@@ -806,7 +1218,10 @@ export class FormManagementService {
 
     const questionKeySet = new Set<string>();
     for (const question of payload.questions) {
-      const questionKey = this.parseRequiredText(question.question_key, 'question_key');
+      const questionKey = this.parseRequiredText(
+        question.question_key,
+        'question_key',
+      );
       if (questionKeySet.has(questionKey)) {
         throw new BadRequestException(
           `question_key duplicado no payload: ${questionKey}.`,
@@ -836,10 +1251,14 @@ export class FormManagementService {
       const formVersionRepo = manager.getRepository(FormVersion);
       const questionRepo = manager.getRepository(Question);
       const questionOptionRepo = manager.getRepository(QuestionOption);
-      const formVersionQuestionRepo = manager.getRepository(FormVersionQuestion);
+      const formVersionQuestionRepo =
+        manager.getRepository(FormVersionQuestion);
       const leadscoreRepo = manager.getRepository(Leadscore);
-      const leadscoreOptionPointsRepo = manager.getRepository(LeadscoreOptionPoints);
-      const leadscoreRangePointsRepo = manager.getRepository(LeadscoreRangePoints);
+      const leadscoreOptionPointsRepo = manager.getRepository(
+        LeadscoreOptionPoints,
+      );
+      const leadscoreRangePointsRepo =
+        manager.getRepository(LeadscoreRangePoints);
 
       const launch = launchId
         ? await this.mustFindLaunchById(launchId, manager)
@@ -876,7 +1295,10 @@ export class FormManagementService {
 
       for (let idx = 0; idx < payload.questions.length; idx++) {
         const item = payload.questions[idx];
-        const questionKey = this.parseRequiredText(item.question_key, 'question_key');
+        const questionKey = this.parseRequiredText(
+          item.question_key,
+          'question_key',
+        );
         const questionText = this.parseOptionalText(item.question_text);
         const inputType = this.parseOptionalText(item.input_type);
 
@@ -894,7 +1316,10 @@ export class FormManagementService {
         const optionKeys = new Set<string>();
         for (let optionIdx = 0; optionIdx < item.options.length; optionIdx++) {
           const optionPayload = item.options[optionIdx];
-          const optionKey = this.parseRequiredText(optionPayload.option_key, 'option_key');
+          const optionKey = this.parseRequiredText(
+            optionPayload.option_key,
+            'option_key',
+          );
           if (optionKeys.has(optionKey)) {
             throw new BadRequestException(
               `option_key duplicado na pergunta ${questionKey}: ${optionKey}.`,
@@ -911,12 +1336,14 @@ export class FormManagementService {
                 this.parseOptionalInteger(
                   optionPayload.display_order,
                   'display_order',
-                ) ??
-                optionIdx + 1,
+                ) ?? optionIdx + 1,
             }),
           );
 
-          optionByQuestionKeyAndOptionKey.set(`${questionKey}::${optionKey}`, option);
+          optionByQuestionKeyAndOptionKey.set(
+            `${questionKey}::${optionKey}`,
+            option,
+          );
           optionsCount++;
         }
 
@@ -927,7 +1354,8 @@ export class FormManagementService {
             display_order:
               this.parseOptionalInteger(item.display_order, 'display_order') ??
               idx + 1,
-            required: this.parseOptionalBoolean(item.required, 'required') ?? false,
+            required:
+              this.parseOptionalBoolean(item.required, 'required') ?? false,
           }),
         );
       }
@@ -939,36 +1367,43 @@ export class FormManagementService {
             leadscoreRepo.create({
               form_version: version,
               name: this.parseRequiredText(scorePayload.name, 'name'),
-              active: this.parseOptionalBoolean(scorePayload.active, 'active') ?? true,
+              active:
+                this.parseOptionalBoolean(scorePayload.active, 'active') ??
+                true,
             }),
           );
           createdScores.push(score);
 
           if (scorePayload.option_points?.length) {
-            const optionPointEntities = scorePayload.option_points.map((item) => {
-              const questionKey = this.parseRequiredText(
-                item.question_key,
-                'question_key',
-              );
-              const optionKey = this.parseRequiredText(item.option_key, 'option_key');
-              const question = questionByKey.get(questionKey);
-              const option = optionByQuestionKeyAndOptionKey.get(
-                `${questionKey}::${optionKey}`,
-              );
-
-              if (!question || !option) {
-                throw new BadRequestException(
-                  `Nao foi encontrada combinacao question_key=${questionKey} + option_key=${optionKey} para score.`,
+            const optionPointEntities = scorePayload.option_points.map(
+              (item) => {
+                const questionKey = this.parseRequiredText(
+                  item.question_key,
+                  'question_key',
                 );
-              }
+                const optionKey = this.parseRequiredText(
+                  item.option_key,
+                  'option_key',
+                );
+                const question = questionByKey.get(questionKey);
+                const option = optionByQuestionKeyAndOptionKey.get(
+                  `${questionKey}::${optionKey}`,
+                );
 
-              return leadscoreOptionPointsRepo.create({
-                leadscore: score,
-                question,
-                option,
-                points: this.parseNumber(item.points, 'points'),
-              });
-            });
+                if (!question || !option) {
+                  throw new BadRequestException(
+                    `Nao foi encontrada combinacao question_key=${questionKey} + option_key=${optionKey} para score.`,
+                  );
+                }
+
+                return leadscoreOptionPointsRepo.create({
+                  leadscore: score,
+                  question,
+                  option,
+                  points: this.parseNumber(item.points, 'points'),
+                });
+              },
+            );
             await leadscoreOptionPointsRepo.save(optionPointEntities);
           }
 
@@ -985,8 +1420,14 @@ export class FormManagementService {
                 );
               }
 
-              const minValue = this.parseOptionalNumber(item.min_value, 'min_value');
-              const maxValue = this.parseOptionalNumber(item.max_value, 'max_value');
+              const minValue = this.parseOptionalNumber(
+                item.min_value,
+                'min_value',
+              );
+              const maxValue = this.parseOptionalNumber(
+                item.max_value,
+                'max_value',
+              );
               if (
                 minValue !== undefined &&
                 maxValue !== undefined &&
@@ -1031,7 +1472,9 @@ export class FormManagementService {
     return form;
   }
 
-  private async mustFindFormVersionById(formVersionId: string): Promise<FormVersion> {
+  private async mustFindFormVersionById(
+    formVersionId: string,
+  ): Promise<FormVersion> {
     const version = await this.formVersionRepo.findOne({
       where: { id: formVersionId },
       relations: ['form'],
@@ -1050,18 +1493,24 @@ export class FormManagementService {
       relations: ['form'],
     });
     if (!question) {
-      throw new NotFoundException(`Question nao encontrada para id=${questionId}.`);
+      throw new NotFoundException(
+        `Question nao encontrada para id=${questionId}.`,
+      );
     }
     return question;
   }
 
-  private async mustFindQuestionOptionById(optionId: string): Promise<QuestionOption> {
+  private async mustFindQuestionOptionById(
+    optionId: string,
+  ): Promise<QuestionOption> {
     const option = await this.questionOptionRepo.findOne({
       where: { id: optionId },
       relations: ['question'],
     });
     if (!option) {
-      throw new NotFoundException(`QuestionOption nao encontrada para id=${optionId}.`);
+      throw new NotFoundException(
+        `QuestionOption nao encontrada para id=${optionId}.`,
+      );
     }
     return option;
   }
@@ -1091,7 +1540,9 @@ export class FormManagementService {
       relations: ['form_version', 'form_version.form'],
     });
     if (!leadscore) {
-      throw new NotFoundException(`Leadscore nao encontrado para id=${leadscoreId}.`);
+      throw new NotFoundException(
+        `Leadscore nao encontrado para id=${leadscoreId}.`,
+      );
     }
     return leadscore;
   }
@@ -1159,7 +1610,10 @@ export class FormManagementService {
     );
   }
 
-  private parseOptionalInteger(value: unknown, fieldName: string): number | undefined {
+  private parseOptionalInteger(
+    value: unknown,
+    fieldName: string,
+  ): number | undefined {
     if (value === undefined || value === null) return undefined;
     return this.parseInteger(value, fieldName);
   }
@@ -1206,7 +1660,10 @@ export class FormManagementService {
     return num;
   }
 
-  private parseOptionalNumber(value: unknown, fieldName: string): number | undefined {
+  private parseOptionalNumber(
+    value: unknown,
+    fieldName: string,
+  ): number | undefined {
     if (value === undefined || value === null) return undefined;
     return this.parseNumber(value, fieldName);
   }
@@ -1225,7 +1682,10 @@ export class FormManagementService {
     return normalized;
   }
 
-  private parseOptionalUuid(value: unknown, fieldName: string): string | undefined {
+  private parseOptionalUuid(
+    value: unknown,
+    fieldName: string,
+  ): string | undefined {
     if (value === undefined || value === null) return undefined;
     if (typeof value !== 'string') {
       throw new BadRequestException(`${fieldName} deve ser string.`);
@@ -1238,7 +1698,10 @@ export class FormManagementService {
     return normalized;
   }
 
-  private assertQuestionBelongsToForm(question: Question, formId: string): void {
+  private assertQuestionBelongsToForm(
+    question: Question,
+    formId: string,
+  ): void {
     if (question.form.id !== formId) {
       throw new BadRequestException(
         `Question ${question.id} nao pertence ao form ${formId}.`,
@@ -1270,7 +1733,9 @@ export class FormManagementService {
     return latest ? latest.version_number + 1 : 1;
   }
 
-  private async nextFormVersionQuestionOrder(formVersionId: string): Promise<number> {
+  private async nextFormVersionQuestionOrder(
+    formVersionId: string,
+  ): Promise<number> {
     const latest = await this.formVersionQuestionRepo.findOne({
       where: { form_version: { id: formVersionId } },
       order: { display_order: 'DESC' },
