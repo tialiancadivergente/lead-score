@@ -52,6 +52,7 @@ import { MetaAdsetRaw } from './meta-ads/meta-adset-raw.entity';
 import { MetaCampaignRaw } from './meta-ads/meta-campaign-raw.entity';
 import { MetaSyncExecution } from './meta-ads/meta-sync-execution.entity';
 import { InleadWebhookActiveCampaignLog } from './inlead/inlead-webhook-activecampaign-log.entity';
+import { LaunchDashboardConfig } from './launch-dashboard/launch-dashboard-config.entity';
 
 export const ENTITIES = [
   Person,
@@ -119,4 +120,5 @@ export const ENTITIES = [
   MetaSyncExecution,
 
   InleadWebhookActiveCampaignLog,
+  LaunchDashboardConfig,
 ];

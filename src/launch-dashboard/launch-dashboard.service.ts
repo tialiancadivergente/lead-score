@@ -1,11 +1,19 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Capture } from '../database/entities/capture/capture.entity';
+import { FormAnswer } from '../database/entities/form/form-answer.entity';
+import { FormResponse } from '../database/entities/form/form-response.entity';
+import { Question } from '../database/entities/form/question.entity';
+import { QuestionOption } from '../database/entities/form/question-option.entity';
 import { HotmartProduct } from '../database/entities/hotmart/hotmart-product.entity';
 import { HotmartSale } from '../database/entities/hotmart/hotmart-sale.entity';
+import { LaunchDashboardConfig } from '../database/entities/launch-dashboard/launch-dashboard-config.entity';
 import { Launch } from '../database/entities/marketing/launch.entity';
 import { MetaAdPerformance } from '../database/entities/meta-ads/meta-ad-performance.entity';
+import { LeadscoreResult } from '../database/entities/leadscore/leadscore-result.entity';
+import { LeadscoreTier } from '../database/entities/leadscore/leadscore-tier.entity';
+import { UpsertLaunchDashboardConfigDto } from './dto/upsert-launch-dashboard-config.dto';
 import { LaunchDashboardQueryDto } from './dto/launch-dashboard-query.dto';
 
 type MediaAgg = {
@@ -39,11 +47,95 @@ export class LaunchDashboardService {
     private readonly saleRepo: Repository<HotmartSale>,
     @InjectRepository(Launch)
     private readonly launchRepo: Repository<Launch>,
+    @InjectRepository(LaunchDashboardConfig)
+    private readonly configRepo: Repository<LaunchDashboardConfig>,
+    @InjectRepository(FormResponse)
+    private readonly formResponseRepo: Repository<FormResponse>,
+    @InjectRepository(FormAnswer)
+    private readonly formAnswerRepo: Repository<FormAnswer>,
+    @InjectRepository(QuestionOption)
+    private readonly questionOptionRepo: Repository<QuestionOption>,
+    @InjectRepository(LeadscoreResult)
+    private readonly leadscoreResultRepo: Repository<LeadscoreResult>,
   ) {}
+
+  // ─── Launches ─────────────────────────────────────────────────────────────
 
   async getLaunches() {
     return this.launchRepo.find({ order: { name: 'ASC' } });
   }
+
+  // ─── Config ───────────────────────────────────────────────────────────────
+
+  async getConfig(launchId: string): Promise<LaunchDashboardConfig | null> {
+    return this.configRepo.findOne({ where: { launch_id: launchId } });
+  }
+
+  async upsertConfig(launchId: string, dto: UpsertLaunchDashboardConfigDto): Promise<LaunchDashboardConfig> {
+    let config = await this.configRepo.findOne({ where: { launch_id: launchId } });
+
+    if (!config) {
+      config = this.configRepo.create({ launch_id: launchId });
+    }
+
+    config.target_spend = dto.targetSpend ?? config.target_spend;
+    config.target_leads = dto.targetLeads ?? config.target_leads;
+    config.target_cpl = dto.targetCpl ?? config.target_cpl;
+    config.target_connect_rate = dto.targetConnectRate ?? config.target_connect_rate;
+    config.target_page_conversion = dto.targetPageConversion ?? config.target_page_conversion;
+    config.target_cpc = dto.targetCpc ?? config.target_cpc;
+    config.target_cpm = dto.targetCpm ?? config.target_cpm;
+    config.target_ctr = dto.targetCtr ?? config.target_ctr;
+    config.target_survey_response_rate = dto.targetSurveyResponseRate ?? config.target_survey_response_rate;
+    config.target_consciousness_rate = dto.targetConsciousnessRate ?? config.target_consciousness_rate;
+    config.target_knows_elton_rate = dto.targetKnowsEltonRate ?? config.target_knows_elton_rate;
+    config.target_knows_alliance_rate = dto.targetKnowsAllianceRate ?? config.target_knows_alliance_rate;
+
+    config.question_key_consciousness = dto.questionKeyConsciousness ?? config.question_key_consciousness;
+    config.positive_option_key_consciousness = dto.positiveOptionKeyConsciousness ?? config.positive_option_key_consciousness;
+    config.question_key_knows_elton = dto.questionKeyKnowsElton ?? config.question_key_knows_elton;
+    config.positive_option_key_knows_elton = dto.positiveOptionKeyKnowsElton ?? config.positive_option_key_knows_elton;
+    config.question_key_knows_alliance = dto.questionKeyKnowsAlliance ?? config.question_key_knows_alliance;
+    config.positive_option_key_knows_alliance = dto.positiveOptionKeyKnowsAlliance ?? config.positive_option_key_knows_alliance;
+
+    return this.configRepo.save(config);
+  }
+
+  // ─── Available questions ──────────────────────────────────────────────────
+
+  async getAvailableQuestions() {
+    const rows = await this.questionOptionRepo
+      .createQueryBuilder('qo')
+      .innerJoinAndSelect('qo.question', 'q')
+      .orderBy('q.question_key', 'ASC')
+      .addOrderBy('qo.display_order', 'ASC')
+      .getMany();
+
+    const map = new Map<string, {
+      questionKey: string;
+      questionText: string | null;
+      options: { optionKey: string; optionText: string | null }[];
+    }>();
+
+    for (const opt of rows) {
+      const key = opt.question.question_key;
+      if (!map.has(key)) {
+        map.set(key, {
+          questionKey: key,
+          questionText: opt.question.question_text ?? null,
+          options: [],
+        });
+      }
+      map.get(key)!.options.push({
+        optionKey: opt.option_key,
+        optionText: opt.option_text ?? null,
+      });
+    }
+
+    return Array.from(map.values());
+  }
+
+  // ─── Summary ──────────────────────────────────────────────────────────────
 
   async getSummary(query: LaunchDashboardQueryDto) {
     this.validateDates(query);
@@ -58,6 +150,8 @@ export class LaunchDashboardService {
       summary: this.buildSummaryMetrics(media, leadsCount, salesData),
     };
   }
+
+  // ─── Timeseries ───────────────────────────────────────────────────────────
 
   async getTimeseries(query: LaunchDashboardQueryDto) {
     this.validateDates(query);
@@ -74,11 +168,7 @@ export class LaunchDashboardService {
 
     const dates = this.dateRange(query.dateFrom!, query.dateTo!);
     const timeseries = dates.map((date) => {
-      const m = mediaByDate.get(date) ?? {
-        spend: 0,
-        impressions: 0,
-        clicks: 0,
-      };
+      const m = mediaByDate.get(date) ?? { spend: 0, impressions: 0, clicks: 0 };
       const leads = leadsByDate.get(date) ?? 0;
       const sales = salesByDate.get(date) ?? 0;
 
@@ -96,6 +186,8 @@ export class LaunchDashboardService {
 
     return { timeseries };
   }
+
+  // ─── Funnel table ─────────────────────────────────────────────────────────
 
   async getFunnelTable(query: LaunchDashboardQueryDto) {
     this.validateDates(query);
@@ -132,6 +224,168 @@ export class LaunchDashboardService {
     items.sort((a, b) => b.spend - a.spend);
 
     return { items, total: items.length };
+  }
+
+  // ─── Awareness metrics ────────────────────────────────────────────────────
+
+  async getAwarenessMetrics(query: LaunchDashboardQueryDto) {
+    this.validateDates(query);
+
+    const config = query.launchId ? await this.getConfig(query.launchId) : null;
+
+    const [totalLeads, totalResponses] = await Promise.all([
+      this.queryLeadsCount(query),
+      this.queryFormResponseCount(query),
+    ]);
+
+    const surveyResponseRate =
+      totalLeads > 0 ? Number((totalResponses / totalLeads).toFixed(6)) : null;
+
+    const [consciousnessCount, knowsEltonCount, knowsAllianceCount] = await Promise.all([
+      config?.question_key_consciousness
+        ? this.queryPositiveAnswerCount(
+            query,
+            config.question_key_consciousness,
+            config.positive_option_key_consciousness,
+          )
+        : Promise.resolve(null),
+      config?.question_key_knows_elton
+        ? this.queryPositiveAnswerCount(
+            query,
+            config.question_key_knows_elton,
+            config.positive_option_key_knows_elton,
+          )
+        : Promise.resolve(null),
+      config?.question_key_knows_alliance
+        ? this.queryPositiveAnswerCount(
+            query,
+            config.question_key_knows_alliance,
+            config.positive_option_key_knows_alliance,
+          )
+        : Promise.resolve(null),
+    ]);
+
+    const rate = (count: number | null) =>
+      count !== null && totalResponses > 0
+        ? Number((count / totalResponses).toFixed(6))
+        : null;
+
+    return {
+      totalLeads,
+      totalFormResponses: totalResponses,
+      surveyResponseRate,
+      consciousnessRate: rate(consciousnessCount),
+      knowsEltonRate: rate(knowsEltonCount),
+      knowsAllianceRate: rate(knowsAllianceCount),
+      configured: {
+        consciousness: !!config?.question_key_consciousness,
+        knowsElton: !!config?.question_key_knows_elton,
+        knowsAlliance: !!config?.question_key_knows_alliance,
+      },
+    };
+  }
+
+  private async queryFormResponseCount(query: LaunchDashboardQueryDto): Promise<number> {
+    const qb = this.formResponseRepo.createQueryBuilder('fr')
+      .innerJoin(Capture, 'c', 'c.id = fr.capture_id')
+      .andWhere('fr.capture_id IS NOT NULL');
+    this.applyFormResponseFilters(qb, query);
+    const row = await qb
+      .select('COUNT(DISTINCT fr.id)', 'responses')
+      .getRawOne<{ responses: string }>();
+    return Number(row?.responses ?? 0);
+  }
+
+  private async queryPositiveAnswerCount(
+    query: LaunchDashboardQueryDto,
+    questionKey: string,
+    positiveOptionKey?: string,
+  ): Promise<number> {
+    const qb = this.formAnswerRepo.createQueryBuilder('fa')
+      .innerJoin(FormResponse, 'fr', 'fr.id = fa.form_response_id')
+      .innerJoin(Capture, 'c', 'c.id = fr.capture_id')
+      .innerJoin(
+        Question,
+        'q',
+        'q.id = fa.question_id AND q.question_key = :questionKey',
+        { questionKey },
+      );
+
+    if (positiveOptionKey) {
+      qb.innerJoin(
+        QuestionOption,
+        'qo',
+        'qo.id = fa.option_id AND qo.option_key = :optionKey',
+        { optionKey: positiveOptionKey },
+      );
+    } else {
+      qb.andWhere('fa.answer_bool = true');
+    }
+
+    this.applyFormResponseFilters(qb, query);
+
+    const row = await qb
+      .select('COUNT(DISTINCT fr.id)', 'count')
+      .getRawOne<{ count: string }>();
+    return Number(row?.count ?? 0);
+  }
+
+  private applyFormResponseFilters(
+    qb: SelectQueryBuilder<any>,
+    query: LaunchDashboardQueryDto,
+  ) {
+    if (query.launchId) {
+      qb.andWhere('c.launch_id = :launchId', { launchId: query.launchId });
+    }
+    if (query.seasonId) {
+      qb.andWhere('c.season_id = :seasonId', { seasonId: query.seasonId });
+    }
+    if (query.dateFrom) {
+      qb.andWhere('COALESCE(c.occurred_at, c.created_at) >= :captureFrom', {
+        captureFrom: `${query.dateFrom}T00:00:00.000Z`,
+      });
+    }
+    if (query.dateTo) {
+      qb.andWhere('COALESCE(c.occurred_at, c.created_at) < :captureTo', {
+        captureTo: this.nextDay(query.dateTo),
+      });
+    }
+  }
+
+  // ─── Tier distribution ────────────────────────────────────────────────────
+
+  async getTierDistribution(query: LaunchDashboardQueryDto) {
+    this.validateDates(query);
+
+    const qb = this.leadscoreResultRepo
+      .createQueryBuilder('lr')
+      .innerJoin(FormResponse, 'fr', 'fr.id = lr.form_response_id')
+      .innerJoin(Capture, 'c', 'c.id = fr.capture_id')
+      .innerJoin(LeadscoreTier, 'lt', 'lt.id = lr.tier_id');
+
+    this.applyFormResponseFilters(qb, query);
+
+    const rows = await qb
+      .select('lt.code', 'tier')
+      .addSelect('lt.name', 'tierName')
+      .addSelect('COUNT(DISTINCT lr.id)', 'count')
+      .groupBy('lt.code, lt.name')
+      .orderBy('lt.code', 'ASC')
+      .getRawMany<{ tier: string; tierName: string; count: string }>();
+
+    const total = rows.reduce((sum, r) => sum + Number(r.count), 0);
+
+    return {
+      distribution: rows.map((r) => ({
+        tier: r.tier,
+        tierName: r.tierName,
+        count: Number(r.count),
+        percentage: total > 0
+          ? Number(((Number(r.count) / total) * 100).toFixed(2))
+          : 0,
+      })),
+      total,
+    };
   }
 
   // ─── Media queries ────────────────────────────────────────────────────────
@@ -383,7 +637,6 @@ export class LaunchDashboardService {
   }
 
   // Direct join via hotmart_product — counts all sales for the launch's active products.
-  // Used for summary totals and timeseries (no capture bridge required).
   private buildDirectSalesQb(query: LaunchDashboardQueryDto) {
     const qb = this.saleRepo
       .createQueryBuilder('hs')
@@ -393,7 +646,6 @@ export class LaunchDashboardService {
     if (query.launchId) {
       qb.andWhere('hp.launch_id = :launchId', { launchId: query.launchId });
     }
-
     if (query.dateFrom) {
       qb.andWhere('COALESCE(hs.approved_date, hs.order_date) >= :salesFrom', {
         salesFrom: `${query.dateFrom}T00:00:00.000Z`,
@@ -409,7 +661,6 @@ export class LaunchDashboardService {
   }
 
   // Capture bridge — attributes sales to specific ads via person_id.
-  // Used for per-ad funnel table breakdown.
   private buildAttributedSalesQb(query: LaunchDashboardQueryDto) {
     const qb = this.captureRepo
       .createQueryBuilder('c')
@@ -419,7 +670,6 @@ export class LaunchDashboardService {
 
     if (query.launchId) {
       qb.andWhere('c.launch_id = :launchId', { launchId: query.launchId });
-      // Restrict to the launch's active products to avoid cross-product attribution
       qb.andWhere(
         `EXISTS (SELECT 1 FROM "hotmart_product" hp2 WHERE hp2.product_id = hs.product_id AND hp2.launch_id = :launchIdProd AND hp2.active = true)`,
         { launchIdProd: query.launchId },
@@ -428,7 +678,6 @@ export class LaunchDashboardService {
     if (query.seasonId) {
       qb.andWhere('c.season_id = :seasonId', { seasonId: query.seasonId });
     }
-
     if (query.dateFrom) {
       qb.andWhere('COALESCE(hs.approved_date, hs.order_date) >= :salesFrom', {
         salesFrom: `${query.dateFrom}T00:00:00.000Z`,
@@ -485,7 +734,10 @@ export class LaunchDashboardService {
     if (!query.dateFrom || !query.dateTo) {
       throw new BadRequestException('dateFrom e dateTo sao obrigatorios.');
     }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(query.dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(query.dateTo)) {
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(query.dateFrom) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(query.dateTo)
+    ) {
       throw new BadRequestException('dateFrom e dateTo devem estar no formato YYYY-MM-DD.');
     }
   }

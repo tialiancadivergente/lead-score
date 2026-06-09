@@ -181,7 +181,7 @@ export class MetaAdsController {
       breakdowns?: string;
     },
   ) {
-    return this.metaAdsService.syncInsights({
+    return this.metaAdsService.enqueueInsightsSync({
       triggeredBy: 'http',
       connectionId: body.connectionId,
       accountIds: body.accountIds,
