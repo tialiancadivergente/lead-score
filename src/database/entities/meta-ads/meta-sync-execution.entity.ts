@@ -9,7 +9,8 @@ export type MetaSyncExecutionStatus =
   | 'running'
   | 'completed'
   | 'failed'
-  | 'partial';
+  | 'partial'
+  | 'aborted';
 
 export type MetaSyncExecutionStep =
   | 'campaigns'

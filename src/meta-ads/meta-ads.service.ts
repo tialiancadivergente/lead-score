@@ -18,6 +18,7 @@ import { MetaProcessorService } from './meta-processor.service';
 @Injectable()
 export class MetaAdsService {
   private readonly logger = new Logger(MetaAdsService.name);
+  private readonly abortRequests = new Set<string>();
 
   constructor(
     @InjectRepository(OAuthConnection)
@@ -368,15 +369,30 @@ export class MetaAdsService {
 
     let totalRecords = 0;
     let failedCount = 0;
+    let doneCount = 0;
     const queue = [...jobs];
     const CONCURRENCY = 5;
+
+    this.logger.log(
+      `[BulkInsights ${execution.id}] Iniciando: ${jobs.length} jobs, ${Math.min(CONCURRENCY, jobs.length)} workers`,
+    );
 
     const workers = Array.from(
       { length: Math.min(CONCURRENCY, jobs.length) },
       async () => {
         while (queue.length > 0) {
+          if (this.abortRequests.has(execution.id)) {
+            this.logger.warn(
+              `[BulkInsights ${execution.id}] Worker detectou sinal de abort — parando`,
+            );
+            break;
+          }
+
           const job = queue.shift();
           if (!job) break;
+
+          const label = `conta=${job.accountId} [${job.since}→${job.until}]`;
+          this.logger.log(`[BulkInsights ${execution.id}] Iniciando job: ${label}`);
 
           try {
             const { report_run_id } = await this.jobService.startInsightsJob({
@@ -389,10 +405,14 @@ export class MetaAdsService {
               breakdowns: opts.breakdowns,
             });
 
+            this.logger.log(
+              `[BulkInsights ${execution.id}] Job Meta criado: ${report_run_id} — aguardando...`,
+            );
+
             const rows = await this.jobService.waitForJobAndFetch({
               connectionId: job.connectionId,
               reportRunId: report_run_id,
-              maxWaitMs: 600_000,
+              maxWaitMs: 180_000, // 3 min por job; chunks de 30 dias raramente precisam mais
             });
 
             const saved = await this.processor.saveInsights(
@@ -400,14 +420,18 @@ export class MetaAdsService {
               rows,
             );
             totalRecords += saved;
+            doneCount++;
+            execution.records_processed = totalRecords;
+            await this.executionRepo.save(execution);
             this.logger.log(
-              `Bulk job ${job.accountId} [${job.since}→${job.until}]: ${saved} registros`,
+              `[BulkInsights ${execution.id}] ✓ ${label}: ${saved} registros salvos | progresso: ${doneCount}/${jobs.length} jobs, ${totalRecords} total`,
             );
           } catch (err: unknown) {
             failedCount++;
+            doneCount++;
             const msg = err instanceof Error ? err.message : String(err);
             this.logger.error(
-              `Bulk job failed for ${job.accountId} [${job.since}→${job.until}]: ${msg}`,
+              `[BulkInsights ${execution.id}] ✗ ${label}: ${msg} | progresso: ${doneCount}/${jobs.length} jobs`,
             );
           }
         }
@@ -416,10 +440,19 @@ export class MetaAdsService {
 
     await Promise.all(workers);
 
+    const wasAborted = this.abortRequests.delete(execution.id);
+
     execution.finished_at = new Date();
     execution.records_processed = totalRecords;
 
-    if (failedCount === 0) {
+    this.logger.log(
+      `[BulkInsights ${execution.id}] Finalizado: ${totalRecords} registros, ${failedCount} falhas, abortado=${wasAborted}`,
+    );
+
+    if (wasAborted) {
+      execution.status = 'aborted';
+      execution.error_message = 'Abortado pelo usuário';
+    } else if (failedCount === 0) {
       execution.status = 'completed';
     } else if (totalRecords > 0) {
       execution.status = 'partial';
@@ -903,6 +936,23 @@ export class MetaAdsService {
       take: params.limit ?? 50,
       order: { started_at: 'DESC' },
     });
+  }
+
+  async abortExecution(id: string): Promise<{ aborted: boolean; message: string }> {
+    const execution = await this.executionRepo.findOne({ where: { id } });
+    if (!execution) {
+      return { aborted: false, message: 'Execução não encontrada.' };
+    }
+    if (execution.status !== 'running') {
+      return { aborted: false, message: `Execução já finalizada com status: ${execution.status}` };
+    }
+    this.abortRequests.add(id);
+    execution.status = 'aborted';
+    execution.error_message = 'Abortado pelo usuário';
+    execution.finished_at = new Date();
+    await this.executionRepo.save(execution);
+    this.logger.warn(`Execução ${id} marcada para abort pelo usuário`);
+    return { aborted: true, message: 'Sinal de abort enviado.' };
   }
 
   // ─── CSV export ───────────────────────────────────────────────────────────

@@ -105,7 +105,7 @@ export class MetaJobService {
   }
 
   /**
-   * Retrieves the results of a completed async insights job.
+   * Retrieves all pages of results from a completed async insights job.
    */
   async getJobResults(params: {
     connectionId: string;
@@ -117,20 +117,28 @@ export class MetaJobService {
         params.connectionId,
       );
 
-    const url = new URL(`${this.getBaseUrl()}/${params.reportRunId}/insights`);
-    url.searchParams.set('access_token', accessToken);
-    url.searchParams.set('limit', String(params.limit ?? 500));
+    const allRows: MetaInsightRow[] = [];
+    const pageSize = params.limit ?? 500;
+    let nextUrl: string | null =
+      `${this.getBaseUrl()}/${params.reportRunId}/insights?access_token=${accessToken}&limit=${pageSize}`;
 
-    const response = await fetch(url.toString());
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(
-        `Failed to retrieve job results: ${response.status} ${text}`,
-      );
+    while (nextUrl) {
+      const response = await fetch(nextUrl);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(
+          `Failed to retrieve job results: ${response.status} ${text}`,
+        );
+      }
+      const json = (await response.json()) as {
+        data: MetaInsightRow[];
+        paging?: { next?: string };
+      };
+      allRows.push(...(json.data ?? []));
+      nextUrl = json.paging?.next ?? null;
     }
 
-    const json = (await response.json()) as { data: MetaInsightRow[] };
-    return json.data ?? [];
+    return allRows;
   }
 
   /**

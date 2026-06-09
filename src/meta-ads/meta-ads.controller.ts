@@ -521,6 +521,12 @@ export class MetaAdsController {
     });
   }
 
+  @ApiOperation({ summary: 'Abortar execução em andamento' })
+  @Post('executions/:id/abort')
+  abortExecution(@Param('id') id: string) {
+    return this.metaAdsService.abortExecution(id);
+  }
+
   @ApiOperation({ summary: 'Histórico de execuções de sync' })
   @Get('executions')
   getExecutions(
