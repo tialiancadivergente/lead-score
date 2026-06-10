@@ -290,6 +290,9 @@ export class MetaAdsService {
       { dateFrom: params.since, dateTo: params.until },
     );
 
+    execution.metadata = { totalJobs, doneJobs: 0, logs: [] };
+    await this.executionRepo.save(execution);
+
     setImmediate(() => {
       void this.runBulkAsyncInsights(execution, targets, chunks, {
         level: params.level ?? 'ad',
@@ -372,27 +375,49 @@ export class MetaAdsService {
     let doneCount = 0;
     const queue = [...jobs];
     const CONCURRENCY = 5;
+    const MAX_LOG_ENTRIES = 200;
+    const logBuffer: string[] = [];
 
-    this.logger.log(
-      `[BulkInsights ${execution.id}] Iniciando: ${jobs.length} jobs, ${Math.min(CONCURRENCY, jobs.length)} workers`,
-    );
+    const ts = () => new Date().toISOString().slice(11, 19); // HH:mm:ss
+
+    const appendLog = async (level: 'info' | 'error', msg: string) => {
+      const entry = `[${ts()}] ${level === 'error' ? '✗' : '✓'} ${msg}`;
+      logBuffer.push(entry);
+      if (logBuffer.length > MAX_LOG_ENTRIES) logBuffer.shift();
+      if (level === 'error') {
+        this.logger.error(`[BulkInsights ${execution.id}] ${msg}`);
+      } else {
+        this.logger.log(`[BulkInsights ${execution.id}] ${msg}`);
+      }
+    };
+
+    const saveProgress = async () => {
+      execution.records_processed = totalRecords;
+      execution.metadata = {
+        ...(execution.metadata ?? {}),
+        totalJobs: jobs.length,
+        doneJobs: doneCount,
+        logs: [...logBuffer],
+      };
+      await this.executionRepo.save(execution);
+    };
+
+    await appendLog('info', `Iniciando: ${jobs.length} jobs, ${Math.min(CONCURRENCY, jobs.length)} workers`);
 
     const workers = Array.from(
       { length: Math.min(CONCURRENCY, jobs.length) },
       async () => {
         while (queue.length > 0) {
           if (this.abortRequests.has(execution.id)) {
-            this.logger.warn(
-              `[BulkInsights ${execution.id}] Worker detectou sinal de abort — parando`,
-            );
+            await appendLog('info', 'Worker detectou sinal de abort — parando');
             break;
           }
 
           const job = queue.shift();
           if (!job) break;
 
-          const label = `conta=${job.accountId} [${job.since}→${job.until}]`;
-          this.logger.log(`[BulkInsights ${execution.id}] Iniciando job: ${label}`);
+          const label = `${job.accountId} [${job.since}→${job.until}]`;
+          await appendLog('info', `Iniciando job: ${label}`);
 
           try {
             const { report_run_id } = await this.jobService.startInsightsJob({
@@ -405,34 +430,25 @@ export class MetaAdsService {
               breakdowns: opts.breakdowns,
             });
 
-            this.logger.log(
-              `[BulkInsights ${execution.id}] Job Meta criado: ${report_run_id} — aguardando...`,
-            );
+            await appendLog('info', `Job Meta criado (${report_run_id.slice(0, 12)}…) — aguardando...`);
 
             const rows = await this.jobService.waitForJobAndFetch({
               connectionId: job.connectionId,
               reportRunId: report_run_id,
-              maxWaitMs: 180_000, // 3 min por job; chunks de 30 dias raramente precisam mais
+              maxWaitMs: 180_000,
             });
 
-            const saved = await this.processor.saveInsights(
-              job.accountId,
-              rows,
-            );
+            const saved = await this.processor.saveInsights(job.accountId, rows);
             totalRecords += saved;
             doneCount++;
-            execution.records_processed = totalRecords;
-            await this.executionRepo.save(execution);
-            this.logger.log(
-              `[BulkInsights ${execution.id}] ✓ ${label}: ${saved} registros salvos | progresso: ${doneCount}/${jobs.length} jobs, ${totalRecords} total`,
-            );
+            await appendLog('info', `${label}: ${saved} registros — ${doneCount}/${jobs.length} jobs concluídos`);
+            await saveProgress();
           } catch (err: unknown) {
             failedCount++;
             doneCount++;
             const msg = err instanceof Error ? err.message : String(err);
-            this.logger.error(
-              `[BulkInsights ${execution.id}] ✗ ${label}: ${msg} | progresso: ${doneCount}/${jobs.length} jobs`,
-            );
+            await appendLog('error', `${label}: ${msg}`);
+            await saveProgress();
           }
         }
       },
@@ -442,12 +458,16 @@ export class MetaAdsService {
 
     const wasAborted = this.abortRequests.delete(execution.id);
 
+    await appendLog('info', `Finalizado: ${totalRecords} registros, ${failedCount} falhas${wasAborted ? ', abortado' : ''}`);
+
     execution.finished_at = new Date();
     execution.records_processed = totalRecords;
-
-    this.logger.log(
-      `[BulkInsights ${execution.id}] Finalizado: ${totalRecords} registros, ${failedCount} falhas, abortado=${wasAborted}`,
-    );
+    execution.metadata = {
+      ...(execution.metadata ?? {}),
+      totalJobs: jobs.length,
+      doneJobs: doneCount,
+      logs: [...logBuffer],
+    };
 
     if (wasAborted) {
       execution.status = 'aborted';
