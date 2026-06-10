@@ -16,12 +16,16 @@ import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { MetaAdsService } from './meta-ads.service';
+import { MetaSyncScheduleService } from './meta-sync-schedule.service';
 
 @ApiTags('meta-ads')
 @UseGuards(ApiKeyGuard)
 @Controller('meta-ads')
 export class MetaAdsController {
-  constructor(private readonly metaAdsService: MetaAdsService) {}
+  constructor(
+    private readonly metaAdsService: MetaAdsService,
+    private readonly metaSyncScheduleService: MetaSyncScheduleService,
+  ) {}
 
   // ─── Batch sync endpoints ─────────────────────────────────────────────────
 
@@ -575,5 +579,31 @@ export class MetaAdsController {
     return this.metaAdsService.importPerformanceCsv(
       file.buffer.toString('utf-8'),
     );
+  }
+
+  // ─── Sync Schedules ────────────────────────────────────────────────────────
+
+  @ApiOperation({ summary: 'Listar agendamentos de sync Meta' })
+  @Get('sync-schedules')
+  listSyncSchedules() {
+    return this.metaSyncScheduleService.listAll();
+  }
+
+  @ApiOperation({ summary: 'Criar agendamento de sync Meta' })
+  @Post('sync-schedules')
+  createSyncSchedule(@Body() body: Record<string, unknown>) {
+    return this.metaSyncScheduleService.create(body as unknown as Parameters<MetaSyncScheduleService['create']>[0]);
+  }
+
+  @ApiOperation({ summary: 'Remover agendamento de sync Meta' })
+  @Post('sync-schedules/:id/delete')
+  removeSyncSchedule(@Param('id') id: string) {
+    return this.metaSyncScheduleService.remove(id);
+  }
+
+  @ApiOperation({ summary: 'Executar agendamento agora' })
+  @Post('sync-schedules/:id/run')
+  runSyncSchedule(@Param('id') id: string) {
+    return this.metaSyncScheduleService.runNow(id);
   }
 }

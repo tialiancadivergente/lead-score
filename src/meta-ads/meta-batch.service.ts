@@ -185,6 +185,28 @@ const INSIGHTS_FIELDS = [
   'video_continuous_2_sec_watched_actions',
 ].join(',');
 
+// Usado no retry de contas grandes — sem métricas de vídeo para reduzir payload
+const INSIGHTS_FIELDS_SLIM = [
+  'campaign_id',
+  'campaign_name',
+  'adset_id',
+  'adset_name',
+  'ad_id',
+  'ad_name',
+  'account_name',
+  'date_start',
+  'date_stop',
+  'impressions',
+  'clicks',
+  'reach',
+  'inline_link_clicks',
+  'spend',
+  'ctr',
+  'cpc',
+  'cpm',
+  'actions',
+].join(',');
+
 @Injectable()
 export class MetaBatchService {
   private readonly logger = new Logger(MetaBatchService.name);
@@ -360,6 +382,89 @@ export class MetaBatchService {
     });
   }
 
+  private buildInsightUrl(
+    accountId: string,
+    level: string,
+    breakdowns: string,
+    timeIncrement: number,
+    dateParam: string,
+    limit: number,
+    slim = false,
+  ): string {
+    return [
+      `act_${accountId}/insights`,
+      `?level=${level}`,
+      `&fields=${slim ? INSIGHTS_FIELDS_SLIM : INSIGHTS_FIELDS}`,
+      `&breakdowns=${breakdowns}`,
+      `&time_increment=${timeIncrement}`,
+      `&${dateParam}`,
+      `&limit=${limit}`,
+    ].join('');
+  }
+
+  private async fetchInsightsSingleAccount(
+    accessToken: string,
+    accountId: string,
+    level: string,
+    breakdowns: string,
+    timeIncrement: number,
+    dateParam: string,
+  ): Promise<MetaInsightRow[]> {
+    // First try with full fields at decreasing limits
+    const fullLimits = [100, 50, 20];
+    for (const limit of fullLimits) {
+      const [response] = await this.executeGraphBatch(accessToken, [
+        {
+          method: 'GET',
+          relative_url: this.buildInsightUrl(
+            accountId, level, breakdowns, timeIncrement, dateParam, limit,
+          ),
+        },
+      ]);
+      if (response.code === 200) {
+        const parsed = JSON.parse(response.body) as MetaPagedResponse<MetaInsightRow>;
+        this.logger.log(`[retry full limit=${limit}] account ${accountId}: ${parsed.data?.length ?? 0} rows`);
+        return parsed.data ?? [];
+      }
+      const errMsg = this.formatBatchErrorBody(response.body);
+      if (response.code === 500 && errMsg.includes('code=1')) {
+        this.logger.warn(`account ${accountId} too large at full limit=${limit}, retrying smaller`);
+        continue;
+      }
+      this.logger.error(`account ${accountId} retry failed (limit=${limit}): ${response.code} ${errMsg}`);
+      return [];
+    }
+
+    // Full fields exhausted — retry with slim fields (no video metrics)
+    this.logger.warn(`account ${accountId} switching to slim fields (no video metrics)`);
+    const slimLimits = [200, 100, 50];
+    for (const limit of slimLimits) {
+      const [response] = await this.executeGraphBatch(accessToken, [
+        {
+          method: 'GET',
+          relative_url: this.buildInsightUrl(
+            accountId, level, breakdowns, timeIncrement, dateParam, limit, true,
+          ),
+        },
+      ]);
+      if (response.code === 200) {
+        const parsed = JSON.parse(response.body) as MetaPagedResponse<MetaInsightRow>;
+        this.logger.log(`[retry slim limit=${limit}] account ${accountId}: ${parsed.data?.length ?? 0} rows`);
+        return parsed.data ?? [];
+      }
+      const errMsg = this.formatBatchErrorBody(response.body);
+      if (response.code === 500 && errMsg.includes('code=1')) {
+        this.logger.warn(`account ${accountId} still too large at slim limit=${limit}`);
+        continue;
+      }
+      this.logger.error(`account ${accountId} slim retry failed (limit=${limit}): ${response.code} ${errMsg}`);
+      return [];
+    }
+
+    this.logger.error(`account ${accountId} exhausted all retry strategies, skipping`);
+    return [];
+  }
+
   async fetchInsightsBatch(params: {
     connectionId: string;
     accountIds: string[];
@@ -369,6 +474,8 @@ export class MetaBatchService {
     level?: 'ad' | 'adset' | 'campaign';
     breakdowns?: string;
     timeIncrement?: number;
+    chunkSize?: number;
+    chunkDelayMs?: number;
   }): Promise<Array<{ accountId: string; insights: MetaInsightRow[] }>> {
     const accessToken =
       await this.metaOAuthService.getAuthorizedAccessTokenForConnection(
@@ -379,45 +486,98 @@ export class MetaBatchService {
     const timeIncrement = params.timeIncrement ?? 1;
     const breakdowns = params.breakdowns ?? 'publisher_platform';
     const dateParam = this.buildDateParam(params);
+    const chunkSize = params.chunkSize ?? 5;
+    const chunkDelayMs = params.chunkDelayMs ?? 1000;
 
-    const requests: BatchRequest[] = params.accountIds.map((accountId) => ({
-      method: 'GET',
-      relative_url: [
-        `act_${accountId}/insights`,
-        `?level=${level}`,
-        `&fields=${INSIGHTS_FIELDS}`,
-        `&breakdowns=${breakdowns}`,
-        `&time_increment=${timeIncrement}`,
-        `&${dateParam}`,
-        `&limit=500`,
-      ].join(''),
-    }));
+    const chunks: string[][] = [];
+    for (let i = 0; i < params.accountIds.length; i += chunkSize) {
+      chunks.push(params.accountIds.slice(i, i + chunkSize));
+    }
 
-    const responses = await this.executeGraphBatch(accessToken, requests);
+    this.logger.log(
+      `Starting insights fetch: ${params.accountIds.length} accounts in ${chunks.length} chunks of ${chunkSize}`,
+    );
 
-    return responses.map((item, idx) => {
-      const accountId = params.accountIds[idx];
-      if (item.code !== 200) {
-        this.logger.error(
-          `Meta insights batch failed for account ${accountId}: ${item.code} ${this.formatBatchErrorBody(item.body)}`,
-        );
-        return { accountId, insights: [] };
+    const allResults: Array<{ accountId: string; insights: MetaInsightRow[] }> =
+      [];
+
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const chunk = chunks[ci];
+      this.logger.log(
+        `Chunk ${ci + 1}/${chunks.length}: accounts [${chunk.join(', ')}]`,
+      );
+
+      if (ci > 0) {
+        await new Promise((r) => setTimeout(r, chunkDelayMs));
       }
 
-      let parsed: MetaPagedResponse<MetaInsightRow>;
-      try {
-        parsed = JSON.parse(item.body) as MetaPagedResponse<MetaInsightRow>;
-      } catch {
-        this.logger.error(
-          `Meta insights batch returned invalid JSON for account ${accountId}: ${item.body}`,
-        );
-        return { accountId, insights: [] };
-      }
+      const requests: BatchRequest[] = chunk.map((accountId) => ({
+        method: 'GET',
+        relative_url: this.buildInsightUrl(
+          accountId,
+          level,
+          breakdowns,
+          timeIncrement,
+          dateParam,
+          200,
+        ),
+      }));
 
-      return {
-        accountId,
-        insights: parsed?.data ?? [],
-      };
-    });
+      const responses = await this.executeGraphBatch(accessToken, requests);
+
+      for (let idx = 0; idx < responses.length; idx++) {
+        const item = responses[idx];
+        const accountId = chunk[idx];
+
+        if (item.code === 200) {
+          let parsed: MetaPagedResponse<MetaInsightRow>;
+          try {
+            parsed = JSON.parse(item.body) as MetaPagedResponse<MetaInsightRow>;
+          } catch {
+            this.logger.error(
+              `Invalid JSON for account ${accountId}: ${item.body}`,
+            );
+            allResults.push({ accountId, insights: [] });
+            continue;
+          }
+          this.logger.log(
+            `account ${accountId}: ${parsed.data?.length ?? 0} rows OK`,
+          );
+          allResults.push({ accountId, insights: parsed.data ?? [] });
+          continue;
+        }
+
+        const errMsg = this.formatBatchErrorBody(item.body);
+        // code=1 = too much data → retry individually with smaller limits
+        if (item.code === 500 && errMsg.includes('code=1')) {
+          this.logger.warn(
+            `account ${accountId} too large (code=1), retrying individually`,
+          );
+          const insights = await this.fetchInsightsSingleAccount(
+            accessToken,
+            accountId,
+            level,
+            breakdowns,
+            timeIncrement,
+            dateParam,
+          );
+          allResults.push({ accountId, insights });
+          continue;
+        }
+
+        this.logger.error(
+          `Meta insights batch failed for account ${accountId}: ${item.code} ${errMsg}`,
+        );
+        allResults.push({ accountId, insights: [] });
+      }
+    }
+
+    const succeeded = allResults.filter((r) => r.insights.length > 0).length;
+    const totalRows = allResults.reduce((s, r) => s + r.insights.length, 0);
+    this.logger.log(
+      `Insights fetch done: ${succeeded}/${params.accountIds.length} accounts OK, ${totalRows} total rows`,
+    );
+
+    return allResults;
   }
 }

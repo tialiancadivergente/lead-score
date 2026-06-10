@@ -39,6 +39,7 @@ type MetaAdAccount = {
 
 type MetaAdAccountsResponse = {
   data?: MetaAdAccount[];
+  paging?: { cursors?: { after?: string }; next?: string };
 };
 
 @Injectable()
@@ -403,23 +404,29 @@ export class MetaAdsOAuthService {
   }
 
   private async fetchAdAccounts(accessToken: string) {
-    const url = new URL(`${this.getMetaGraphBaseUrl()}/me/adaccounts`);
-    url.searchParams.set(
-      'fields',
-      'id,account_id,name,account_status,currency,timezone_name,business',
-    );
-    url.searchParams.set('access_token', accessToken);
+    const allAccounts: MetaAdAccount[] = [];
+    let nextUrl: string | null = (() => {
+      const url = new URL(`${this.getMetaGraphBaseUrl()}/me/adaccounts`);
+      url.searchParams.set('fields', 'id,account_id,name,account_status,currency,timezone_name,business');
+      url.searchParams.set('limit', '100');
+      url.searchParams.set('access_token', accessToken);
+      return url.toString();
+    })();
 
-    const response = await fetch(url);
-    if (!response.ok) {
-      const body = await response.text();
-      throw new InternalServerErrorException(
-        `Falha ao listar contas de anuncio da Meta: ${body}`,
-      );
+    while (nextUrl) {
+      const response = await fetch(nextUrl);
+      if (!response.ok) {
+        const body = await response.text();
+        throw new InternalServerErrorException(
+          `Falha ao listar contas de anuncio da Meta: ${body}`,
+        );
+      }
+      const payload = (await response.json()) as MetaAdAccountsResponse;
+      allAccounts.push(...(payload.data ?? []));
+      nextUrl = payload.paging?.next ?? null;
     }
 
-    const payload = (await response.json()) as MetaAdAccountsResponse;
-    return (payload.data ?? []).map((account) => ({
+    return allAccounts.map((account) => ({
       id: account.id,
       accountId: account.account_id ?? this.normalizeMetaAccountId(account.id),
       name: account.name ?? null,
