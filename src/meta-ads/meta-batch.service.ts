@@ -398,18 +398,20 @@ export class MetaBatchService {
     return responses.map((item, idx) => {
       const accountId = params.accountIds[idx];
       if (item.code !== 200) {
-        throw new Error(
+        this.logger.error(
           `Meta insights batch failed for account ${accountId}: ${item.code} ${this.formatBatchErrorBody(item.body)}`,
         );
+        return { accountId, insights: [] };
       }
 
       let parsed: MetaPagedResponse<MetaInsightRow>;
       try {
         parsed = JSON.parse(item.body) as MetaPagedResponse<MetaInsightRow>;
       } catch {
-        throw new Error(
+        this.logger.error(
           `Meta insights batch returned invalid JSON for account ${accountId}: ${item.body}`,
         );
+        return { accountId, insights: [] };
       }
 
       return {
