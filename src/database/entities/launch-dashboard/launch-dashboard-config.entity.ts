@@ -57,7 +57,7 @@ export class LaunchDashboardConfig {
   target_consciousness_rate?: number;
 
   @Column({ type: 'numeric', name: 'target_knows_elton_rate', nullable: true })
-  target_knows_elton_rate?: number;
+  target_knows_expert_rate?: number;
 
   @Column({
     type: 'numeric',
@@ -79,14 +79,14 @@ export class LaunchDashboardConfig {
   positive_option_key_consciousness?: string;
 
   @Column({ type: 'text', name: 'question_key_knows_elton', nullable: true })
-  question_key_knows_elton?: string;
+  question_key_knows_expert?: string;
 
   @Column({
     type: 'text',
     name: 'positive_option_key_knows_elton',
     nullable: true,
   })
-  positive_option_key_knows_elton?: string;
+  positive_option_key_knows_expert?: string;
 
   @Column({ type: 'text', name: 'question_key_knows_alliance', nullable: true })
   question_key_knows_alliance?: string;

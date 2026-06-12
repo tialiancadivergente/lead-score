@@ -9,6 +9,7 @@ export type AsyncJobStatus = {
     | 'Job Started'
     | 'Job Running'
     | 'Job Complete'
+    | 'Job Completed'
     | 'Job Failed'
     | 'Job Skipped';
   async_percent_completion: number;

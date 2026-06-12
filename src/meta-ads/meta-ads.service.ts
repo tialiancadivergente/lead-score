@@ -15,10 +15,20 @@ import { AsyncJobStatus, MetaJobService } from './meta-job.service';
 import { MetaBatchService } from './meta-batch.service';
 import { MetaProcessorService } from './meta-processor.service';
 
+type BulkPendingJob = {
+  connectionId: string;
+  accountId: string;
+  since: string;
+  until: string;
+  reportRunId: string;
+  pct?: number;
+};
+
 @Injectable()
 export class MetaAdsService {
   private readonly logger = new Logger(MetaAdsService.name);
   private readonly abortRequests = new Set<string>();
+  private readonly pollingExecutions = new Set<string>();
 
   constructor(
     @InjectRepository(OAuthConnection)
@@ -290,6 +300,9 @@ export class MetaAdsService {
       { dateFrom: params.since, dateTo: params.until },
     );
 
+    execution.metadata = { totalJobs, doneJobs: 0, logs: [] };
+    await this.executionRepo.save(execution);
+
     setImmediate(() => {
       void this.runBulkAsyncInsights(execution, targets, chunks, {
         level: params.level ?? 'ad',
@@ -338,9 +351,13 @@ export class MetaAdsService {
       'adset_name',
       'ad_id',
       'ad_name',
+      'account_name',
+      'date_start',
+      'date_stop',
       'impressions',
       'clicks',
       'reach',
+      'inline_link_clicks',
       'spend',
       'ctr',
       'cpc',
@@ -348,7 +365,46 @@ export class MetaAdsService {
       'actions',
     ];
 
-    const jobs: Array<{
+    const MAX_LOG_ENTRIES = 200;
+    const logBuffer: string[] = [];
+    let totalRecords = 0;
+    let failedCount = 0;
+    let doneCount = 0;
+
+    const ts = () => new Date().toISOString().slice(11, 19);
+
+    const appendLog = async (level: 'info' | 'error', msg: string) => {
+      const entry = `[${ts()}] ${level === 'error' ? '✗' : '✓'} ${msg}`;
+      logBuffer.push(entry);
+      if (logBuffer.length > MAX_LOG_ENTRIES) logBuffer.shift();
+      if (level === 'error') {
+        this.logger.error(`[BulkInsights ${execution.id}] ${msg}`);
+      } else {
+        this.logger.log(`[BulkInsights ${execution.id}] ${msg}`);
+      }
+    };
+
+    const saveProgress = async () => {
+      execution.records_processed = totalRecords;
+      execution.metadata = {
+        ...(execution.metadata ?? {}),
+        totalJobs: 0,
+        doneJobs: doneCount,
+        logs: [...logBuffer],
+      };
+      await this.executionRepo.save(execution);
+    };
+
+    // ── Fase 1: disparar todos os jobs na Meta de uma vez ──────────────────
+    type PendingJob = {
+      connectionId: string;
+      accountId: string;
+      since: string;
+      until: string;
+      reportRunId: string;
+    };
+
+    const allJobDefs: Array<{
       connectionId: string;
       accountId: string;
       since: string;
@@ -357,97 +413,93 @@ export class MetaAdsService {
     for (const { connectionId, accountIds } of targets) {
       for (const accountId of accountIds) {
         for (const chunk of chunks) {
-          jobs.push({
-            connectionId,
-            accountId,
-            since: chunk.since,
-            until: chunk.until,
-          });
+          allJobDefs.push({ connectionId, accountId, since: chunk.since, until: chunk.until });
         }
       }
     }
 
-    let totalRecords = 0;
-    let failedCount = 0;
-    let doneCount = 0;
-    const queue = [...jobs];
-    const CONCURRENCY = 5;
+    execution.metadata = { totalJobs: allJobDefs.length, doneJobs: 0, logs: [] };
+    await this.executionRepo.save(execution);
 
-    this.logger.log(
-      `[BulkInsights ${execution.id}] Iniciando: ${jobs.length} jobs, ${Math.min(CONCURRENCY, jobs.length)} workers`,
-    );
+    await appendLog('info', `Fase 1: disparando ${allJobDefs.length} jobs na Meta...`);
 
-    const workers = Array.from(
-      { length: Math.min(CONCURRENCY, jobs.length) },
-      async () => {
-        while (queue.length > 0) {
-          if (this.abortRequests.has(execution.id)) {
-            this.logger.warn(
-              `[BulkInsights ${execution.id}] Worker detectou sinal de abort — parando`,
-            );
-            break;
-          }
+    const pending: PendingJob[] = [];
+    const startErrors: string[] = [];
 
-          const job = queue.shift();
-          if (!job) break;
-
-          const label = `conta=${job.accountId} [${job.since}→${job.until}]`;
-          this.logger.log(`[BulkInsights ${execution.id}] Iniciando job: ${label}`);
-
-          try {
-            const { report_run_id } = await this.jobService.startInsightsJob({
-              connectionId: job.connectionId,
-              nodeId: `act_${job.accountId}`,
-              fields: defaultFields,
-              level: opts.level,
-              since: job.since,
-              until: job.until,
-              breakdowns: opts.breakdowns,
-            });
-
-            this.logger.log(
-              `[BulkInsights ${execution.id}] Job Meta criado: ${report_run_id} — aguardando...`,
-            );
-
-            const rows = await this.jobService.waitForJobAndFetch({
-              connectionId: job.connectionId,
-              reportRunId: report_run_id,
-              maxWaitMs: 180_000, // 3 min por job; chunks de 30 dias raramente precisam mais
-            });
-
-            const saved = await this.processor.saveInsights(
-              job.accountId,
-              rows,
-            );
-            totalRecords += saved;
-            doneCount++;
-            execution.records_processed = totalRecords;
-            await this.executionRepo.save(execution);
-            this.logger.log(
-              `[BulkInsights ${execution.id}] ✓ ${label}: ${saved} registros salvos | progresso: ${doneCount}/${jobs.length} jobs, ${totalRecords} total`,
-            );
-          } catch (err: unknown) {
-            failedCount++;
-            doneCount++;
-            const msg = err instanceof Error ? err.message : String(err);
-            this.logger.error(
-              `[BulkInsights ${execution.id}] ✗ ${label}: ${msg} | progresso: ${doneCount}/${jobs.length} jobs`,
-            );
-          }
+    await Promise.all(
+      allJobDefs.map(async (def) => {
+        const label = `${def.accountId} [${def.since}→${def.until}]`;
+        try {
+          const { report_run_id } = await this.jobService.startInsightsJob({
+            connectionId: def.connectionId,
+            nodeId: `act_${def.accountId}`,
+            fields: defaultFields,
+            level: opts.level,
+            since: def.since,
+            until: def.until,
+            breakdowns: opts.breakdowns,
+          });
+          pending.push({ ...def, reportRunId: report_run_id });
+          await appendLog('info', `Iniciando job: ${label}`);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          startErrors.push(label);
+          await appendLog('error', `${label}: falha ao criar job — ${msg}`);
         }
-      },
+      }),
     );
 
-    await Promise.all(workers);
+    failedCount += startErrors.length;
+    doneCount += startErrors.length;
 
-    const wasAborted = this.abortRequests.delete(execution.id);
+    await appendLog(
+      'info',
+      `Fase 1 concluída: ${pending.length} jobs criados, ${startErrors.length} falhas`,
+    );
 
+    if (pending.length === 0 || this.abortRequests.has(execution.id)) {
+      this.abortRequests.delete(execution.id);
+      await this.finalizeExecution(execution, totalRecords, failedCount, allJobDefs.length, true, logBuffer);
+      return;
+    }
+
+    // Salva jobs pendentes no metadata — o cron vai monitorar a partir daqui
+    execution.records_processed = totalRecords;
+    execution.metadata = {
+      totalJobs: allJobDefs.length,
+      doneJobs: doneCount,
+      failedCount,
+      totalRecords,
+      logs: [...logBuffer],
+      pendingJobs: pending,
+    };
+    await this.executionRepo.save(execution);
+
+    await appendLog(
+      'info',
+      `${pending.length} jobs pendentes salvos no banco — cron vai monitorar a cada 30s`,
+    );
+  }
+
+  private async finalizeExecution(
+    execution: MetaSyncExecution,
+    totalRecords: number,
+    failedCount: number,
+    totalJobs: number,
+    wasAborted: boolean,
+    logBuffer: string[],
+  ): Promise<void> {
     execution.finished_at = new Date();
     execution.records_processed = totalRecords;
-
-    this.logger.log(
-      `[BulkInsights ${execution.id}] Finalizado: ${totalRecords} registros, ${failedCount} falhas, abortado=${wasAborted}`,
-    );
+    execution.metadata = {
+      ...(execution.metadata ?? {}),
+      totalJobs,
+      doneJobs: totalJobs - failedCount,
+      failedCount,
+      totalRecords,
+      logs: [...logBuffer],
+      pendingJobs: [],
+    };
 
     if (wasAborted) {
       execution.status = 'aborted';
@@ -456,13 +508,145 @@ export class MetaAdsService {
       execution.status = 'completed';
     } else if (totalRecords > 0) {
       execution.status = 'partial';
-      execution.error_message = `${failedCount} de ${jobs.length} jobs falharam`;
+      execution.error_message = `${failedCount} de ${totalJobs} jobs falharam`;
     } else {
       execution.status = 'failed';
-      execution.error_message = `Todos os ${jobs.length} jobs falharam`;
+      execution.error_message = `Todos os ${totalJobs} jobs falharam`;
     }
 
     await this.executionRepo.save(execution);
+  }
+
+  // ─── Cron: polling de jobs bulk async pendentes ───────────────────────────
+
+  async pollRunningBulkJobs(): Promise<void> {
+    const running = await this.executionRepo.find({
+      where: { status: 'running', step: 'insights' } as FindOptionsWhere<MetaSyncExecution>,
+    });
+
+    for (const execution of running) {
+      const pending = execution.metadata?.pendingJobs as BulkPendingJob[] | undefined;
+      if (!pending || pending.length === 0) continue;
+      if (this.pollingExecutions.has(execution.id)) continue;
+
+      this.pollingExecutions.add(execution.id);
+      void this.processPendingJobs(execution).finally(() => {
+        this.pollingExecutions.delete(execution.id);
+      });
+    }
+  }
+
+  private async processPendingJobs(execution: MetaSyncExecution): Promise<void> {
+    try {
+    this.logger.log(`[BulkInsights ${execution.id}] Cron tick: verificando ${((execution.metadata?.pendingJobs as unknown[]) ?? []).length} jobs pendentes`);
+    const meta = execution.metadata!;
+    const pendingJobs = (meta.pendingJobs ?? []) as BulkPendingJob[];
+    let totalRecords = ((meta.totalRecords as number) ?? 0);
+    let failedCount = ((meta.failedCount as number) ?? 0);
+    let doneCount = ((meta.doneJobs as number) ?? 0);
+    const totalJobs = ((meta.totalJobs as number) ?? pendingJobs.length);
+    const logBuffer = [...((meta.logs as string[]) ?? [])];
+    const MAX_LOG_ENTRIES = 200;
+
+    const ts = () => new Date().toISOString().slice(11, 19);
+    const appendLog = (level: 'info' | 'error', msg: string) => {
+      const entry = `[${ts()}] ${level === 'error' ? '✗' : '✓'} ${msg}`;
+      logBuffer.push(entry);
+      if (logBuffer.length > MAX_LOG_ENTRIES) logBuffer.shift();
+      if (level === 'error') {
+        this.logger.error(`[BulkInsights ${execution.id}] ${msg}`);
+      } else {
+        this.logger.log(`[BulkInsights ${execution.id}] ${msg}`);
+      }
+    };
+
+    const stillPending: BulkPendingJob[] = [];
+
+    const checks = await Promise.allSettled(
+      pendingJobs.map(async (job) => {
+        const status = await this.jobService.checkJob({
+          connectionId: job.connectionId,
+          reportRunId: job.reportRunId,
+        });
+        return { job, status };
+      }),
+    );
+
+    for (let i = 0; i < checks.length; i++) {
+      const check = checks[i];
+      const job = pendingJobs[i];
+      const label = `${job.accountId} [${job.since}→${job.until}]`;
+
+      if (check.status === 'rejected') {
+        stillPending.push(job);
+        continue;
+      }
+
+      const { status } = check.value;
+
+      if (status.async_status === 'Job Complete' || status.async_status === 'Job Completed') {
+        try {
+          const rows = await this.jobService.getJobResults({
+            connectionId: job.connectionId,
+            reportRunId: job.reportRunId,
+          });
+          const saved = await this.processor.saveInsights(job.accountId, rows);
+          totalRecords += saved;
+          doneCount++;
+          appendLog('info', `${label}: ${saved} registros — ${doneCount}/${totalJobs} concluídos`);
+        } catch (err: unknown) {
+          failedCount++;
+          doneCount++;
+          appendLog('error', `${label}: erro ao buscar resultados — ${err instanceof Error ? err.message : String(err)}`);
+        }
+      } else if (
+        status.async_status === 'Job Failed' ||
+        status.async_status === 'Job Skipped'
+      ) {
+        failedCount++;
+        doneCount++;
+        appendLog('error', `${label}: ${status.async_status}`);
+      } else {
+        stillPending.push({ ...job, pct: status.async_percent_completion });
+        if (status.async_percent_completion === 100) {
+          appendLog('info', `${label}: 100% mas status="${status.async_status}" — aguardando transição`);
+        }
+      }
+    }
+
+    const updatedMeta = {
+      ...meta,
+      totalJobs,
+      doneJobs: doneCount,
+      failedCount,
+      totalRecords,
+      logs: [...logBuffer],
+      pendingJobs: stillPending,
+    };
+
+    if (stillPending.length === 0) {
+      execution.metadata = updatedMeta;
+      await this.finalizeExecution(execution, totalRecords, failedCount, totalJobs, false, logBuffer);
+    } else {
+      execution.records_processed = totalRecords;
+      execution.metadata = updatedMeta;
+      await this.executionRepo.save(execution);
+
+      const pcts = (stillPending as Array<{ pct?: number }>)
+        .map((j) => j.pct ?? 0);
+      const avgPct = Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length);
+      const minPct = Math.min(...pcts);
+      const maxPct = Math.max(...pcts);
+      appendLog(
+        'info',
+        `${stillPending.length}/${totalJobs} jobs pendentes — progresso: min=${minPct}% avg=${avgPct}% max=${maxPct}% — próxima verificação em 30s`,
+      );
+    }
+    } catch (err: unknown) {
+      this.logger.error(
+        `[BulkInsights ${execution.id}] processPendingJobs error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   private async runInsightsExecution(

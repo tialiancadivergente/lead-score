@@ -55,10 +55,10 @@ export class UpsertLaunchDashboardConfigDto {
   targetConsciousnessRate?: number;
 
   @ApiPropertyOptional({
-    description: 'Meta de taxa "conhece Elton" (0 a 1)',
+    description: 'Meta de taxa "conhece o especialista" (0 a 1)',
     example: 0.25,
   })
-  targetKnowsEltonRate?: number;
+  targetKnowsExpertRate?: number;
 
   @ApiPropertyOptional({
     description: 'Meta de taxa "conhece Aliança" (0 a 1)',
@@ -79,14 +79,14 @@ export class UpsertLaunchDashboardConfigDto {
   positiveOptionKeyConsciousness?: string;
 
   @ApiPropertyOptional({
-    description: 'question_key da pergunta "conhece o Elton?"',
+    description: 'question_key da pergunta "conhece o especialista?"',
   })
-  questionKeyKnowsElton?: string;
+  questionKeyKnowsExpert?: string;
 
   @ApiPropertyOptional({
-    description: 'option_key da opção positiva para "conhece Elton"',
+    description: 'option_key da opção positiva para "conhece especialista"',
   })
-  positiveOptionKeyKnowsElton?: string;
+  positiveOptionKeyKnowsExpert?: string;
 
   @ApiPropertyOptional({
     description: 'question_key da pergunta "conhece a Aliança?"',

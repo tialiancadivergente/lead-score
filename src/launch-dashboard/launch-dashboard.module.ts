@@ -4,6 +4,7 @@ import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { Capture } from '../database/entities/capture/capture.entity';
 import { FormAnswer } from '../database/entities/form/form-answer.entity';
 import { FormResponse } from '../database/entities/form/form-response.entity';
+import { Question } from '../database/entities/form/question.entity';
 import { QuestionOption } from '../database/entities/form/question-option.entity';
 import { HotmartProduct } from '../database/entities/hotmart/hotmart-product.entity';
 import { HotmartSale } from '../database/entities/hotmart/hotmart-sale.entity';
@@ -25,6 +26,7 @@ import { LaunchDashboardService } from './launch-dashboard.service';
       LaunchDashboardConfig,
       FormResponse,
       FormAnswer,
+      Question,
       QuestionOption,
       LeadscoreResult,
     ]),
