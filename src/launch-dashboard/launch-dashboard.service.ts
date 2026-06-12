@@ -598,9 +598,12 @@ export class LaunchDashboardService {
       qb.andWhere('p.report_date <= :dateTo', { dateTo: query.dateTo });
     }
     if (query.externalAccountId) {
-      qb.andWhere('p.external_account_id = :externalAccountId', {
-        externalAccountId: query.externalAccountId,
-      });
+      const ids = query.externalAccountId.split(',').map((s) => s.trim()).filter(Boolean);
+      if (ids.length === 1) {
+        qb.andWhere('p.external_account_id = :externalAccountId', { externalAccountId: ids[0] });
+      } else if (ids.length > 1) {
+        qb.andWhere('p.external_account_id IN (:...externalAccountIds)', { externalAccountIds: ids });
+      }
     }
     if (query.externalCampaignId) {
       qb.andWhere('p.external_campaign_id = :externalCampaignId', {
