@@ -53,6 +53,8 @@ export class LaunchDashboardService {
     private readonly formResponseRepo: Repository<FormResponse>,
     @InjectRepository(FormAnswer)
     private readonly formAnswerRepo: Repository<FormAnswer>,
+    @InjectRepository(Question)
+    private readonly questionRepo: Repository<Question>,
     @InjectRepository(QuestionOption)
     private readonly questionOptionRepo: Repository<QuestionOption>,
     @InjectRepository(LeadscoreResult)
@@ -97,61 +99,91 @@ export class LaunchDashboardService {
       dto.targetSurveyResponseRate ?? config.target_survey_response_rate;
     config.target_consciousness_rate =
       dto.targetConsciousnessRate ?? config.target_consciousness_rate;
-    config.target_knows_elton_rate =
-      dto.targetKnowsEltonRate ?? config.target_knows_elton_rate;
+    config.target_knows_expert_rate =
+      dto.targetKnowsExpertRate ?? config.target_knows_expert_rate;
     config.target_knows_alliance_rate =
       dto.targetKnowsAllianceRate ?? config.target_knows_alliance_rate;
 
-    config.question_key_consciousness =
-      dto.questionKeyConsciousness ?? config.question_key_consciousness;
-    config.positive_option_key_consciousness =
-      dto.positiveOptionKeyConsciousness ??
-      config.positive_option_key_consciousness;
-    config.question_key_knows_elton =
-      dto.questionKeyKnowsElton ?? config.question_key_knows_elton;
-    config.positive_option_key_knows_elton =
-      dto.positiveOptionKeyKnowsElton ?? config.positive_option_key_knows_elton;
-    config.question_key_knows_alliance =
-      dto.questionKeyKnowsAlliance ?? config.question_key_knows_alliance;
-    config.positive_option_key_knows_alliance =
-      dto.positiveOptionKeyKnowsAlliance ??
-      config.positive_option_key_knows_alliance;
+    // Usa !== undefined em vez de ?? para permitir que null limpe o valor existente.
+    // undefined = "campo não enviado, mantém o existente"
+    // null = "campo enviado como vazio, limpa no banco"
+    if (dto.questionKeyConsciousness !== undefined)
+      config.question_key_consciousness = dto.questionKeyConsciousness;
+    if (dto.positiveOptionKeyConsciousness !== undefined)
+      config.positive_option_key_consciousness = dto.positiveOptionKeyConsciousness;
+    if (dto.questionKeyKnowsExpert !== undefined)
+      config.question_key_knows_expert = dto.questionKeyKnowsExpert;
+    if (dto.positiveOptionKeyKnowsExpert !== undefined)
+      config.positive_option_key_knows_expert = dto.positiveOptionKeyKnowsExpert;
+    if (dto.questionKeyKnowsAlliance !== undefined)
+      config.question_key_knows_alliance = dto.questionKeyKnowsAlliance;
+    if (dto.positiveOptionKeyKnowsAlliance !== undefined)
+      config.positive_option_key_knows_alliance = dto.positiveOptionKeyKnowsAlliance;
 
     return this.configRepo.save(config);
   }
 
   // ─── Available questions ──────────────────────────────────────────────────
 
-  async getAvailableQuestions() {
-    const rows = await this.questionOptionRepo
-      .createQueryBuilder('qo')
-      .innerJoinAndSelect('qo.question', 'q')
+  async getAvailableQuestions(launchId?: string, seasonId?: string) {
+    const qb = this.questionRepo
+      .createQueryBuilder('q')
+      .innerJoin('q.form', 'f')
+      .leftJoin(QuestionOption, 'qo', 'qo.question_id = q.id')
+      .select([
+        'q.question_key AS "questionKey"',
+        'q.question_text AS "questionText"',
+        'q.input_type AS "inputType"',
+        'qo.option_key AS "optionKey"',
+        'qo.option_text AS "optionText"',
+        'qo.display_order AS "displayOrder"',
+      ])
       .orderBy('q.question_key', 'ASC')
-      .addOrderBy('qo.display_order', 'ASC')
-      .getMany();
+      .addOrderBy('qo.display_order', 'ASC');
+
+    if (launchId) {
+      qb.andWhere('f.launch_id = :launchId', { launchId });
+    }
+    if (seasonId) {
+      qb.andWhere('f.season_id = :seasonId', { seasonId });
+    }
+
+    const rows = await qb.getRawMany<{
+      questionKey: string;
+      questionText: string | null;
+      inputType: string | null;
+      optionKey: string | null;
+      optionText: string | null;
+    }>();
 
     const map = new Map<
       string,
       {
         questionKey: string;
         questionText: string | null;
+        inputType: string | null;
         options: { optionKey: string; optionText: string | null }[];
       }
     >();
+    const seenOptions = new Map<string, Set<string>>();
 
-    for (const opt of rows) {
-      const key = opt.question.question_key;
-      if (!map.has(key)) {
-        map.set(key, {
-          questionKey: key,
-          questionText: opt.question.question_text ?? null,
+    for (const row of rows) {
+      if (!map.has(row.questionKey)) {
+        map.set(row.questionKey, {
+          questionKey: row.questionKey,
+          questionText: row.questionText,
+          inputType: row.inputType,
           options: [],
         });
+        seenOptions.set(row.questionKey, new Set());
       }
-      map.get(key)!.options.push({
-        optionKey: opt.option_key,
-        optionText: opt.option_text ?? null,
-      });
+      if (row.optionKey && !seenOptions.get(row.questionKey)!.has(row.optionKey)) {
+        seenOptions.get(row.questionKey)!.add(row.optionKey);
+        map.get(row.questionKey)!.options.push({
+          optionKey: row.optionKey,
+          optionText: row.optionText,
+        });
+      }
     }
 
     return Array.from(map.values());
@@ -267,7 +299,7 @@ export class LaunchDashboardService {
     const surveyResponseRate =
       totalLeads > 0 ? Number((totalResponses / totalLeads).toFixed(6)) : null;
 
-    const [consciousnessCount, knowsEltonCount, knowsAllianceCount] =
+    const [consciousnessCount, knowsExpertCount, knowsAllianceCount] =
       await Promise.all([
         config?.question_key_consciousness
           ? this.queryPositiveAnswerCount(
@@ -276,11 +308,11 @@ export class LaunchDashboardService {
               config.positive_option_key_consciousness,
             )
           : Promise.resolve(null),
-        config?.question_key_knows_elton
+        config?.question_key_knows_expert
           ? this.queryPositiveAnswerCount(
               query,
-              config.question_key_knows_elton,
-              config.positive_option_key_knows_elton,
+              config.question_key_knows_expert,
+              config.positive_option_key_knows_expert,
             )
           : Promise.resolve(null),
         config?.question_key_knows_alliance
@@ -302,11 +334,11 @@ export class LaunchDashboardService {
       totalFormResponses: totalResponses,
       surveyResponseRate,
       consciousnessRate: rate(consciousnessCount),
-      knowsEltonRate: rate(knowsEltonCount),
+      knowsExpertRate: rate(knowsExpertCount),
       knowsAllianceRate: rate(knowsAllianceCount),
       configured: {
         consciousness: !!config?.question_key_consciousness,
-        knowsElton: !!config?.question_key_knows_elton,
+        knowsExpert: !!config?.question_key_knows_expert,
         knowsAlliance: !!config?.question_key_knows_alliance,
       },
     };
@@ -349,9 +381,9 @@ export class LaunchDashboardService {
         'qo.id = fa.option_id AND qo.option_key = :optionKey',
         { optionKey: positiveOptionKey },
       );
-    } else {
-      qb.andWhere('fa.answer_bool = true');
     }
+    // sem positiveOptionKey: conta qualquer form_response que tenha uma linha de form_answer
+    // para essa question_key — a existência da linha já indica que o lead respondeu
 
     this.applyFormResponseFilters(qb, query);
 

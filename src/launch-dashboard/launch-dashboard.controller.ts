@@ -7,6 +7,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+
 import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { LaunchDashboardQueryDto } from './dto/launch-dashboard-query.dto';
@@ -56,9 +57,14 @@ export class LaunchDashboardController {
     summary:
       'Lista perguntas disponíveis e suas opções para configuração de consciência',
   })
+  @ApiQuery({ name: 'launchId', required: false })
+  @ApiQuery({ name: 'seasonId', required: false })
   @Get('available-questions')
-  getAvailableQuestions() {
-    return this.service.getAvailableQuestions();
+  getAvailableQuestions(
+    @Query('launchId') launchId?: string,
+    @Query('seasonId') seasonId?: string,
+  ) {
+    return this.service.getAvailableQuestions(launchId, seasonId);
   }
 
   // ─── Summary ──────────────────────────────────────────────────────────────
