@@ -450,6 +450,25 @@ export class LaunchDashboardService {
     };
   }
 
+  // ─── Ad accounts ──────────────────────────────────────────────────────────
+
+  async getAdAccounts(query: LaunchDashboardQueryDto) {
+    const qb = this.perfRepo.createQueryBuilder('p');
+    this.applyMediaFilters(qb, query);
+
+    const rows = await qb
+      .select('p.external_account_id', 'externalAccountId')
+      .addSelect('MAX(p.account_name)', 'accountName')
+      .groupBy('p.external_account_id')
+      .orderBy('MAX(p.account_name)', 'ASC')
+      .getRawMany<{ externalAccountId: string; accountName: string | null }>();
+
+    return rows.map((r) => ({
+      externalAccountId: r.externalAccountId,
+      accountName: r.accountName ?? r.externalAccountId,
+    }));
+  }
+
   // ─── Media queries ────────────────────────────────────────────────────────
 
   private async queryMediaAggregated(

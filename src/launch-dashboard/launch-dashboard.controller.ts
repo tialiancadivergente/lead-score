@@ -67,6 +67,16 @@ export class LaunchDashboardController {
     return this.service.getAvailableQuestions(launchId, seasonId);
   }
 
+  // ─── Ad accounts ─────────────────────────────────────────────────────────
+
+  @ApiOperation({ summary: 'Lista contas de anúncio com dados no período' })
+  @ApiQuery({ name: 'dateFrom', required: false })
+  @ApiQuery({ name: 'dateTo', required: false })
+  @Get('ad-accounts')
+  getAdAccounts(@Query() query: LaunchDashboardQueryDto) {
+    return this.service.getAdAccounts(query);
+  }
+
   // ─── Summary ──────────────────────────────────────────────────────────────
 
   @ApiOperation({ summary: 'KPIs agregados do funil de lançamento' })
