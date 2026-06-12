@@ -19,6 +19,7 @@ import { HotmartModule } from './hotmart/hotmart.module';
 import { MetaAdsModule } from './meta-ads/meta-ads.module';
 import { LaunchDashboardModule } from './launch-dashboard/launch-dashboard.module';
 import { InleadWebhookModule } from './inlead-webhook/inlead-webhook.module';
+import { PageModule } from './page/page.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { InleadWebhookModule } from './inlead-webhook/inlead-webhook.module';
     MetaAdsModule,
     LaunchDashboardModule,
     InleadWebhookModule,
+    PageModule,
   ],
   controllers: [AppController],
   providers: [AppService],
