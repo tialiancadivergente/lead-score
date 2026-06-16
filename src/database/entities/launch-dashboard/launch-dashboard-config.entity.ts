@@ -66,6 +66,17 @@ export class LaunchDashboardConfig {
   })
   target_knows_alliance_rate?: number;
 
+  // ─── Notificação / Monitoramento ─────────────────────────────────────────
+
+  @Column({ type: 'varchar', name: 'notification_metric', length: 50, nullable: true })
+  notification_metric?: string;
+
+  @Column({ type: 'date', name: 'notification_date_from', nullable: true })
+  notification_date_from?: string;
+
+  @Column({ type: 'date', name: 'notification_date_to', nullable: true })
+  notification_date_to?: string;
+
   // ─── Question keys para métricas de consciência ───────────────────────────
 
   @Column({ type: 'text', name: 'question_key_consciousness', nullable: true })

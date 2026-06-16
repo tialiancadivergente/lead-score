@@ -58,7 +58,6 @@ import { Page } from './page/page.entity';
 import { PageHeadline } from './page/page-headline.entity';
 import { PageTemperature } from './page/page-temperature.entity';
 import { PageVersion } from './page/page-version.entity';
-
 export const ENTITIES = [
   Person,
   IdentifierType,

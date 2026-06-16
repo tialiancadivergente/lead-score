@@ -97,4 +97,18 @@ export class UpsertLaunchDashboardConfigDto {
     description: 'option_key da opção positiva para "conhece Aliança"',
   })
   positiveOptionKeyKnowsAlliance?: string;
+
+  // ─── Notificação ──────────────────────────────────────────────────────────
+
+  @ApiPropertyOptional({
+    description: 'Métrica a monitorar (CPL, SPEND, LEADS, CTR, CPC, CONNECT_RATE, PAGE_CONVERSION)',
+    example: 'CPL',
+  })
+  notificationMetric?: string | null;
+
+  @ApiPropertyOptional({ description: 'Data inicial do período (YYYY-MM-DD)', example: '2026-06-01' })
+  notificationDateFrom?: string | null;
+
+  @ApiPropertyOptional({ description: 'Data final do período (YYYY-MM-DD)', example: '2026-06-16' })
+  notificationDateTo?: string | null;
 }

@@ -120,7 +120,115 @@ export class LaunchDashboardService {
     if (dto.positiveOptionKeyKnowsAlliance !== undefined)
       config.positive_option_key_knows_alliance = dto.positiveOptionKeyKnowsAlliance;
 
+    if (dto.notificationMetric !== undefined)
+      config.notification_metric = dto.notificationMetric ?? undefined;
+    if (dto.notificationDateFrom !== undefined)
+      config.notification_date_from = dto.notificationDateFrom ?? undefined;
+    if (dto.notificationDateTo !== undefined)
+      config.notification_date_to = dto.notificationDateTo ?? undefined;
+
     return this.configRepo.save(config);
+  }
+
+  // ─── Notifications ────────────────────────────────────────────────────────
+
+  async getNotifications() {
+    const configs = await this.configRepo
+      .createQueryBuilder('c')
+      .innerJoin(Launch, 'l', 'l.id = c.launch_id')
+      .select('c.launch_id', 'launchId')
+      .addSelect('l.name', 'launchName')
+      .addSelect('c.notification_metric', 'metric')
+      .addSelect('c.notification_date_from', 'dateFrom')
+      .addSelect('c.notification_date_to', 'dateTo')
+      .addSelect('c.target_cpl', 'targetCpl')
+      .addSelect('c.target_spend', 'targetSpend')
+      .addSelect('c.target_leads', 'targetLeads')
+      .addSelect('c.target_ctr', 'targetCtr')
+      .addSelect('c.target_cpc', 'targetCpc')
+      .addSelect('c.target_connect_rate', 'targetConnectRate')
+      .addSelect('c.target_page_conversion', 'targetPageConversion')
+      .where('c.notification_metric IS NOT NULL')
+      .andWhere('c.notification_date_from IS NOT NULL')
+      .andWhere('c.notification_date_to IS NOT NULL')
+      .getRawMany<{
+        launchId: string;
+        launchName: string;
+        metric: string;
+        dateFrom: string;
+        dateTo: string;
+        targetCpl: string | null;
+        targetSpend: string | null;
+        targetLeads: string | null;
+        targetCtr: string | null;
+        targetCpc: string | null;
+        targetConnectRate: string | null;
+        targetPageConversion: string | null;
+      }>();
+
+    const toDateStr = (v: unknown): string => {
+      if (v instanceof Date) return v.toISOString().slice(0, 10);
+      return String(v);
+    };
+
+    const results = await Promise.all(
+      configs.map(async (cfg) => {
+        const query = {
+          launchId: cfg.launchId,
+          dateFrom: toDateStr(cfg.dateFrom),
+          dateTo: toDateStr(cfg.dateTo),
+        } as import('./dto/launch-dashboard-query.dto').LaunchDashboardQueryDto;
+
+        const [media, leadsCount] = await Promise.all([
+          this.queryMediaAggregated(query),
+          this.queryLeadsCount(query),
+        ]);
+
+        const summary = this.buildSummaryMetrics(media, leadsCount, { sales: 0, revenue: 0 });
+
+        const n = (v: string | null) => (v != null ? Number(v) : null);
+        const targetMap: Record<string, number | null> = {
+          CPL: n(cfg.targetCpl),
+          SPEND: n(cfg.targetSpend),
+          LEADS: n(cfg.targetLeads),
+          CTR: n(cfg.targetCtr),
+          CPC: n(cfg.targetCpc),
+          CONNECT_RATE: n(cfg.targetConnectRate),
+          PAGE_CONVERSION: n(cfg.targetPageConversion),
+        };
+
+        const valueMap: Record<string, number | null> = {
+          CPL: summary.cpl,
+          SPEND: summary.spend,
+          LEADS: summary.leads,
+          CTR: summary.ctr,
+          CPC: summary.cpc,
+          CONNECT_RATE: summary.connectRate,
+          PAGE_CONVERSION: summary.txPgvCheckout,
+        };
+
+        const currentValue = valueMap[cfg.metric] ?? null;
+        const targetValue = targetMap[cfg.metric] ?? null;
+        const pctDiff =
+          targetValue && currentValue !== null && targetValue !== 0
+            ? ((currentValue - targetValue) / targetValue) * 100
+            : null;
+
+        return {
+          launchId: cfg.launchId,
+          launchName: cfg.launchName,
+          metric: cfg.metric,
+          dateFrom: toDateStr(cfg.dateFrom),
+          dateTo: toDateStr(cfg.dateTo),
+          currentValue,
+          targetValue,
+          pctDiff,
+          summary,
+        };
+      }),
+    );
+
+    return results;
   }
 
   // ─── Available questions ──────────────────────────────────────────────────

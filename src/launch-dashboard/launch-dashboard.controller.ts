@@ -51,6 +51,14 @@ export class LaunchDashboardController {
     return this.service.upsertConfig(launchId, dto);
   }
 
+  // ─── Notifications ───────────────────────────────────────────────────────
+
+  @ApiOperation({ summary: 'Lista todos os monitoramentos configurados com métricas atuais' })
+  @Get('notifications')
+  getNotifications() {
+    return this.service.getNotifications();
+  }
+
   // ─── Available questions ──────────────────────────────────────────────────
 
   @ApiOperation({
