@@ -120,12 +120,16 @@ export class LaunchDashboardService {
     if (dto.positiveOptionKeyKnowsAlliance !== undefined)
       config.positive_option_key_knows_alliance = dto.positiveOptionKeyKnowsAlliance;
 
-    if (dto.notificationMetric !== undefined)
-      config.notification_metric = dto.notificationMetric ?? undefined;
+    if (dto.notificationMetrics !== undefined) {
+      config.notification_metrics =
+        dto.notificationMetrics && dto.notificationMetrics.length > 0
+          ? dto.notificationMetrics.join(',')
+          : null;
+    }
     if (dto.notificationDateFrom !== undefined)
-      config.notification_date_from = dto.notificationDateFrom ?? undefined;
+      config.notification_date_from = dto.notificationDateFrom;
     if (dto.notificationDateTo !== undefined)
-      config.notification_date_to = dto.notificationDateTo ?? undefined;
+      config.notification_date_to = dto.notificationDateTo;
 
     return this.configRepo.save(config);
   }
@@ -138,7 +142,7 @@ export class LaunchDashboardService {
       .innerJoin(Launch, 'l', 'l.id = c.launch_id')
       .select('c.launch_id', 'launchId')
       .addSelect('l.name', 'launchName')
-      .addSelect('c.notification_metric', 'metric')
+      .addSelect('c.notification_metrics', 'metrics')
       .addSelect('c.notification_date_from', 'dateFrom')
       .addSelect('c.notification_date_to', 'dateTo')
       .addSelect('c.target_cpl', 'targetCpl')
@@ -148,15 +152,15 @@ export class LaunchDashboardService {
       .addSelect('c.target_cpc', 'targetCpc')
       .addSelect('c.target_connect_rate', 'targetConnectRate')
       .addSelect('c.target_page_conversion', 'targetPageConversion')
-      .where('c.notification_metric IS NOT NULL')
+      .where('c.notification_metrics IS NOT NULL')
       .andWhere('c.notification_date_from IS NOT NULL')
       .andWhere('c.notification_date_to IS NOT NULL')
       .getRawMany<{
         launchId: string;
         launchName: string;
-        metric: string;
-        dateFrom: string;
-        dateTo: string;
+        metrics: string;
+        dateFrom: unknown;
+        dateTo: unknown;
         targetCpl: string | null;
         targetSpend: string | null;
         targetLeads: string | null;
@@ -207,28 +211,34 @@ export class LaunchDashboardService {
           PAGE_CONVERSION: summary.txPgvCheckout,
         };
 
-        const currentValue = valueMap[cfg.metric] ?? null;
-        const targetValue = targetMap[cfg.metric] ?? null;
-        const pctDiff =
-          targetValue && currentValue !== null && targetValue !== 0
-            ? ((currentValue - targetValue) / targetValue) * 100
-            : null;
+        const metricKeys = cfg.metrics
+          ? cfg.metrics.split(',').filter(Boolean)
+          : [];
 
-        return {
-          launchId: cfg.launchId,
-          launchName: cfg.launchName,
-          metric: cfg.metric,
-          dateFrom: toDateStr(cfg.dateFrom),
-          dateTo: toDateStr(cfg.dateTo),
-          currentValue,
-          targetValue,
-          pctDiff,
-          summary,
-        };
+        return metricKeys.map((metric) => {
+          const currentValue = valueMap[metric] ?? null;
+          const targetValue = targetMap[metric] ?? null;
+          const pctDiff =
+            targetValue && currentValue !== null && targetValue !== 0
+              ? ((currentValue - targetValue) / targetValue) * 100
+              : null;
+
+          return {
+            launchId: cfg.launchId,
+            launchName: cfg.launchName,
+            metric,
+            dateFrom: toDateStr(cfg.dateFrom),
+            dateTo: toDateStr(cfg.dateTo),
+            currentValue,
+            targetValue,
+            pctDiff,
+            summary,
+          };
+        });
       }),
     );
 
-    return results;
+    return results.flat();
   }
 
   // ─── Available questions ──────────────────────────────────────────────────

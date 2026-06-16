@@ -67,15 +67,15 @@ export class LaunchDashboardConfig {
   target_knows_alliance_rate?: number;
 
   // ─── Notificação / Monitoramento ─────────────────────────────────────────
-
-  @Column({ type: 'varchar', name: 'notification_metric', length: 50, nullable: true })
-  notification_metric?: string;
+  // Stored as comma-separated metric keys, e.g. "CPL,SPEND,CTR"
+  @Column({ type: 'text', name: 'notification_metrics', nullable: true })
+  notification_metrics?: string | null;
 
   @Column({ type: 'date', name: 'notification_date_from', nullable: true })
-  notification_date_from?: string;
+  notification_date_from?: string | null;
 
   @Column({ type: 'date', name: 'notification_date_to', nullable: true })
-  notification_date_to?: string;
+  notification_date_to?: string | null;
 
   // ─── Question keys para métricas de consciência ───────────────────────────
 

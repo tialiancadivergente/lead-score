@@ -101,10 +101,10 @@ export class UpsertLaunchDashboardConfigDto {
   // ─── Notificação ──────────────────────────────────────────────────────────
 
   @ApiPropertyOptional({
-    description: 'Métrica a monitorar (CPL, SPEND, LEADS, CTR, CPC, CONNECT_RATE, PAGE_CONVERSION)',
-    example: 'CPL',
+    description: 'Métricas a monitorar (array de CPL, SPEND, LEADS, CTR, CPC, CONNECT_RATE, PAGE_CONVERSION)',
+    example: ['CPL', 'SPEND'],
   })
-  notificationMetric?: string | null;
+  notificationMetrics?: string[] | null;
 
   @ApiPropertyOptional({ description: 'Data inicial do período (YYYY-MM-DD)', example: '2026-06-01' })
   notificationDateFrom?: string | null;
