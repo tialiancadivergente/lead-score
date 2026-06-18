@@ -21,6 +21,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionGuard } from '../auth/guards/permission.guard';
 import { CreateSeasonDto } from './dto/create-season.dto';
 import { ListSeasonQueryDto } from './dto/list-season-query.dto';
 import { ListSeasonItemDto } from './dto/list-season-response.dto';
@@ -35,7 +38,8 @@ import { SeasonService } from './season.service';
   description:
     'API key interna. Obrigatoria quando API_KEY_ENABLED=true no backend.',
 })
-@UseGuards(ApiKeyGuard)
+@UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+@RequirePermission('season', 'view')
 @Controller('season')
 export class SeasonController {
   constructor(private readonly seasonService: SeasonService) {}
@@ -88,6 +92,7 @@ export class SeasonController {
   }
 
   @Post()
+  @RequirePermission('season', 'create')
   @ApiOperation({
     summary: 'Cadastra season',
     description: 'Cria uma season informando name, active e launch_id.',
@@ -111,6 +116,7 @@ export class SeasonController {
   }
 
   @Patch(':id')
+  @RequirePermission('season', 'update')
   @ApiOperation({
     summary: 'Edita season',
     description:
@@ -138,6 +144,7 @@ export class SeasonController {
   }
 
   @Delete(':id')
+  @RequirePermission('season', 'delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Remove season',

@@ -28,6 +28,10 @@ import { LeadscoreTier } from './leadscore/leadscore-tier.entity';
 import { LeadscoreTierRule } from './leadscore/leadscore-tier-rule.entity';
 import { Invite } from './system/invite.entity';
 import { PasswordReset } from './system/password-reset.entity';
+import { AuditLog } from './system/audit-log.entity';
+import { Permission } from './system/permission.entity';
+import { RefreshToken } from './system/refresh-token.entity';
+import { Role } from './system/role.entity';
 import { User } from './system/user.entity';
 import { OAuthConnection } from './integrations/oauth-connection.entity';
 import { OAuthState } from './integrations/oauth-state.entity';
@@ -103,7 +107,11 @@ export const ENTITIES = [
   MarketingSyncConfiguration,
 
   User,
+  Role,
+  Permission,
+  RefreshToken,
   PasswordReset,
+  AuditLog,
   Invite,
 
   VotingCampaign,

@@ -16,6 +16,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionGuard } from '../auth/guards/permission.guard';
 import {
   AdminVotingCampaignListItemDto,
   AdminVotingCampaignResponseDto,
@@ -38,12 +41,14 @@ import { VotingService } from './voting.service';
   description:
     'API key interna. Obrigatoria quando API_KEY_ENABLED=true no backend.',
 })
-@UseGuards(ApiKeyGuard)
+@UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+@RequirePermission('vote_campaigns', 'view')
 @Controller('v1/voting/admin')
 export class VotingAdminController {
   constructor(private readonly votingService: VotingService) {}
 
   @Post('campaigns')
+  @RequirePermission('vote_campaigns', 'create')
   @ApiOperation({ summary: 'Cria campanha de votacao' })
   @ApiBody({ type: CreateVotingCampaignDto })
   @ApiResponse({ status: 201, type: AdminVotingCampaignResponseDto })
@@ -63,6 +68,7 @@ export class VotingAdminController {
   }
 
   @Patch('campaigns/:campaignId')
+  @RequirePermission('vote_campaigns', 'update')
   @ApiOperation({ summary: 'Atualiza campanha' })
   @ApiBody({ type: UpdateVotingCampaignDto })
   @ApiResponse({ status: 200, type: AdminVotingCampaignResponseDto })
@@ -75,6 +81,7 @@ export class VotingAdminController {
   }
 
   @Post('campaigns/:campaignId/categories')
+  @RequirePermission('vote_campaigns', 'create')
   @ApiOperation({ summary: 'Cria categoria da campanha' })
   @ApiBody({ type: CreateVotingCategoryDto })
   @ApiResponse({ status: 201, type: AdminVotingCategoryResponseDto })
@@ -101,6 +108,7 @@ export class VotingAdminController {
   }
 
   @Patch('categories/:categoryId')
+  @RequirePermission('vote_campaigns', 'update')
   @ApiOperation({ summary: 'Atualiza categoria' })
   @ApiBody({ type: UpdateVotingCategoryDto })
   @ApiResponse({ status: 200, type: AdminVotingCategoryResponseDto })
@@ -113,6 +121,7 @@ export class VotingAdminController {
   }
 
   @Post('campaigns/:campaignId/candidates')
+  @RequirePermission('vote_campaigns', 'create')
   @ApiOperation({ summary: 'Cria candidato da campanha' })
   @ApiBody({ type: CreateVotingCandidateDto })
   @ApiResponse({ status: 201, type: AdminVotingCandidateResponseDto })
@@ -139,6 +148,7 @@ export class VotingAdminController {
   }
 
   @Patch('candidates/:candidateId')
+  @RequirePermission('vote_campaigns', 'update')
   @ApiOperation({ summary: 'Atualiza candidato' })
   @ApiBody({ type: UpdateVotingCandidateDto })
   @ApiResponse({ status: 200, type: AdminVotingCandidateResponseDto })

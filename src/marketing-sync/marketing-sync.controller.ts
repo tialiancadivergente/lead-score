@@ -25,13 +25,17 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionGuard } from '../auth/guards/permission.guard';
 import { MarketingExtractProcessorService } from './marketing-extract-processor.service';
 import { MarketingSyncConfigurationsQueryDto } from './dto/marketing-sync-configurations-query.dto';
 import { UpsertMarketingSyncConfigurationDto } from './dto/upsert-marketing-sync-configuration.dto';
 import { MarketingSyncService } from './marketing-sync.service';
 
 @ApiTags('marketing-sync')
-@UseGuards(ApiKeyGuard)
+@UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+@RequirePermission('marketing_sync', 'view')
 @Controller('marketing-sync')
 export class MarketingSyncController {
   constructor(
@@ -67,6 +71,7 @@ export class MarketingSyncController {
       'Payload invalido. syncKey e obrigatorio e scheduleIntervalMinutes deve ser inteiro > 0.',
   })
   @Post('configurations')
+  @RequirePermission('marketing_sync_config', 'update')
   upsertConfiguration(@Body() body: UpsertMarketingSyncConfigurationDto) {
     return this.marketingSyncService.upsertConfiguration(body);
   }
@@ -81,6 +86,7 @@ export class MarketingSyncController {
   })
   @ApiOkResponse({ description: 'Contas sincronizadas com sucesso.' })
   @Post('accounts/refresh')
+  @RequirePermission('marketing_sync', 'create')
   refreshAccounts(@Query('provider') provider?: string) {
     return this.marketingSyncService.refreshAccountsForProvider(provider);
   }
@@ -90,6 +96,7 @@ export class MarketingSyncController {
   })
   @ApiOkResponse({ description: 'Conexao sincronizada com sucesso.' })
   @Post('connections/:connectionId/accounts/refresh')
+  @RequirePermission('marketing_sync', 'create')
   refreshAccountsForConnection(@Param('connectionId') connectionId: string) {
     return this.marketingSyncService.refreshAccountsForConnection(connectionId);
   }
@@ -115,6 +122,7 @@ export class MarketingSyncController {
   })
   @ApiBadRequestResponse({ description: 'Conta nao encontrada.' })
   @Patch('accounts/:accountId/selection')
+  @RequirePermission('marketing_sync_config', 'update')
   setAccountSelection(
     @Param('accountId') accountId: string,
     @Body() body: { selected?: boolean },
@@ -129,6 +137,7 @@ export class MarketingSyncController {
     summary: 'Cria jobs diarios para contas selecionadas',
   })
   @Post('jobs/daily')
+  @RequirePermission('marketing_sync', 'create')
   createDailyJobs(
     @Body()
     body: {
@@ -148,6 +157,7 @@ export class MarketingSyncController {
       'Payload invalido. dateFrom/dateTo sao obrigatorios no formato YYYY-MM-DD.',
   })
   @Post('jobs/manual')
+  @RequirePermission('marketing_sync', 'create')
   createManualJobs(
     @Body()
     body: {
@@ -276,6 +286,7 @@ export class MarketingSyncController {
     description: 'CSV invalido ou arquivo ausente.',
   })
   @Post('ad-performance/import/csv')
+  @RequirePermission('marketing_sync', 'create')
   @UseInterceptors(FileInterceptor('file'))
   async importAdPerformanceCsv(
     @UploadedFile() file: any,
@@ -295,6 +306,7 @@ export class MarketingSyncController {
     summary: 'Enfileira manualmente um job de extracao',
   })
   @Post('jobs/:jobId/enqueue')
+  @RequirePermission('marketing_sync', 'update')
   enqueueJob(@Param('jobId') jobId: string) {
     return this.marketingSyncService.enqueueJob(jobId, 'http:manual');
   }
@@ -303,6 +315,7 @@ export class MarketingSyncController {
     summary: 'Processa manualmente um job de extracao',
   })
   @Post('jobs/:jobId/process')
+  @RequirePermission('marketing_sync', 'update')
   processJob(@Param('jobId') jobId: string) {
     return this.marketingExtractProcessor.processJob(jobId);
   }

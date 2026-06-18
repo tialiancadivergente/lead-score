@@ -19,6 +19,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionGuard } from '../auth/guards/permission.guard';
 import { CreateLaunchDto } from './dto/create-launch.dto';
 import { LaunchResponseDto } from './dto/launch-response.dto';
 import { ListLaunchItemDto } from './dto/list-launch-response.dto';
@@ -32,7 +35,8 @@ import { LaunchService } from './launch.service';
   description:
     'API key interna. Obrigatoria quando API_KEY_ENABLED=true no backend.',
 })
-@UseGuards(ApiKeyGuard)
+@UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+@RequirePermission('launch', 'view')
 @Controller('launch')
 export class LaunchController {
   constructor(private readonly launchService: LaunchService) {}
@@ -77,6 +81,7 @@ export class LaunchController {
   }
 
   @Post()
+  @RequirePermission('launch', 'create')
   @ApiOperation({
     summary: 'Cadastra launch',
     description: 'Cria um novo registro em launch com name e active.',
@@ -96,6 +101,7 @@ export class LaunchController {
   }
 
   @Patch(':id')
+  @RequirePermission('launch', 'update')
   @ApiOperation({
     summary: 'Edita launch',
     description: 'Atualiza name e/ou active de um launch existente.',
@@ -122,6 +128,7 @@ export class LaunchController {
   }
 
   @Delete(':id')
+  @RequirePermission('launch', 'delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Remove launch',

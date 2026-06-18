@@ -21,6 +21,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionGuard } from '../auth/guards/permission.guard';
 import { CreateFormDto } from './dto/create-form.dto';
 import { FormResponseDto } from './dto/form-response.dto';
 import { ListFormQueryDto } from './dto/list-form-query.dto';
@@ -35,7 +38,8 @@ import { FormService } from './form.service';
   description:
     'API key interna. Obrigatoria quando API_KEY_ENABLED=true no backend.',
 })
-@UseGuards(ApiKeyGuard)
+@UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+@RequirePermission('forms', 'view')
 @Controller('form')
 export class FormController {
   constructor(private readonly formService: FormService) {}
@@ -100,6 +104,7 @@ export class FormController {
   }
 
   @Post()
+  @RequirePermission('forms', 'create')
   @ApiOperation({
     summary: 'Cadastra form',
     description: 'Cria um novo form com name, type, launch_id e season_id.',
@@ -123,6 +128,7 @@ export class FormController {
   }
 
   @Patch(':id')
+  @RequirePermission('forms', 'update')
   @ApiOperation({
     summary: 'Edita form',
     description: 'Atualiza os campos de um form existente.',
@@ -149,6 +155,7 @@ export class FormController {
   }
 
   @Delete(':id')
+  @RequirePermission('forms', 'delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Remove form',

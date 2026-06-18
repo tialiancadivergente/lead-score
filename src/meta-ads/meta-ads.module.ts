@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { OAuthConnection } from '../database/entities/integrations/oauth-connection.entity';
+import { AuthModule } from '../auth/auth.module';
 import { MarketingConnectionAccount } from '../database/entities/marketing-sync/marketing-connection-account.entity';
 import { MetaAdPerformance } from '../database/entities/meta-ads/meta-ad-performance.entity';
 import { MetaAdRaw } from '../database/entities/meta-ads/meta-ad-raw.entity';
@@ -19,6 +20,7 @@ import { MetaSyncScheduleService } from './meta-sync-schedule.service';
 
 @Module({
   imports: [
+    AuthModule,
     TypeOrmModule.forFeature([
       OAuthConnection,
       MarketingConnectionAccount,

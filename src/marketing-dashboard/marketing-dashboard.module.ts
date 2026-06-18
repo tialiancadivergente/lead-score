@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { AuthModule } from '../auth/auth.module';
 import { Capture } from '../database/entities/capture/capture.entity';
 import { Launch } from '../database/entities/marketing/launch.entity';
 import { Season } from '../database/entities/marketing/season.entity';
@@ -10,6 +11,7 @@ import { MarketingDashboardService } from './marketing-dashboard.service';
 
 @Module({
   imports: [
+    AuthModule,
     TypeOrmModule.forFeature([
       MarketingAdDailyPerformance,
       Capture,

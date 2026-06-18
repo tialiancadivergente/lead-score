@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { AuthModule } from '../auth/auth.module';
 import { Form } from '../database/entities/form/form.entity';
 import { FormVersion } from '../database/entities/form/form-version.entity';
 import { Launch } from '../database/entities/marketing/launch.entity';
@@ -15,6 +16,7 @@ import { PageService } from './page.service';
 
 @Module({
   imports: [
+    AuthModule,
     TypeOrmModule.forFeature([
       Page,
       PageHeadline,

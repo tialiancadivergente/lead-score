@@ -17,6 +17,9 @@ import {
 } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionGuard } from '../auth/guards/permission.guard';
 import { CaptureService } from './capture.service';
 import { CaptureQuizAnswersResponseDto } from './dto/capture-quiz-answers-response.dto';
 import { CaptureFilterQueryDto } from './dto/capture-filter-query.dto';
@@ -30,7 +33,8 @@ import { CaptureListResponseDto } from './dto/list-capture-response.dto';
   description:
     'API key interna. Obrigatoria quando API_KEY_ENABLED=true no backend.',
 })
-@UseGuards(ApiKeyGuard)
+@UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+@RequirePermission('lead_capture', 'view')
 @Controller('capture')
 export class CaptureController {
   constructor(private readonly captureService: CaptureService) {}

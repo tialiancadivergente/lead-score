@@ -15,11 +15,15 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionGuard } from '../auth/guards/permission.guard';
 import { MetaAdsService } from './meta-ads.service';
 import { MetaSyncScheduleService } from './meta-sync-schedule.service';
 
 @ApiTags('meta-ads')
-@UseGuards(ApiKeyGuard)
+@UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+@RequirePermission('meta_ads', 'view')
 @Controller('meta-ads')
 export class MetaAdsController {
   constructor(
@@ -61,6 +65,7 @@ export class MetaAdsController {
     },
   })
   @Post('sync/campaigns')
+  @RequirePermission('meta_ads', 'create')
   syncCampaigns(
     @Body()
     body: {
@@ -100,6 +105,7 @@ export class MetaAdsController {
     },
   })
   @Post('sync/adsets')
+  @RequirePermission('meta_ads', 'create')
   syncAdsets(
     @Body()
     body: {
@@ -126,6 +132,7 @@ export class MetaAdsController {
       'Busca anúncios (com criativos) de uma ou mais contas via Graph API Batch e persiste em meta_ads_raw.',
   })
   @Post('sync/ads')
+  @RequirePermission('meta_ads', 'create')
   syncAds(
     @Body()
     body: {
@@ -177,6 +184,7 @@ export class MetaAdsController {
     },
   })
   @Post('sync/insights')
+  @RequirePermission('meta_ads', 'create')
   syncInsights(
     @Body()
     body: {
@@ -207,6 +215,7 @@ export class MetaAdsController {
       'Executa todos os 4 passos em paralelo para todas as contas selecionadas.',
   })
   @Post('sync/all')
+  @RequirePermission('meta_ads', 'create')
   syncAll(
     @Body()
     body: {
@@ -262,6 +271,7 @@ export class MetaAdsController {
     },
   })
   @Post('jobs/insights')
+  @RequirePermission('meta_ads', 'create')
   startInsightsJob(
     @Body()
     body: {
@@ -316,6 +326,7 @@ export class MetaAdsController {
     },
   })
   @Post('jobs/insights/bulk')
+  @RequirePermission('meta_ads', 'create')
   startBulkInsightsJob(
     @Body()
     body: {
@@ -527,6 +538,7 @@ export class MetaAdsController {
 
   @ApiOperation({ summary: 'Abortar execução em andamento' })
   @Post('executions/:id/abort')
+  @RequirePermission('meta_ads', 'update')
   abortExecution(@Param('id') id: string) {
     return this.metaAdsService.abortExecution(id);
   }
@@ -573,6 +585,7 @@ export class MetaAdsController {
 
   @ApiOperation({ summary: 'Importar performance via CSV' })
   @Post('data/import/csv')
+  @RequirePermission('meta_ads', 'create')
   @UseInterceptors(FileInterceptor('file'))
   async importCsv(@UploadedFile() file: { buffer: Buffer }) {
     if (!file) throw new BadRequestException('Arquivo CSV não enviado.');
@@ -591,18 +604,21 @@ export class MetaAdsController {
 
   @ApiOperation({ summary: 'Criar agendamento de sync Meta' })
   @Post('sync-schedules')
+  @RequirePermission('meta_ads', 'create')
   createSyncSchedule(@Body() body: Record<string, unknown>) {
     return this.metaSyncScheduleService.create(body as unknown as Parameters<MetaSyncScheduleService['create']>[0]);
   }
 
   @ApiOperation({ summary: 'Remover agendamento de sync Meta' })
   @Post('sync-schedules/:id/delete')
+  @RequirePermission('meta_ads', 'delete')
   removeSyncSchedule(@Param('id') id: string) {
     return this.metaSyncScheduleService.remove(id);
   }
 
   @ApiOperation({ summary: 'Executar agendamento agora' })
   @Post('sync-schedules/:id/run')
+  @RequirePermission('meta_ads', 'update')
   runSyncSchedule(@Param('id') id: string) {
     return this.metaSyncScheduleService.runNow(id);
   }

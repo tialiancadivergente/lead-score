@@ -20,6 +20,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionGuard } from '../auth/guards/permission.guard';
 import {
   AddFormVersionQuestionDto,
   CreateFormVersionDto,
@@ -63,7 +66,8 @@ import { FormManagementService } from './form-management.service';
   description:
     'API key interna. Obrigatoria quando API_KEY_ENABLED=true no backend.',
 })
-@UseGuards(ApiKeyGuard)
+@UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+@RequirePermission('forms', 'view')
 @Controller('form')
 export class FormManagementController {
   constructor(private readonly service: FormManagementService) {}
@@ -88,6 +92,7 @@ export class FormManagementController {
   }
 
   @Post(':formId/versions')
+  @RequirePermission('forms', 'create')
   @ApiOperation({ summary: 'Cria versao de form' })
   @ApiBody({ type: CreateFormVersionDto })
   @ApiResponse({ status: 201, type: FormVersionResponseDto })
@@ -99,6 +104,7 @@ export class FormManagementController {
   }
 
   @Patch('versions/:formVersionId')
+  @RequirePermission('forms', 'update')
   @ApiOperation({ summary: 'Atualiza versao de form' })
   @ApiBody({ type: UpdateFormVersionDto })
   @ApiResponse({ status: 200, type: FormVersionResponseDto })
@@ -111,6 +117,7 @@ export class FormManagementController {
   }
 
   @Post('versions/:formVersionId/activate')
+  @RequirePermission('forms', 'update')
   @ApiOperation({ summary: 'Ativa versao de form' })
   @ApiResponse({ status: 200, type: FormVersionResponseDto })
   async activateVersion(
@@ -121,6 +128,7 @@ export class FormManagementController {
   }
 
   @Delete('versions/:formVersionId')
+  @RequirePermission('forms', 'delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove versao de form' })
   @ApiResponse({ status: 204 })
@@ -151,6 +159,7 @@ export class FormManagementController {
   }
 
   @Post(':formId/questions')
+  @RequirePermission('forms', 'create')
   @ApiOperation({ summary: 'Cria pergunta no form' })
   @ApiBody({ type: CreateQuestionDto })
   @ApiResponse({ status: 201, type: QuestionResponseDto })
@@ -162,6 +171,7 @@ export class FormManagementController {
   }
 
   @Patch('questions/:questionId')
+  @RequirePermission('forms', 'update')
   @ApiOperation({ summary: 'Atualiza pergunta' })
   @ApiBody({ type: UpdateQuestionDto })
   @ApiResponse({ status: 200, type: QuestionResponseDto })
@@ -174,6 +184,7 @@ export class FormManagementController {
   }
 
   @Delete('questions/:questionId')
+  @RequirePermission('forms', 'delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove pergunta' })
   @ApiResponse({ status: 204 })
@@ -195,6 +206,7 @@ export class FormManagementController {
   }
 
   @Post('questions/:questionId/options')
+  @RequirePermission('forms', 'create')
   @ApiOperation({ summary: 'Cria opcao da pergunta' })
   @ApiBody({ type: CreateQuestionOptionDto })
   @ApiResponse({ status: 201, type: QuestionOptionResponseDto })
@@ -207,6 +219,7 @@ export class FormManagementController {
   }
 
   @Patch('options/:optionId')
+  @RequirePermission('forms', 'update')
   @ApiOperation({ summary: 'Atualiza opcao da pergunta' })
   @ApiBody({ type: UpdateQuestionOptionDto })
   @ApiResponse({ status: 200, type: QuestionOptionResponseDto })
@@ -218,6 +231,7 @@ export class FormManagementController {
   }
 
   @Delete('options/:optionId')
+  @RequirePermission('forms', 'delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove opcao da pergunta' })
   @ApiResponse({ status: 204 })
@@ -242,6 +256,7 @@ export class FormManagementController {
   }
 
   @Post('versions/:formVersionId/questions')
+  @RequirePermission('forms', 'create')
   @ApiOperation({ summary: 'Vincula pergunta a versao' })
   @ApiBody({ type: AddFormVersionQuestionDto })
   @ApiResponse({ status: 201, type: FormVersionQuestionResponseDto })
@@ -254,6 +269,7 @@ export class FormManagementController {
   }
 
   @Patch('versions/:formVersionId/questions/:questionId')
+  @RequirePermission('forms', 'update')
   @ApiOperation({ summary: 'Atualiza vinculo pergunta x versao' })
   @ApiBody({ type: UpdateFormVersionQuestionDto })
   @ApiResponse({ status: 200, type: FormVersionQuestionResponseDto })
@@ -272,6 +288,7 @@ export class FormManagementController {
   }
 
   @Delete('versions/:formVersionId/questions/:questionId')
+  @RequirePermission('forms', 'delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove vinculo pergunta x versao' })
   @ApiResponse({ status: 204 })
@@ -285,6 +302,7 @@ export class FormManagementController {
   }
 
   @Put('versions/:formVersionId/questions/reorder')
+  @RequirePermission('forms', 'update')
   @ApiOperation({ summary: 'Reordena perguntas da versao' })
   @ApiBody({ type: ReorderFormVersionQuestionsDto })
   @ApiResponse({
@@ -311,6 +329,7 @@ export class FormManagementController {
   }
 
   @Post('versions/:formVersionId/scores')
+  @RequirePermission('forms', 'create')
   @ApiOperation({ summary: 'Cria lead score da versao' })
   @ApiBody({ type: CreateLeadscoreDto })
   @ApiResponse({ status: 201, type: LeadscoreResponseDto })
@@ -323,6 +342,7 @@ export class FormManagementController {
   }
 
   @Patch('scores/:leadscoreId')
+  @RequirePermission('forms', 'update')
   @ApiOperation({ summary: 'Atualiza lead score' })
   @ApiBody({ type: UpdateLeadscoreDto })
   @ApiResponse({ status: 200, type: LeadscoreResponseDto })
@@ -335,6 +355,7 @@ export class FormManagementController {
   }
 
   @Post('scores/:leadscoreId/activate')
+  @RequirePermission('forms', 'update')
   @ApiOperation({ summary: 'Ativa lead score' })
   @ApiResponse({ status: 200, type: LeadscoreResponseDto })
   async activateScore(
@@ -345,6 +366,7 @@ export class FormManagementController {
   }
 
   @Delete('scores/:leadscoreId')
+  @RequirePermission('forms', 'delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove lead score' })
   @ApiResponse({ status: 204 })
@@ -370,6 +392,7 @@ export class FormManagementController {
   }
 
   @Put('scores/:leadscoreId/option-points')
+  @RequirePermission('forms', 'update')
   @ApiOperation({ summary: 'Substitui pontos por opcao' })
   @ApiBody({ type: ReplaceLeadscoreOptionPointsDto })
   @ApiResponse({
@@ -400,6 +423,7 @@ export class FormManagementController {
   }
 
   @Put('scores/:leadscoreId/range-points')
+  @RequirePermission('forms', 'update')
   @ApiOperation({ summary: 'Substitui pontos por faixa' })
   @ApiBody({ type: ReplaceLeadscoreRangePointsDto })
   @ApiResponse({
@@ -416,6 +440,7 @@ export class FormManagementController {
   }
 
   @Post('clone')
+  @RequirePermission('forms', 'create')
   @ApiOperation({
     summary: 'Duplica perguntas, opcoes e lead score de uma versao para outra',
   })
@@ -426,6 +451,7 @@ export class FormManagementController {
   }
 
   @Post('full')
+  @RequirePermission('forms', 'create')
   @ApiOperation({
     summary: 'Cria formulario completo em transacao unica',
   })

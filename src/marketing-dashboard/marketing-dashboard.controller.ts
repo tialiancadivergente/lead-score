@@ -7,13 +7,17 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionGuard } from '../auth/guards/permission.guard';
 import { MarketingDashboardFiltersQueryDto } from './dto/marketing-dashboard-filters-query.dto';
 import { MarketingDashboardSummaryQueryDto } from './dto/marketing-dashboard-summary-query.dto';
 import { MarketingDashboardTableQueryDto } from './dto/marketing-dashboard-table-query.dto';
 import { MarketingDashboardService } from './marketing-dashboard.service';
 
 @ApiTags('marketing-dashboard')
-@UseGuards(ApiKeyGuard)
+@UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+@RequirePermission('dashboard', 'view')
 @Controller('marketing-dashboard')
 export class MarketingDashboardController {
   constructor(

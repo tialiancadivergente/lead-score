@@ -21,6 +21,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionGuard } from '../auth/guards/permission.guard';
 import { CreatePageDto } from './dto/create-page.dto';
 import { GroupedPageByLaunchDto } from './dto/grouped-page-response.dto';
 import { ListPageQueryDto } from './dto/list-page-query.dto';
@@ -51,7 +54,8 @@ import { PageService } from './page.service';
   description:
     'API key interna. Obrigatoria quando API_KEY_ENABLED=true no backend.',
 })
-@UseGuards(ApiKeyGuard)
+@UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+@RequirePermission('pages', 'view')
 @Controller('page')
 export class PageController {
   constructor(private readonly pageService: PageService) {}
@@ -118,6 +122,7 @@ export class PageController {
   }
 
   @Post()
+  @RequirePermission('pages', 'create')
   @ApiOperation({
     summary: 'Cadastra page',
     description:
@@ -134,6 +139,7 @@ export class PageController {
   }
 
   @Patch(':id')
+  @RequirePermission('pages', 'update')
   @ApiOperation({
     summary: 'Edita page',
     description:
@@ -153,6 +159,7 @@ export class PageController {
   }
 
   @Delete(':id')
+  @RequirePermission('pages', 'delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Remove page',
@@ -167,6 +174,7 @@ export class PageController {
   }
 
   @Post(':pageId/headline')
+  @RequirePermission('pages', 'create')
   @ApiOperation({
     summary: 'Cadastra headline da page',
     description:
@@ -186,6 +194,7 @@ export class PageController {
   }
 
   @Patch(':pageId/headline/:headlineId')
+  @RequirePermission('pages', 'update')
   @ApiOperation({ summary: 'Edita headline da page' })
   @ApiBody({ type: UpdatePageHeadlineDto })
   @ApiResponse({
@@ -203,6 +212,7 @@ export class PageController {
   }
 
   @Delete(':pageId/headline/:headlineId')
+  @RequirePermission('pages', 'delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove headline da page' })
   async removeHeadline(
@@ -214,6 +224,7 @@ export class PageController {
   }
 
   @Post(':pageId/temperature')
+  @RequirePermission('pages', 'create')
   @ApiOperation({
     summary: 'Cadastra temperatura da page',
     description:
@@ -233,6 +244,7 @@ export class PageController {
   }
 
   @Patch(':pageId/temperature/:pageTemperatureId')
+  @RequirePermission('pages', 'update')
   @ApiOperation({ summary: 'Edita temperatura da page' })
   @ApiBody({ type: UpdatePageTemperatureDto })
   @ApiResponse({
@@ -254,6 +266,7 @@ export class PageController {
   }
 
   @Delete(':pageId/temperature/:pageTemperatureId')
+  @RequirePermission('pages', 'delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove temperatura da page' })
   async removeTemperature(
@@ -265,6 +278,7 @@ export class PageController {
   }
 
   @Post(':pageId/version')
+  @RequirePermission('pages', 'create')
   @ApiOperation({
     summary: 'Cadastra versao da page',
     description:
@@ -284,6 +298,7 @@ export class PageController {
   }
 
   @Patch(':pageId/version/:versionId')
+  @RequirePermission('pages', 'update')
   @ApiOperation({ summary: 'Edita versao da page' })
   @ApiBody({ type: UpdatePageVersionDto })
   @ApiResponse({
@@ -300,6 +315,7 @@ export class PageController {
   }
 
   @Delete(':pageId/version/:versionId')
+  @RequirePermission('pages', 'delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove versao da page' })
   async removeVersion(

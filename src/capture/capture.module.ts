@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { AuthModule } from '../auth/auth.module';
 import { Capture } from '../database/entities/capture/capture.entity';
 import { FormAnswer } from '../database/entities/form/form-answer.entity';
 import { FormResponse } from '../database/entities/form/form-response.entity';
@@ -11,6 +12,7 @@ import { CaptureService } from './capture.service';
 
 @Module({
   imports: [
+    AuthModule,
     TypeOrmModule.forFeature([
       Capture,
       PersonIdentifier,

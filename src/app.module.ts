@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './auth/auth.module';
 import { DatabaseModule } from './database/database.module';
 import { ServiceBusModule } from './service-bus/service-bus.module';
 import { LeadRegistrationModule } from './lead-registration/lead-registration.module';
@@ -20,6 +22,8 @@ import { MetaAdsModule } from './meta-ads/meta-ads.module';
 import { LaunchDashboardModule } from './launch-dashboard/launch-dashboard.module';
 import { InleadWebhookModule } from './inlead-webhook/inlead-webhook.module';
 import { PageModule } from './page/page.module';
+import { RolesModule } from './roles/roles.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -28,7 +32,16 @@ import { PageModule } from './page/page.module';
       envFilePath: ['.env.local', '.env'],
       expandVariables: true,
     }),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60_000,
+        limit: 60,
+      },
+    ]),
     DatabaseModule,
+    AuthModule,
+    UsersModule,
+    RolesModule,
     ServiceBusModule,
     LeadRegistrationModule,
     LeadScoreModule,

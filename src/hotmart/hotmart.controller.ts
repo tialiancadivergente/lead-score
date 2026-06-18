@@ -11,6 +11,9 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionGuard } from '../auth/guards/permission.guard';
 import { HotmartProcessorService } from './hotmart-processor.service';
 import { HotmartProductService } from './hotmart-product.service';
 import { HotmartSyncScheduleService } from './hotmart-sync-schedule.service';
@@ -39,6 +42,8 @@ export class HotmartController {
   // ── Endpoints protegidos ──────────────────────────────────────────────────
 
   @UseGuards(ApiKeyGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('vendas_hotmart', 'view')
   @ApiOperation({ summary: 'Lista registros raw de vendas Hotmart' })
   @ApiQuery({ name: 'limit', required: false })
   @Get('raw')
@@ -47,6 +52,8 @@ export class HotmartController {
   }
 
   @UseGuards(ApiKeyGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('vendas_hotmart', 'create')
   @ApiOperation({
     summary:
       'Sincroniza vendas históricas da API Hotmart (executa em background)',
@@ -80,6 +87,8 @@ export class HotmartController {
   }
 
   @UseGuards(ApiKeyGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('vendas_hotmart', 'create')
   @ApiOperation({ summary: 'Processa em lote registros raw pendentes' })
   @ApiQuery({
     name: 'limit',
@@ -96,6 +105,8 @@ export class HotmartController {
   // ── Dashboard ─────────────────────────────────────────────────────────────
 
   @UseGuards(ApiKeyGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('vendas_hotmart', 'view')
   @ApiOperation({ summary: 'Lista vendas processadas (hotmart_sale)' })
   @ApiQuery({
     name: 'status',
@@ -133,6 +144,8 @@ export class HotmartController {
   }
 
   @UseGuards(ApiKeyGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('vendas_hotmart', 'view')
   @ApiOperation({ summary: 'Resumo agregado de vendas Hotmart' })
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to', required: false })
@@ -149,6 +162,8 @@ export class HotmartController {
   // ── Produtos Hotmart (config de mapeamento launch→produto) ────────────────
 
   @UseGuards(ApiKeyGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('vendas_hotmart', 'view')
   @ApiOperation({
     summary: 'Lista configurações de produtos Hotmart por launch',
   })
@@ -158,6 +173,8 @@ export class HotmartController {
   }
 
   @UseGuards(ApiKeyGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('vendas_hotmart', 'create')
   @ApiOperation({ summary: 'Cria configuração de produto Hotmart' })
   @Post('products')
   createProduct(@Body() body: Record<string, unknown>) {
@@ -170,6 +187,8 @@ export class HotmartController {
   }
 
   @UseGuards(ApiKeyGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('vendas_hotmart', 'update')
   @ApiOperation({ summary: 'Atualiza configuração de produto Hotmart' })
   @Patch('products/:id')
   updateProduct(
@@ -187,6 +206,8 @@ export class HotmartController {
   }
 
   @UseGuards(ApiKeyGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('vendas_hotmart', 'delete')
   @ApiOperation({ summary: 'Remove configuração de produto Hotmart' })
   @Delete('products/:id')
   removeProduct(@Param('id') id: string) {
@@ -196,6 +217,8 @@ export class HotmartController {
   // ── Sync Schedules ────────────────────────────────────────────────────────
 
   @UseGuards(ApiKeyGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('vendas_hotmart', 'view')
   @ApiOperation({ summary: 'Lista agendamentos de sync Hotmart' })
   @Get('sync-schedules')
   listSchedules() {
@@ -203,6 +226,8 @@ export class HotmartController {
   }
 
   @UseGuards(ApiKeyGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('vendas_hotmart', 'create')
   @ApiOperation({ summary: 'Cria agendamento de sync Hotmart' })
   @Post('sync-schedules')
   createSchedule(@Body() body: Record<string, unknown>) {
@@ -218,6 +243,8 @@ export class HotmartController {
   }
 
   @UseGuards(ApiKeyGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('vendas_hotmart', 'delete')
   @ApiOperation({ summary: 'Remove agendamento de sync Hotmart' })
   @Delete('sync-schedules/:id')
   removeSchedule(@Param('id') id: string) {
@@ -225,6 +252,8 @@ export class HotmartController {
   }
 
   @UseGuards(ApiKeyGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('vendas_hotmart', 'update')
   @ApiOperation({
     summary: 'Executa agendamento de sync Hotmart imediatamente',
   })

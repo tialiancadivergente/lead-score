@@ -9,6 +9,7 @@ import { Person } from '../database/entities/identity/person.entity';
 import { PersonIdentifier } from '../database/entities/identity/person-identifier.entity';
 import { Launch } from '../database/entities/marketing/launch.entity';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { AuthModule } from '../auth/auth.module';
 import { ServiceBusModule } from '../service-bus/service-bus.module';
 import { HotmartController } from './hotmart.controller';
 import { HotmartProcessorService } from './hotmart-processor.service';
@@ -20,6 +21,7 @@ import { HotmartSyncScheduleService } from './hotmart-sync-schedule.service';
 
 @Module({
   imports: [
+    AuthModule,
     TypeOrmModule.forFeature([
       HotmartSaleRaw,
       HotmartSale,

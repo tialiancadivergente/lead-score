@@ -10,12 +10,16 @@ import {
 
 import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionGuard } from '../auth/guards/permission.guard';
 import { LaunchDashboardQueryDto } from './dto/launch-dashboard-query.dto';
 import { UpsertLaunchDashboardConfigDto } from './dto/upsert-launch-dashboard-config.dto';
 import { LaunchDashboardService } from './launch-dashboard.service';
 
 @ApiTags('launch-dashboard')
-@UseGuards(ApiKeyGuard)
+@UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+@RequirePermission('launch_dashboard', 'view')
 @Controller('launch-dashboard')
 export class LaunchDashboardController {
   constructor(private readonly service: LaunchDashboardService) {}
@@ -44,6 +48,7 @@ export class LaunchDashboardController {
   })
   @ApiParam({ name: 'launchId', type: 'string' })
   @Put('config/:launchId')
+  @RequirePermission('launch_dashboard', 'update')
   upsertConfig(
     @Param('launchId') launchId: string,
     @Body() dto: UpsertLaunchDashboardConfigDto,
