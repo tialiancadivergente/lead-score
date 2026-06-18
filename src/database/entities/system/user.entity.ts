@@ -35,6 +35,9 @@ export class User {
   @Column({ type: 'timestamptz', name: 'last_login_at', nullable: true })
   lastLoginAt?: Date | null;
 
+  @Column({ type: 'timestamptz', name: 'email_verified_at', nullable: true })
+  emailVerifiedAt?: Date | null;
+
   @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   createdAt!: Date;
 

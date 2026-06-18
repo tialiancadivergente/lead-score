@@ -26,9 +26,10 @@ export class UsersService {
     const pageSize = Math.min(this.parsePositiveInt(query.pageSize, 20), 100);
     const qb = this.userRepo
       .createQueryBuilder('user')
-      .leftJoinAndSelect('user.roles', 'role')
-      .where('user.deleted_at IS NULL')
-      .orderBy('user.created_at', 'DESC')
+      .leftJoin('user.roles', 'role')
+      .where('user.deletedAt IS NULL')
+      .orderBy('user.createdAt', 'DESC')
+      .addOrderBy('user.id', 'ASC')
       .skip((page - 1) * pageSize)
       .take(pageSize);
 
@@ -41,13 +42,28 @@ export class UsersService {
       qb.andWhere('role.id = :roleId', { roleId: query.roleId.trim() });
     }
     if (query.isActive !== undefined) {
-      qb.andWhere('user.is_active = :isActive', {
+      qb.andWhere('user.isActive = :isActive', {
         isActive: this.parseBoolean(query.isActive, 'isActive'),
       });
     }
 
-    const [items, total] = await qb.getManyAndCount();
-    return { items: items.map((user) => this.mapUser(user)), total, page, pageSize };
+    const [pagedUsers, total] = await qb.getManyAndCount();
+    const ids = pagedUsers.map((user) => user.id);
+    if (!ids.length) {
+      return { items: [], total, page, pageSize };
+    }
+
+    const users = await this.userRepo.find({
+      where: { id: In(ids) },
+      relations: { roles: true },
+    });
+    const byId = new Map(users.map((user) => [user.id, user]));
+    const items = ids
+      .map((id) => byId.get(id))
+      .filter((user): user is User => Boolean(user))
+      .map((user) => this.mapUser(user));
+
+    return { items, total, page, pageSize };
   }
 
   async findById(id: string) {

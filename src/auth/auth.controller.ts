@@ -8,12 +8,16 @@ import {
   Ip,
   Post,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiExcludeEndpoint, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { AuthenticatedUser } from './auth.types';
 import { AuthService } from './auth.service';
+import { BootstrapService } from './bootstrap.service';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { BootstrapDto } from './dto/bootstrap.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
@@ -24,7 +28,29 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly bootstrapService: BootstrapService,
+  ) {}
+
+  @Post('bootstrap')
+  @ApiExcludeEndpoint()
+  @Throttle({ default: { limit: 5, ttl: 3_600_000 } })
+  @UsePipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    }),
+  )
+  bootstrap(
+    @Body() dto: BootstrapDto,
+    @Headers('x-bootstrap-token') token: string | undefined,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    return this.bootstrapService.bootstrap(dto, { token, ip, userAgent });
+  }
 
   @Post('login')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })

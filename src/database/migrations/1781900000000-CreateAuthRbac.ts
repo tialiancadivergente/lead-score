@@ -42,6 +42,7 @@ export class CreateAuthRbac1781900000000 implements MigrationInterface {
         "password_hash" varchar(255) NOT NULL,
         "is_active" boolean NOT NULL DEFAULT true,
         "last_login_at" TIMESTAMP WITH TIME ZONE,
+        "email_verified_at" TIMESTAMP WITH TIME ZONE,
         "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
         "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
         "deleted_at" TIMESTAMP WITH TIME ZONE,
@@ -79,6 +80,10 @@ export class CreateAuthRbac1781900000000 implements MigrationInterface {
       ALTER COLUMN "name" TYPE varchar(120),
       ALTER COLUMN "email" TYPE varchar(180),
       ALTER COLUMN "password_hash" TYPE varchar(255)
+    `);
+    await queryRunner.query(`
+      ALTER TABLE "users"
+      ADD COLUMN IF NOT EXISTS "email_verified_at" TIMESTAMP WITH TIME ZONE
     `);
     await queryRunner.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS "IDX_users_email" ON "users" ("email")

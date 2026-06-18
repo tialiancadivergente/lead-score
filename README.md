@@ -42,6 +42,8 @@ Principais variáveis:
 - **Swagger**: `SWAGGER_ENABLED=true` e `SWAGGER_PATH=docs` (documentação em `http://localhost:3000/docs`)
 - **Postgres**: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
 - **SSL/UUID** (Azure Postgres geralmente exige): `DB_SSL=true` e `DB_UUID_EXTENSION=pgcrypto`
+- **Auth/RBAC**: `JWT_ACCESS_SECRET`, `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_IN`
+- **Bootstrap**: `BOOTSTRAP_TOKEN` habilita `POST /auth/bootstrap` para criar o primeiro `super_admin`. Use um valor aleatorio forte, por exemplo 32 bytes em hex. Apos o bootstrap, remova a variavel do ambiente ou rotacione o valor.
 - **Service Bus**: `SERVICE_BUS_CONNECTION_STRING`, `SERVICE_BUS_LEAD_SCORE_QUEUE`
 - **Consumer**: `SERVICE_BUS_CONSUMER_ENABLED=true` para ativar o worker de exemplo
 

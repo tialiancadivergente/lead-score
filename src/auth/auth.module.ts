@@ -5,6 +5,7 @@ import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { BootstrapService } from './bootstrap.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { PermissionGuard } from './guards/permission.guard';
 import { PermissionsService } from './permissions.service';
@@ -23,6 +24,7 @@ import { User } from '../database/entities/system/user.entity';
   controllers: [AuthController],
   providers: [
     AuthService,
+    BootstrapService,
     PermissionsService,
     JwtStrategy,
     JwtAuthGuard,
