@@ -1094,7 +1094,7 @@ export class MarketingSyncService {
 
       return payload.accounts.map((account) => ({
         externalAccountId: String(account.accountId),
-        externalAccountName: account.name ?? account.accountId,
+        externalAccountName: account.name || account.accountId,
         parentExternalAccountId: account.businessId ?? null,
         isManager: false,
         accessible: account.accessible !== false,

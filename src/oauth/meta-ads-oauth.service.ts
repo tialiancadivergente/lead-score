@@ -465,7 +465,7 @@ export class MetaAdsOAuthService {
     return allAccounts.map((account) => ({
       id: account.id,
       accountId: account.account_id ?? this.normalizeMetaAccountId(account.id),
-      name: account.name ?? null,
+      name: account.name || null,
       accountStatus: account.account_status ?? null,
       currency: account.currency ?? null,
       timeZone: account.timezone_name ?? null,
