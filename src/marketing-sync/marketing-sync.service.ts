@@ -139,9 +139,7 @@ export class MarketingSyncService {
         continue;
       }
 
-      existing.status = 'missing';
-      existing.last_seen_at = now;
-      await this.accountRepository.save(existing);
+      await this.accountRepository.remove(existing);
     }
 
     return {

@@ -439,14 +439,7 @@ export class MetaAdsOAuthService {
       }
     };
 
-    // 1. Contas diretamente acessíveis pelo usuário
-    const meUrl = new URL(`${this.getMetaGraphBaseUrl()}/me/adaccounts`);
-    meUrl.searchParams.set('fields', accountFields);
-    meUrl.searchParams.set('limit', '100');
-    meUrl.searchParams.set('access_token', accessToken);
-    await fetchAllPages(meUrl.toString());
-
-    // 2. Contas via Business Managers (owned + client)
+    // Contas via Business Managers (owned + client)
     const businesses = await this.fetchBusinesses(accessToken);
     for (const bm of businesses) {
       for (const edge of ['owned_ad_accounts', 'client_ad_accounts'] as const) {
