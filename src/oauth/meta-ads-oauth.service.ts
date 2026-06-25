@@ -42,6 +42,16 @@ type MetaAdAccountsResponse = {
   paging?: { cursors?: { after?: string }; next?: string };
 };
 
+type MetaBusiness = {
+  id: string;
+  name?: string;
+};
+
+type MetaBusinessesResponse = {
+  data?: MetaBusiness[];
+  paging?: { cursors?: { after?: string }; next?: string };
+};
+
 @Injectable()
 export class MetaAdsOAuthService {
   private readonly provider = 'meta_ads';
@@ -404,26 +414,52 @@ export class MetaAdsOAuthService {
   }
 
   private async fetchAdAccounts(accessToken: string) {
+    const accountFields = 'id,account_id,name,account_status,currency,timezone_name,business';
+    const seenIds = new Set<string>();
     const allAccounts: MetaAdAccount[] = [];
-    let nextUrl: string | null = (() => {
-      const url = new URL(`${this.getMetaGraphBaseUrl()}/me/adaccounts`);
-      url.searchParams.set('fields', 'id,account_id,name,account_status,currency,timezone_name,business');
-      url.searchParams.set('limit', '100');
-      url.searchParams.set('access_token', accessToken);
-      return url.toString();
-    })();
 
-    while (nextUrl) {
-      const response = await fetch(nextUrl);
-      if (!response.ok) {
-        const body = await response.text();
-        throw new InternalServerErrorException(
-          `Falha ao listar contas de anuncio da Meta: ${body}`,
-        );
+    const fetchAllPages = async (firstUrl: string) => {
+      let nextUrl: string | null = firstUrl;
+      while (nextUrl) {
+        const response = await fetch(nextUrl);
+        if (!response.ok) {
+          const body = await response.text();
+          throw new InternalServerErrorException(
+            `Falha ao listar contas de anuncio da Meta: ${body}`,
+          );
+        }
+        const payload = (await response.json()) as MetaAdAccountsResponse;
+        for (const account of payload.data ?? []) {
+          if (!seenIds.has(account.id)) {
+            seenIds.add(account.id);
+            allAccounts.push(account);
+          }
+        }
+        nextUrl = payload.paging?.next ?? null;
       }
-      const payload = (await response.json()) as MetaAdAccountsResponse;
-      allAccounts.push(...(payload.data ?? []));
-      nextUrl = payload.paging?.next ?? null;
+    };
+
+    // 1. Contas diretamente acessíveis pelo usuário
+    const meUrl = new URL(`${this.getMetaGraphBaseUrl()}/me/adaccounts`);
+    meUrl.searchParams.set('fields', accountFields);
+    meUrl.searchParams.set('limit', '100');
+    meUrl.searchParams.set('access_token', accessToken);
+    await fetchAllPages(meUrl.toString());
+
+    // 2. Contas via Business Managers (owned + client)
+    const businesses = await this.fetchBusinesses(accessToken);
+    for (const bm of businesses) {
+      for (const edge of ['owned_ad_accounts', 'client_ad_accounts'] as const) {
+        const bmUrl = new URL(`${this.getMetaGraphBaseUrl()}/${bm.id}/${edge}`);
+        bmUrl.searchParams.set('fields', accountFields);
+        bmUrl.searchParams.set('limit', '100');
+        bmUrl.searchParams.set('access_token', accessToken);
+        try {
+          await fetchAllPages(bmUrl.toString());
+        } catch {
+          // BM sem permissão de listagem é ignorado silenciosamente
+        }
+      }
     }
 
     return allAccounts.map((account) => ({
@@ -439,6 +475,30 @@ export class MetaAdsOAuthService {
       errorCode: null,
       errorMessage: null,
     }));
+  }
+
+  private async fetchBusinesses(accessToken: string): Promise<MetaBusiness[]> {
+    const businesses: MetaBusiness[] = [];
+    let nextUrl: string | null = (() => {
+      const url = new URL(`${this.getMetaGraphBaseUrl()}/me/businesses`);
+      url.searchParams.set('fields', 'id,name');
+      url.searchParams.set('limit', '100');
+      url.searchParams.set('access_token', accessToken);
+      return url.toString();
+    })();
+
+    while (nextUrl) {
+      const response = await fetch(nextUrl);
+      if (!response.ok) {
+        // Se não tiver permissão de business_management, retorna lista vazia sem quebrar
+        break;
+      }
+      const payload = (await response.json()) as MetaBusinessesResponse;
+      businesses.push(...(payload.data ?? []));
+      nextUrl = payload.paging?.next ?? null;
+    }
+
+    return businesses;
   }
 
   private getUsableAccessToken(connection: OAuthConnection): string {
