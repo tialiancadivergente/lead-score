@@ -11,6 +11,7 @@ import { HotmartSale } from '../database/entities/hotmart/hotmart-sale.entity';
 import { LaunchDashboardConfig } from '../database/entities/launch-dashboard/launch-dashboard-config.entity';
 import { Launch } from '../database/entities/marketing/launch.entity';
 import { MetaAdPerformance } from '../database/entities/meta-ads/meta-ad-performance.entity';
+import { MarketingConnectionAccount } from '../database/entities/marketing-sync/marketing-connection-account.entity';
 import { LeadscoreResult } from '../database/entities/leadscore/leadscore-result.entity';
 import { LeadscoreTier } from '../database/entities/leadscore/leadscore-tier.entity';
 import { UpsertLaunchDashboardConfigDto } from './dto/upsert-launch-dashboard-config.dto';
@@ -59,6 +60,8 @@ export class LaunchDashboardService {
     private readonly questionOptionRepo: Repository<QuestionOption>,
     @InjectRepository(LeadscoreResult)
     private readonly leadscoreResultRepo: Repository<LeadscoreResult>,
+    @InjectRepository(MarketingConnectionAccount)
+    private readonly connectionAccountRepo: Repository<MarketingConnectionAccount>,
   ) {}
 
   // ─── Launches ─────────────────────────────────────────────────────────────
@@ -570,20 +573,15 @@ export class LaunchDashboardService {
 
   // ─── Ad accounts ──────────────────────────────────────────────────────────
 
-  async getAdAccounts(query: LaunchDashboardQueryDto) {
-    const qb = this.perfRepo.createQueryBuilder('p');
-    this.applyMediaFilters(qb, query);
+  async getAdAccounts(_query: LaunchDashboardQueryDto) {
+    const accounts = await this.connectionAccountRepo.find({
+      where: { provider: 'meta_ads', selected: true },
+      order: { external_account_name: 'ASC' },
+    });
 
-    const rows = await qb
-      .select('p.external_account_id', 'externalAccountId')
-      .addSelect('MAX(p.account_name)', 'accountName')
-      .groupBy('p.external_account_id')
-      .orderBy('MAX(p.account_name)', 'ASC')
-      .getRawMany<{ externalAccountId: string; accountName: string | null }>();
-
-    return rows.map((r) => ({
-      externalAccountId: r.externalAccountId,
-      accountName: r.accountName ?? r.externalAccountId,
+    return accounts.map((a) => ({
+      externalAccountId: a.external_account_id,
+      accountName: a.external_account_name ?? a.external_account_id,
     }));
   }
 

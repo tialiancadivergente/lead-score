@@ -13,6 +13,7 @@ import { LaunchDashboardConfig } from '../database/entities/launch-dashboard/lau
 import { Launch } from '../database/entities/marketing/launch.entity';
 import { MetaAdPerformance } from '../database/entities/meta-ads/meta-ad-performance.entity';
 import { LeadscoreResult } from '../database/entities/leadscore/leadscore-result.entity';
+import { MarketingConnectionAccount } from '../database/entities/marketing-sync/marketing-connection-account.entity';
 import { LaunchDashboardController } from './launch-dashboard.controller';
 import { LaunchDashboardService } from './launch-dashboard.service';
 
@@ -31,6 +32,7 @@ import { LaunchDashboardService } from './launch-dashboard.service';
       Question,
       QuestionOption,
       LeadscoreResult,
+      MarketingConnectionAccount,
     ]),
   ],
   controllers: [LaunchDashboardController],
