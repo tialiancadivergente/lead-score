@@ -286,12 +286,9 @@ export class CaptureService {
     const startedAt = Date.now();
     this.logger.log('Capture CSV export started.');
 
-    const items = await this.listCaptureItems(query, {
-      includeQuizDetails: true,
-    });
+    const { items, questionHeaders, answersByCapture } =
+      await this.buildExportDataset(query);
     const columns = CaptureService.EXPORT_COLUMNS;
-    const { questionHeaders, answersByCapture } =
-      await this.resolveQuizAnswersByCapture(items.map((item) => item.id));
 
     const headerRow = [
       ...columns.map((column) => column.header),
@@ -323,12 +320,9 @@ export class CaptureService {
     const startedAt = Date.now();
     this.logger.log('Capture Excel export started.');
 
-    const items = await this.listCaptureItems(query, {
-      includeQuizDetails: true,
-    });
+    const { items, questionHeaders, answersByCapture } =
+      await this.buildExportDataset(query);
     const columns = CaptureService.EXPORT_COLUMNS;
-    const { questionHeaders, answersByCapture } =
-      await this.resolveQuizAnswersByCapture(items.map((item) => item.id));
     const headers = [
       ...columns.map((column) => column.header),
       ...questionHeaders,
@@ -550,29 +544,29 @@ export class CaptureService {
     }
   }
 
-  private async listCaptureItems(
-    query: CaptureFilterQuery,
-    options?: { includeQuizDetails?: boolean },
-  ): Promise<CaptureListItemDto[]> {
+  private async buildExportDataset(query: CaptureFilterQueryDto): Promise<{
+    items: CaptureListItemDto[];
+    questionHeaders: string[];
+    answersByCapture: Map<string, Map<string, string>>;
+  }> {
     const filters = this.parseFilters(query);
     const rows = await this.buildDataQuery(filters).getRawMany<CaptureRawRow>();
-    return await this.mapRowsToItems(rows, options);
+    const { detailsByCapture, questionHeaders, answersByCapture } =
+      await this.resolveQuizExportData(rows.map((row) => row.id));
+    const items = await this.mapRowsToItems(rows, detailsByCapture);
+    return { items, questionHeaders, answersByCapture };
   }
 
   private async mapRowsToItems(
     rows: CaptureRawRow[],
-    options?: { includeQuizDetails?: boolean },
+    quizDetailsByCapture?: Map<string, CaptureQuizExportDetail>,
   ): Promise<CaptureListItemDto[]> {
-    const includeQuizDetails = options?.includeQuizDetails === true;
     const personContacts = await this.resolvePersonContacts(
       rows.map((row) => row.person_id).filter((id): id is string => !!id),
     );
-    const quizDetailsByCapture = includeQuizDetails
-      ? await this.resolveLatestQuizDetailsByCapture(rows.map((row) => row.id))
-      : new Map<string, CaptureQuizExportDetail>();
 
     return rows.map((row) => ({
-      ...(quizDetailsByCapture.get(row.id) ?? {
+      ...(quizDetailsByCapture?.get(row.id) ?? {
         quiz_answered: Boolean(row.form_version_id),
         score_total: null,
         faixa: null,
@@ -652,13 +646,20 @@ export class CaptureService {
     return '';
   }
 
-  private async resolveQuizAnswersByCapture(captureIds: string[]) {
+  // Single pass over form_response/leadscore_result/form_answer that produces
+  // both the per-capture quiz summary and the per-question answer breakdown.
+  private async resolveQuizExportData(captureIds: string[]): Promise<{
+    detailsByCapture: Map<string, CaptureQuizExportDetail>;
+    questionHeaders: string[];
+    answersByCapture: Map<string, Map<string, string>>;
+  }> {
     const uniqueCaptureIds = [...new Set(captureIds)];
+    const detailsByCapture = new Map<string, CaptureQuizExportDetail>();
     const answersByCapture = new Map<string, Map<string, string>>();
     const questionLabelsByKey = new Map<string, string>();
 
     if (!uniqueCaptureIds.length) {
-      return { questionHeaders: [] as string[], answersByCapture };
+      return { detailsByCapture, questionHeaders: [], answersByCapture };
     }
 
     const captureIdBatches = this.chunkArray(
@@ -700,98 +701,11 @@ export class CaptureService {
         CaptureService.PERSON_CONTACTS_BATCH_SIZE,
       );
 
-      for (const formResponseIdBatch of formResponseIdBatches) {
-        const formAnswers = await this.formAnswerRepo
-          .createQueryBuilder('fa')
-          .leftJoin('fa.question', 'question')
-          .leftJoin('fa.option', 'option')
-          .select([
-            'fa.form_response_id AS form_response_id',
-            'question.question_key AS question_key',
-            'question.question_text AS question_text',
-            'option.option_text AS option_text',
-            'fa.answer_text AS answer_text',
-            'fa.answer_number AS answer_number',
-            'fa.answer_bool AS answer_bool',
-          ])
-          .where('fa.form_response_id IN (:...formResponseIds)', {
-            formResponseIds: formResponseIdBatch,
-          })
-          .orderBy('fa.form_response_id', 'ASC')
-          .addOrderBy('question.question_key', 'ASC')
-          .addOrderBy('fa.created_at', 'ASC')
-          .getRawMany<FormAnswerRawRow>();
-
-        for (const answer of formAnswers) {
-          const captureId = captureByFormResponse.get(answer.form_response_id);
-          if (!captureId) continue;
-
-          const questionKey =
-            answer.question_key ?? answer.question_text ?? 'question';
-          const questionLabel =
-            answer.question_text ?? answer.question_key ?? 'Pergunta';
-          if (!questionLabelsByKey.has(questionKey)) {
-            questionLabelsByKey.set(questionKey, questionLabel);
-          }
-
-          const value = this.formatQuizAnswerValue(answer);
-          const answerMap =
-            answersByCapture.get(captureId) ?? new Map<string, string>();
-          answerMap.set(questionLabel, value);
-          answersByCapture.set(captureId, answerMap);
-        }
-      }
-    }
-
-    const questionHeaders = [...questionLabelsByKey.entries()]
-      .sort(([keyA], [keyB]) => keyA.localeCompare(keyB, 'pt-BR'))
-      .map(([, label]) => label);
-
-    return { questionHeaders, answersByCapture };
-  }
-
-  private async resolveLatestQuizDetailsByCapture(captureIds: string[]) {
-    const uniqueCaptureIds = [...new Set(captureIds)];
-    const out = new Map<string, CaptureQuizExportDetail>();
-    if (!uniqueCaptureIds.length) return out;
-
-    const captureIdBatches = this.chunkArray(
-      uniqueCaptureIds,
-      CaptureService.PERSON_CONTACTS_BATCH_SIZE,
-    );
-
-    for (const captureIdBatch of captureIdBatches) {
-      const latestResponses = await this.formResponseRepo
-        .createQueryBuilder('fr')
-        .select(['fr.id AS form_response_id', 'fr.capture_id AS capture_id'])
-        .where('fr.capture_id IN (:...captureIds)', {
-          captureIds: captureIdBatch,
-        })
-        .orderBy('fr.capture_id', 'ASC')
-        .addOrderBy('fr.submitted_at', 'DESC', 'NULLS LAST')
-        .addOrderBy('fr.created_at', 'DESC')
-        .getRawMany<FormResponseCaptureRawRow>();
-
-      const formResponseByCapture = new Map<string, string>();
-      for (const row of latestResponses) {
-        if (!formResponseByCapture.has(row.capture_id)) {
-          formResponseByCapture.set(row.capture_id, row.form_response_id);
-        }
-      }
-
-      if (!formResponseByCapture.size) continue;
-
-      const formResponseIds = [...new Set(formResponseByCapture.values())];
-      const formResponseIdBatches = this.chunkArray(
-        formResponseIds,
-        CaptureService.PERSON_CONTACTS_BATCH_SIZE,
-      );
-
       const scoreByFormResponse = new Map<
         string,
         { score_total: number | null; faixa: string | null }
       >();
-      const answersByFormResponse = new Map<string, string>();
+      const concatenatedAnswersByFormResponse = new Map<string, string>();
 
       for (const formResponseIdBatch of formResponseIdBatches) {
         const leadscoreResults = await this.leadscoreResultRepo
@@ -841,17 +755,35 @@ export class CaptureService {
 
         const groupedAnswers = new Map<string, string[]>();
         for (const answer of formAnswers) {
+          const value = this.formatQuizAnswerValue(answer);
           const questionLabel =
             answer.question_text ?? answer.question_key ?? 'Pergunta';
-          const value = this.formatQuizAnswerValue(answer);
+
           const piece = value ? `${questionLabel}: ${value}` : questionLabel;
           const list = groupedAnswers.get(answer.form_response_id) ?? [];
           list.push(piece);
           groupedAnswers.set(answer.form_response_id, list);
+
+          const captureId = captureByFormResponse.get(answer.form_response_id);
+          if (captureId) {
+            const questionKey =
+              answer.question_key ?? answer.question_text ?? 'question';
+            if (!questionLabelsByKey.has(questionKey)) {
+              questionLabelsByKey.set(questionKey, questionLabel);
+            }
+
+            const answerMap =
+              answersByCapture.get(captureId) ?? new Map<string, string>();
+            answerMap.set(questionLabel, value);
+            answersByCapture.set(captureId, answerMap);
+          }
         }
 
         for (const [formResponseId, answerList] of groupedAnswers.entries()) {
-          answersByFormResponse.set(formResponseId, answerList.join(' | '));
+          concatenatedAnswersByFormResponse.set(
+            formResponseId,
+            answerList.join(' | '),
+          );
         }
       }
 
@@ -860,16 +792,21 @@ export class CaptureService {
         formResponseId,
       ] of formResponseByCapture.entries()) {
         const score = scoreByFormResponse.get(formResponseId);
-        out.set(captureId, {
+        detailsByCapture.set(captureId, {
           quiz_answered: true,
           score_total: score?.score_total ?? null,
           faixa: score?.faixa ?? null,
-          quiz_answers: answersByFormResponse.get(formResponseId) ?? null,
+          quiz_answers:
+            concatenatedAnswersByFormResponse.get(formResponseId) ?? null,
         });
       }
     }
 
-    return out;
+    const questionHeaders = [...questionLabelsByKey.entries()]
+      .sort(([keyA], [keyB]) => keyA.localeCompare(keyB, 'pt-BR'))
+      .map(([, label]) => label);
+
+    return { detailsByCapture, questionHeaders, answersByCapture };
   }
 
   private async resolvePersonContacts(personIds: string[]) {
