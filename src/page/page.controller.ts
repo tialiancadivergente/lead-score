@@ -21,6 +21,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { ApiKeyOnly } from '../auth/decorators/api-key-only.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
@@ -102,6 +103,24 @@ export class PageController {
     @Query() query: ListPageQueryDto,
   ): Promise<GroupedPageByLaunchDto[]> {
     return await this.pageService.listGroupedByLaunch(query);
+  }
+
+  @Get('by-abbreviation/:abbreviation')
+  @ApiKeyOnly()
+  @ApiOperation({
+    summary: 'Busca page por abbreviation',
+    description:
+      'Retorna uma page com headlines, temperaturas configuradas, versoes, launch_name e season_name.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Page encontrada com sucesso.',
+    type: PageResponseDto,
+  })
+  async findByAbbreviation(
+    @Param('abbreviation') abbreviation: string,
+  ): Promise<PageResponseDto> {
+    return await this.pageService.findByAbbreviation(abbreviation);
   }
 
   @Get(':id')

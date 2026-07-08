@@ -5,16 +5,25 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Reflector } from '@nestjs/core';
+import { API_KEY_ONLY_KEY } from '../../auth/decorators/api-key-only.decorator';
 
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly reflector: Reflector,
+  ) {}
 
   canActivate(context: ExecutionContext): boolean {
+    const forceApiKey = this.reflector.getAllAndOverride<boolean>(
+      API_KEY_ONLY_KEY,
+      [context.getHandler(), context.getClass()],
+    );
     const enabled =
       this.config.get<string>('API_KEY_ENABLED', 'false').toLowerCase() ===
       'true';
-    if (!enabled) return true;
+    if (!enabled && !forceApiKey) return true;
 
     const expectedApiKey = this.config.get<string>('INTERNAL_API_KEY');
     if (!expectedApiKey) {

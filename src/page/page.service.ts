@@ -144,6 +144,11 @@ export class PageService {
     return this.mapPageResponse(page);
   }
 
+  async findByAbbreviation(abbreviation: string): Promise<PageResponseDto> {
+    const page = await this.findPageByAbbreviationOrFail(abbreviation);
+    return this.mapPageResponse(page);
+  }
+
   async create(dto: CreatePageDto): Promise<PageResponseDto> {
     const name = this.parseRequiredText(dto.name, 'name');
     const launchId = this.parseOptionalUuid(dto.launch_id, 'launch_id');
@@ -570,6 +575,33 @@ export class PageService {
     return page;
   }
 
+  private async findPageByAbbreviationOrFail(
+    abbreviation: string,
+  ): Promise<Page> {
+    const normalized = this.parseRequiredText(abbreviation, 'abbreviation');
+    const page = await this.pageRepo
+      .createQueryBuilder('page')
+      .leftJoinAndSelect('page.launch', 'launch')
+      .leftJoinAndSelect('page.season', 'season')
+      .leftJoinAndSelect('page.form', 'form')
+      .leftJoinAndSelect('page.form_version', 'form_version')
+      .leftJoinAndSelect('page.headlines', 'headlines')
+      .leftJoinAndSelect('page.temperatures', 'temperatures')
+      .leftJoinAndSelect('temperatures.temperature', 'temperature')
+      .leftJoinAndSelect('page.versions', 'versions')
+      .where('LOWER(page.abbreviation) = :abbreviation', {
+        abbreviation: normalized.toLowerCase(),
+      })
+      .getOne();
+
+    if (!page) {
+      throw new NotFoundException(
+        `Page nao encontrada para abbreviation=${normalized}.`,
+      );
+    }
+    return page;
+  }
+
   private async mustFindPageEntityById(id: string): Promise<Page> {
     const page = await this.pageRepo.findOne({ where: { id } });
     if (!page) {
@@ -853,7 +885,9 @@ export class PageService {
       abbreviation: page.abbreviation,
       name: page.name,
       launch_id: page.launch?.id ?? null,
+      launch_name: page.launch?.name ?? null,
       season_id: page.season?.id ?? null,
+      season_name: page.season?.name ?? null,
       form_id: page.form.id,
       form_version_id: page.form_version.id,
       active: page.active,
