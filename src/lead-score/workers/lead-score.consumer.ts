@@ -4,6 +4,7 @@ import { ServiceBusReceivedMessage } from '@azure/service-bus';
 import { ServiceBusService } from '../../service-bus/service-bus.service';
 import { LeadScorePersistenceService } from '../services/lead-score-persistence.service';
 import { LeadScoreQueueMessage } from '../lead-score.service';
+import { LeadScoreCaptureNotFoundError } from '../errors/lead-score-capture-not-found.error';
 
 @Injectable()
 export class LeadScoreConsumer implements OnModuleInit {
@@ -60,6 +61,7 @@ export class LeadScoreConsumer implements OnModuleInit {
 
     const payload = typed.payload ?? typed ?? {};
     const requestId = String(typed.requestId ?? message.messageId ?? 'unknown');
+    const captureRetryCount = Number(typed.captureResolveRetryCount ?? 0);
 
     this.logger.debug(
       `Mensagem recebida (requestId=${requestId}): ` +
@@ -99,6 +101,52 @@ export class LeadScoreConsumer implements OnModuleInit {
       );
       return;
     } catch (error) {
+      if (error instanceof LeadScoreCaptureNotFoundError) {
+        const retryMax = Number(
+          this.config.get<string>(
+            'SERVICE_BUS_LEAD_SCORE_CAPTURE_RETRY_MAX',
+            '12',
+          ),
+        );
+        const retryDelaySeconds = Number(
+          this.config.get<string>(
+            'SERVICE_BUS_LEAD_SCORE_CAPTURE_RETRY_DELAY_SECONDS',
+            '30',
+          ),
+        );
+
+        if (captureRetryCount < retryMax) {
+          const queueName = this.config.get<string>(
+            'SERVICE_BUS_LEAD_SCORE_QUEUE',
+            'lead-score',
+          );
+          const nextAttempt = captureRetryCount + 1;
+          const scheduledEnqueueTimeUtc = new Date(
+            Date.now() + Math.max(retryDelaySeconds, 1) * 1000,
+          );
+
+          await this.serviceBus.publish(
+            queueName,
+            {
+              ...typed,
+              payload,
+              requestId,
+              captureResolveRetryCount: nextAttempt,
+              captureResolveLastError: error.message,
+            },
+            {
+              subject: 'lead.score.capture-retry',
+              scheduledEnqueueTimeUtc,
+            },
+          );
+
+          this.logger.warn(
+            `Capture ainda não encontrada para lead score (requestId=${requestId}, tentativa=${nextAttempt}/${retryMax}, captureId=${error.identifiers.captureId ?? 'n/a'}, leadRegistrationRequestId=${error.identifiers.leadRegistrationRequestId ?? 'n/a'}). Reenfileirado para ${scheduledEnqueueTimeUtc.toISOString()}.`,
+          );
+          return;
+        }
+      }
+
       this.logger.error(
         `Falha ao persistir lead score (requestId=${requestId}): ${error instanceof Error ? error.message : String(error)}`,
         error instanceof Error ? error.stack : undefined,

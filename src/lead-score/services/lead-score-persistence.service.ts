@@ -13,6 +13,7 @@ import { LeadscoreRangePoints } from '../../database/entities/leadscore/leadscor
 import { LeadscoreResult } from '../../database/entities/leadscore/leadscore-result.entity';
 import { LeadscoreTierRule } from '../../database/entities/leadscore/leadscore-tier-rule.entity';
 import { Leadscore } from '../../database/entities/leadscore/leadscore.entity';
+import { LeadScoreCaptureNotFoundError } from '../errors/lead-score-capture-not-found.error';
 
 type ParsedAnswer = {
   question_id: string;
@@ -131,7 +132,10 @@ export class LeadScorePersistenceService {
         relations: ['person', 'form_version'],
       });
       if (!capture && !leadRegistrationRequestId) {
-        throw new Error(`Capture não encontrada para id=${captureId}.`);
+        throw new LeadScoreCaptureNotFoundError(
+          `Capture não encontrada para id=${captureId}.`,
+          { captureId },
+        );
       }
     }
 
@@ -148,8 +152,9 @@ export class LeadScorePersistenceService {
     }
 
     if (!capture) {
-      throw new Error(
+      throw new LeadScoreCaptureNotFoundError(
         'Capture não encontrada para os identificadores informados.',
+        { captureId, leadRegistrationRequestId },
       );
     }
 

@@ -44,7 +44,7 @@ export class ServiceBusService implements OnApplicationShutdown {
   async publish<TBody extends Record<string, any>>(
     queueOrTopicName: string,
     body: TBody,
-    options?: { subject?: string },
+    options?: { subject?: string; scheduledEnqueueTimeUtc?: Date },
   ) {
     if (!this.client) {
       this.logger.warn(
@@ -57,6 +57,7 @@ export class ServiceBusService implements OnApplicationShutdown {
       body,
       contentType: 'application/json',
       subject: options?.subject,
+      scheduledEnqueueTimeUtc: options?.scheduledEnqueueTimeUtc,
     });
   }
 
