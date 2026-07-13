@@ -110,8 +110,24 @@ COPILOT_RISK_SCAN_INTERVAL_MINUTES=60
 ```
 
 `OPENAI_MODEL` é lido em runtime (`ConfigService`) — não há model id hardcoded no
-código, então pode ser troc ado por qualquer modelo da OpenAI que a conta tenha
+código, então pode ser trocado por qualquer modelo da OpenAI que a conta tenha
 acesso (`gpt-4o`, `gpt-4.1`, etc.) sem precisar alterar código.
+
+### Deploy (AKS)
+
+`OPENAI_MODEL`, `COPILOT_RISK_SCAN_ENABLED` e `COPILOT_RISK_SCAN_INTERVAL_MINUTES`
+já foram adicionados ao `k8s/01-configmap.yaml` (não são sensíveis).
+
+`OPENAI_API_KEY` é sensível — já foi adicionado à lista `SENSITIVE_VARS` de
+`create-k8s-secrets.sh`, então basta ter `OPENAI_API_KEY=<chave real>` no `.env`
+usado por esse script (não é o `.env.local` de desenvolvimento) antes de rodar:
+
+```bash
+./create-k8s-secrets.sh
+```
+
+`k8s/03-deployment.yaml` já injeta tudo do ConfigMap e do Secret via `envFrom` —
+não precisa editar o deployment pra essas variáveis chegarem no container.
 
 ### RBAC
 
