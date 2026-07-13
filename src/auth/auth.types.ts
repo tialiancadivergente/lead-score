@@ -41,6 +41,7 @@ export const RBAC_MODULES = [
   'marketing_sync_config',
   'users',
   'roles',
+  'copilot',
 ] as const;
 
 export const RBAC_ACTIONS: PermissionAction[] = [

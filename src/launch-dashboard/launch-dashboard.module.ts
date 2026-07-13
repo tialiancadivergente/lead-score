@@ -37,5 +37,6 @@ import { LaunchDashboardService } from './launch-dashboard.service';
   ],
   controllers: [LaunchDashboardController],
   providers: [LaunchDashboardService, ApiKeyGuard],
+  exports: [LaunchDashboardService],
 })
 export class LaunchDashboardModule {}

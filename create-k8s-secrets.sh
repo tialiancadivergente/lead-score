@@ -61,6 +61,7 @@ SENSITIVE_VARS=(
     "META_APP_ID"
     "META_APP_SECRET"
     "META_CONFIG_ID"
+    "OPENAI_API_KEY"
 )
 
 # Construir comando kubectl create secret

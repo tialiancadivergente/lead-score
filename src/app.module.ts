@@ -24,6 +24,7 @@ import { InleadWebhookModule } from './inlead-webhook/inlead-webhook.module';
 import { PageModule } from './page/page.module';
 import { RolesModule } from './roles/roles.module';
 import { UsersModule } from './users/users.module';
+import { CopilotModule } from './copilot/copilot.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { UsersModule } from './users/users.module';
     LaunchDashboardModule,
     InleadWebhookModule,
     PageModule,
+    CopilotModule,
   ],
   controllers: [AppController],
   providers: [AppService],
