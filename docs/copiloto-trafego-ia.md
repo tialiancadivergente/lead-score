@@ -43,11 +43,17 @@ Fluxo macro do motor de risco (background):
    `external_ad_id` + `report_date` dentro da janela, separa os últimos
    `RECENT_WINDOW_DAYS` dias ("recente") do restante ("baseline") e avalia 6 regras
    determinísticas (seção 7).
-4. Quando uma regra dispara, chama `CopilotLlmService.explainRiskSignal(...)`
-   **uma única vez** para gerar `narrative` + `recommendation` + `severity`.
-5. Persiste o alerta em `copilot_risk_alert`, com dedupe por
-   `(launch_id, external_ad_id, rule_key, detected_on)` — não recria o mesmo
-   alerta em ciclos seguintes.
+4. Quando uma regra dispara, **antes** de chamar a LLM checa se já existe um
+   alerta para a mesma chave `(launch_id, external_ad_id, rule_key, detected_on)`
+   (`CopilotRiskAlertsService.exists`). Só chama
+   `CopilotLlmService.explainRiskSignal(...)` se for de fato uma detecção nova —
+   isso é o que garante no máximo 1 chamada de LLM por risco por dia,
+   independente de quantos ciclos do scheduler rodarem enquanto o risco
+   persistir.
+5. Persiste o alerta em `copilot_risk_alert` via `createIfNotExists` (mesma
+   chave, com `UNIQUE INDEX` + `ON CONFLICT DO NOTHING` como garantia final
+   contra corrida entre scans concorrentes — o caminho normal já é bloqueado
+   pelo `exists()` do passo anterior).
 
 Fluxo macro do chat (on-demand):
 

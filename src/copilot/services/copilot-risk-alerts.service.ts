@@ -44,8 +44,35 @@ export class CopilotRiskAlertsService {
     return this.alertRepo.findOne({ where: { id } });
   }
 
+  // Checa a mesma chave de dedupe do UNIQUE INDEX (launch, ad, rule, dia) ANTES
+  // de gerar a narrativa via LLM — o motor de risco deve chamar isso primeiro e
+  // só acionar a LLM quando retornar false, senão um sinal que continua ativo
+  // gera uma chamada de LLM por ciclo de scan (ex: 24x/dia com interval de 1h)
+  // mesmo que o INSERT seguinte fosse um no-op.
+  async exists(
+    launchId: string,
+    externalAdId: string | null,
+    ruleKey: string,
+    detectedOn: string,
+  ): Promise<boolean> {
+    const count = await this.alertRepo
+      .createQueryBuilder('a')
+      .where('a.launch_id = :launchId', { launchId })
+      .andWhere(
+        externalAdId === null
+          ? 'a.external_ad_id IS NULL'
+          : 'a.external_ad_id = :externalAdId',
+        externalAdId === null ? {} : { externalAdId },
+      )
+      .andWhere('a.rule_key = :ruleKey', { ruleKey })
+      .andWhere('a.detected_on = :detectedOn', { detectedOn })
+      .getCount();
+    return count > 0;
+  }
+
   // Dedupe por (launch, ad, rule, dia) via UNIQUE INDEX na migration —
-  // ON CONFLICT DO NOTHING evita recriar o mesmo alerta em cada ciclo do scan.
+  // ON CONFLICT DO NOTHING é a garantia final contra corrida entre scans
+  // concorrentes; o caminho normal é `exists()` evitar chegar aqui de novo.
   async createIfNotExists(input: CreateRiskAlertInput): Promise<boolean> {
     const result = await this.alertRepo
       .createQueryBuilder()

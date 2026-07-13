@@ -402,6 +402,17 @@ export class CopilotRiskEngineService implements OnModuleInit, OnModuleDestroy {
     pctDiff: number | null;
     titleFallback: string;
   }): Promise<void> {
+    // Checa dedupe ANTES de chamar a LLM — evita gastar uma chamada por ciclo
+    // de scan pra um risco que já foi alertado hoje (a LLM só é usada pra
+    // explicar um sinal novo, nunca pra re-confirmar um sinal já conhecido).
+    const alreadyAlerted = await this.riskAlerts.exists(
+      params.launch.id,
+      params.externalAdId,
+      params.ruleKey,
+      params.detectedOn,
+    );
+    if (alreadyAlerted) return;
+
     const copilotConfig = await this.copilotConfig.getConfig(params.launch.id);
 
     let narrative: string | null = null;
