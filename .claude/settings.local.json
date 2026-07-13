@@ -4,7 +4,12 @@
       "Bash(npx tsc *)",
       "Bash(grep -E \"\\\\.\\(ts\\)$\")",
       "Bash(npm run *)",
-      "Bash(docker compose *)"
+      "Bash(docker compose *)",
+      "Bash(npm view *)",
+      "Bash(npm install *)",
+      "Bash(npx eslint *)",
+      "Bash(pkill -f \"nest start --watch\")",
+      "Bash(pkill -f \"start:dev\")"
     ]
   }
 }

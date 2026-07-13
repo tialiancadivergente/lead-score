@@ -62,6 +62,10 @@ import { Page } from './page/page.entity';
 import { PageHeadline } from './page/page-headline.entity';
 import { PageTemperature } from './page/page-temperature.entity';
 import { PageVersion } from './page/page-version.entity';
+import { CopilotConversation } from './copilot/copilot-conversation.entity';
+import { CopilotMessage } from './copilot/copilot-message.entity';
+import { CopilotRiskAlert } from './copilot/copilot-risk-alert.entity';
+import { CopilotConfig } from './copilot/copilot-config.entity';
 export const ENTITIES = [
   Person,
   IdentifierType,
@@ -139,4 +143,9 @@ export const ENTITIES = [
   PageHeadline,
   PageTemperature,
   PageVersion,
+
+  CopilotConversation,
+  CopilotMessage,
+  CopilotRiskAlert,
+  CopilotConfig,
 ];
