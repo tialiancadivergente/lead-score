@@ -12,6 +12,8 @@ import { Season } from '../database/entities/marketing/season.entity';
 import { Leadscore } from '../database/entities/leadscore/leadscore.entity';
 import { LeadscoreOptionPoints } from '../database/entities/leadscore/leadscore-option-points.entity';
 import { LeadscoreRangePoints } from '../database/entities/leadscore/leadscore-range-points.entity';
+import { LeadscoreTier } from '../database/entities/leadscore/leadscore-tier.entity';
+import { LeadscoreTierRule } from '../database/entities/leadscore/leadscore-tier-rule.entity';
 import { FormController } from './form.controller';
 import { FormManagementController } from './form-management.controller';
 import { FormManagementService } from './form-management.service';
@@ -31,6 +33,8 @@ import { FormService } from './form.service';
       Leadscore,
       LeadscoreOptionPoints,
       LeadscoreRangePoints,
+      LeadscoreTier,
+      LeadscoreTierRule,
     ]),
   ],
   controllers: [FormController, FormManagementController],

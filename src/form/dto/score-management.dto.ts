@@ -116,3 +116,45 @@ export class ReplaceLeadscoreRangePointsDto {
   })
   items!: UpsertLeadscoreRangePointItemDto[];
 }
+
+export class LeadscoreTierRuleResponseDto {
+  @ApiProperty({ example: 'f94c3f1d-c1f9-4e80-9ab9-aea933d4f233' })
+  id!: string;
+
+  @ApiProperty({ example: 'f94c3f1d-c1f9-4e80-9ab9-aea933d4f233' })
+  leadscore_id!: string;
+
+  @ApiProperty({ example: '81fb42e8-f942-4864-bc00-6e2e3beb9908' })
+  tier_id!: string;
+
+  @ApiProperty({ example: 'A' })
+  tier_code!: string;
+
+  @ApiProperty({ example: 'A' })
+  tier_name!: string;
+
+  @ApiPropertyOptional({ nullable: true, example: 180.3 })
+  min_score?: number | null;
+
+  @ApiPropertyOptional({ nullable: true, example: null })
+  max_score?: number | null;
+}
+
+export class UpsertLeadscoreTierRuleItemDto {
+  @ApiProperty({ example: '81fb42e8-f942-4864-bc00-6e2e3beb9908' })
+  tier_id!: string;
+
+  @ApiPropertyOptional({ nullable: true, example: 180.3 })
+  min_score?: number;
+
+  @ApiPropertyOptional({ nullable: true, example: null })
+  max_score?: number;
+}
+
+export class ReplaceLeadscoreTierRulesDto {
+  @ApiProperty({
+    type: UpsertLeadscoreTierRuleItemDto,
+    isArray: true,
+  })
+  items!: UpsertLeadscoreTierRuleItemDto[];
+}

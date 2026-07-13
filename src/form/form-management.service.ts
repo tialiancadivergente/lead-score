@@ -16,6 +16,7 @@ import { Season } from '../database/entities/marketing/season.entity';
 import { Leadscore } from '../database/entities/leadscore/leadscore.entity';
 import { LeadscoreOptionPoints } from '../database/entities/leadscore/leadscore-option-points.entity';
 import { LeadscoreRangePoints } from '../database/entities/leadscore/leadscore-range-points.entity';
+import { LeadscoreTier } from '../database/entities/leadscore/leadscore-tier.entity';
 import { LeadscoreTierRule } from '../database/entities/leadscore/leadscore-tier-rule.entity';
 import {
   AddFormVersionQuestionDto,
@@ -39,8 +40,10 @@ import {
   LeadscoreOptionPointResponseDto,
   LeadscoreRangePointResponseDto,
   LeadscoreResponseDto,
+  LeadscoreTierRuleResponseDto,
   ReplaceLeadscoreOptionPointsDto,
   ReplaceLeadscoreRangePointsDto,
+  ReplaceLeadscoreTierRulesDto,
   UpdateLeadscoreDto,
 } from './dto/score-management.dto';
 import {
@@ -75,6 +78,10 @@ export class FormManagementService {
     private readonly leadscoreOptionPointsRepo: Repository<LeadscoreOptionPoints>,
     @InjectRepository(LeadscoreRangePoints)
     private readonly leadscoreRangePointsRepo: Repository<LeadscoreRangePoints>,
+    @InjectRepository(LeadscoreTier)
+    private readonly leadscoreTierRepo: Repository<LeadscoreTier>,
+    @InjectRepository(LeadscoreTierRule)
+    private readonly leadscoreTierRuleRepo: Repository<LeadscoreTierRule>,
     @InjectRepository(Launch)
     private readonly launchRepo: Repository<Launch>,
     @InjectRepository(Season)
@@ -845,6 +852,90 @@ export class FormManagementService {
     });
 
     return await this.listScoreRangePoints(leadscoreId);
+  }
+
+  async listScoreTierRules(
+    leadscoreId: string,
+  ): Promise<LeadscoreTierRuleResponseDto[]> {
+    await this.mustFindLeadscoreById(leadscoreId);
+
+    const rows = await this.leadscoreTierRuleRepo.find({
+      where: { leadscore: { id: leadscoreId } },
+      relations: ['leadscore', 'tier'],
+      order: {
+        min_score: 'DESC',
+        created_at: 'ASC',
+      },
+    });
+
+    return rows.map((row) => this.mapLeadscoreTierRule(row));
+  }
+
+  async replaceScoreTierRules(
+    leadscoreId: string,
+    dto: ReplaceLeadscoreTierRulesDto,
+  ): Promise<LeadscoreTierRuleResponseDto[]> {
+    const leadscore = await this.mustFindLeadscoreById(leadscoreId);
+
+    if (!Array.isArray(dto.items)) {
+      throw new BadRequestException('items deve ser uma lista.');
+    }
+
+    const parsedItems = dto.items.map((item) => {
+      const minScore = this.parseOptionalNumber(item.min_score, 'min_score');
+      const maxScore = this.parseOptionalNumber(item.max_score, 'max_score');
+      if (
+        minScore !== undefined &&
+        maxScore !== undefined &&
+        minScore >= maxScore
+      ) {
+        throw new BadRequestException(
+          'min_score deve ser menor que max_score.',
+        );
+      }
+      return {
+        tier_id: this.parseRequiredUuid(item.tier_id, 'tier_id'),
+        min_score: minScore,
+        max_score: maxScore,
+      };
+    });
+
+    const duplicateTierSet = new Set(parsedItems.map((item) => item.tier_id));
+    if (duplicateTierSet.size !== parsedItems.length) {
+      throw new BadRequestException('Nao e permitido repetir tier_id.');
+    }
+
+    const tierIds = Array.from(new Set(parsedItems.map((item) => item.tier_id)));
+    const tiers = tierIds.length
+      ? await this.leadscoreTierRepo.find({ where: { id: In(tierIds) } })
+      : [];
+    const tierById = new Map(tiers.map((row) => [row.id, row]));
+
+    for (const item of parsedItems) {
+      if (!tierById.has(item.tier_id)) {
+        throw new NotFoundException(
+          `LeadscoreTier nao encontrado para id=${item.tier_id}.`,
+        );
+      }
+    }
+
+    await this.leadscoreTierRuleRepo.manager.transaction(async (manager) => {
+      const tierRuleRepo = manager.getRepository(LeadscoreTierRule);
+      await tierRuleRepo.delete({ leadscore: { id: leadscoreId } });
+      if (!parsedItems.length) return;
+
+      const entities = parsedItems.map((item) =>
+        tierRuleRepo.create({
+          leadscore,
+          tier: tierById.get(item.tier_id)!,
+          min_score: item.min_score,
+          max_score: item.max_score,
+        }),
+      );
+      await tierRuleRepo.save(entities);
+    });
+
+    return await this.listScoreTierRules(leadscoreId);
   }
 
   async clone(payload: CloneFormPayloadDto): Promise<CloneFormResponseDto> {
@@ -1812,6 +1903,20 @@ export class FormManagementService {
       active: row.active,
       created_at: row.created_at.toISOString(),
       updated_at: row.updated_at.toISOString(),
+    };
+  }
+
+  private mapLeadscoreTierRule(
+    row: LeadscoreTierRule,
+  ): LeadscoreTierRuleResponseDto {
+    return {
+      id: row.id,
+      leadscore_id: row.leadscore.id,
+      tier_id: row.tier.id,
+      tier_code: row.tier.code,
+      tier_name: row.tier.name,
+      min_score: row.min_score ?? null,
+      max_score: row.max_score ?? null,
     };
   }
 }

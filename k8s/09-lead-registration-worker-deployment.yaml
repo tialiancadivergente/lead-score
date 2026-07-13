@@ -1,13 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: lead-score-app
+  name: lead-registration-worker
   namespace: lead-score
   labels:
     app: lead-score
-    component: api
+    component: lead-registration-worker
+    managed-by: kustomize
 spec:
-  replicas: 2
+  replicas: 3
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -16,30 +17,25 @@ spec:
   selector:
     matchLabels:
       app: lead-score
-      component: api
+      component: lead-registration-worker
+      managed-by: kustomize
   template:
     metadata:
       labels:
         app: lead-score
-        component: api
+        component: lead-registration-worker
+        managed-by: kustomize
     spec:
-      # Configuração de segurança
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
         fsGroup: 1001
-      
+
       containers:
-      - name: lead-score
+      - name: lead-registration-worker
         image: leadscoreacr.azurecr.io/lead-score:v1.4.19
         imagePullPolicy: Always
-        
-        ports:
-        - name: http
-          containerPort: 3000
-          protocol: TCP
-        
-        # Environment variables do ConfigMap
+
         envFrom:
         - configMapRef:
             name: lead-score-config
@@ -47,54 +43,51 @@ spec:
             name: lead-score-secrets
         env:
         - name: SERVICE_BUS_CONSUMER_ENABLED
-          value: "false"
+          value: "true"
         - name: SERVICE_BUS_LEAD_REGISTRATION_CONSUMER_ENABLED
-          value: "false"
+          value: "true"
+        - name: SERVICE_BUS_LEAD_REGISTRATION_MAX_CONCURRENCY
+          value: "5"
         - name: SERVICE_BUS_LEAD_SCORE_CONSUMER_ENABLED
           value: "false"
         - name: SERVICE_BUS_MARKETING_EXTRACT_CONSUMER_ENABLED
           value: "false"
-        
-        # Resources
+
         resources:
           requests:
-            memory: "128Mi"
+            memory: "64Mi"
             cpu: "100m"
           limits:
             memory: "512Mi"
             cpu: "500m"
-        
-        # Liveness probe
+
         livenessProbe:
           httpGet:
             path: /health
-            port: http
+            port: 3000
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 3
           failureThreshold: 3
-        
-        # Readiness probe
+
         readinessProbe:
           httpGet:
             path: /health
-            port: http
+            port: 3000
           initialDelaySeconds: 10
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 3
-        
-        # Startup probe (para aplicações que demoram para iniciar)
+
         startupProbe:
           httpGet:
             path: /health
-            port: http
+            port: 3000
           initialDelaySeconds: 0
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 30
-        
-        # Security context
+
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: false
@@ -103,9 +96,6 @@ spec:
           capabilities:
             drop:
             - ALL
-      
-      # Restart policy
+
       restartPolicy: Always
-      
-      # DNS config
       dnsPolicy: ClusterFirst

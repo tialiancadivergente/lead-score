@@ -9,14 +9,18 @@ resources:
 - 05-ingress.yaml
 - 06-hpa.yaml
 - 07-pdb.yaml
+- 08-worker-deployment.yaml
+- 09-lead-registration-worker-deployment.yaml
 
 # Namespace comum
 namespace: lead-score
 
 # Labels comuns
-commonLabels:
-  app: lead-score
-  managed-by: kustomize
+labels:
+- pairs:
+    app: lead-score
+    managed-by: kustomize
+  includeSelectors: false
 
 # Annotations comuns
 commonAnnotations:

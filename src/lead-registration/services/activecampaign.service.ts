@@ -217,6 +217,13 @@ export class ActiveCampaignService {
     );
   }
 
+  private isMissingTagError(status: number, errBody: unknown): boolean {
+    if (status !== 404) return false;
+
+    const raw = JSON.stringify(errBody).toLowerCase();
+    return raw.includes('tag not found');
+  }
+
   private extractContactIdFromResponse(
     response: unknown,
     fallbackId?: string,
@@ -284,6 +291,14 @@ export class ActiveCampaignService {
         return {
           skipped: true,
           reason: 'duplicate-tag',
+        };
+      }
+
+      if (this.isMissingTagError(res.status, errJson)) {
+        return {
+          skipped: true,
+          reason: 'tag-not-found',
+          tagId,
         };
       }
 

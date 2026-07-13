@@ -45,8 +45,10 @@ import {
   LeadscoreOptionPointResponseDto,
   LeadscoreRangePointResponseDto,
   LeadscoreResponseDto,
+  LeadscoreTierRuleResponseDto,
   ReplaceLeadscoreOptionPointsDto,
   ReplaceLeadscoreRangePointsDto,
+  ReplaceLeadscoreTierRulesDto,
   UpdateLeadscoreDto,
 } from './dto/score-management.dto';
 import {
@@ -437,6 +439,37 @@ export class FormManagementController {
     @Body() dto: ReplaceLeadscoreRangePointsDto,
   ) {
     return await this.service.replaceScoreRangePoints(leadscoreId, dto);
+  }
+
+  @Get('scores/:leadscoreId/tier-rules')
+  @ApiOperation({ summary: 'Lista regras de tier do lead score' })
+  @ApiResponse({
+    status: 200,
+    type: LeadscoreTierRuleResponseDto,
+    isArray: true,
+  })
+  async listScoreTierRules(
+    @Param('leadscoreId', new ParseUUIDPipe({ version: '4' }))
+    leadscoreId: string,
+  ) {
+    return await this.service.listScoreTierRules(leadscoreId);
+  }
+
+  @Put('scores/:leadscoreId/tier-rules')
+  @RequirePermission('forms', 'update')
+  @ApiOperation({ summary: 'Substitui regras de tier do lead score' })
+  @ApiBody({ type: ReplaceLeadscoreTierRulesDto })
+  @ApiResponse({
+    status: 200,
+    type: LeadscoreTierRuleResponseDto,
+    isArray: true,
+  })
+  async replaceScoreTierRules(
+    @Param('leadscoreId', new ParseUUIDPipe({ version: '4' }))
+    leadscoreId: string,
+    @Body() dto: ReplaceLeadscoreTierRulesDto,
+  ) {
+    return await this.service.replaceScoreTierRules(leadscoreId, dto);
   }
 
   @Post('clone')

@@ -188,6 +188,17 @@ kubectl set image deployment/lead-score-app \
     -n lead-score
 echo -e "${GREEN}✓ Deployment updated${NC}"
 
+echo -e "${YELLOW}Updating workers...${NC}"
+kubectl apply -f k8s/08-worker-deployment.yaml
+kubectl apply -f k8s/09-lead-registration-worker-deployment.yaml
+kubectl set image deployment/lead-score-worker \
+    lead-score-worker=$ACR_NAME.azurecr.io/lead-score:$VERSION \
+    -n lead-score
+kubectl set image deployment/lead-registration-worker \
+    lead-registration-worker=$ACR_NAME.azurecr.io/lead-score:$VERSION \
+    -n lead-score
+echo -e "${GREEN}✓ Workers updated${NC}"
+
 # Aplicar Service
 echo -e "${YELLOW}Applying Service...${NC}"
 kubectl apply -f k8s/04-service.yaml
@@ -252,6 +263,8 @@ echo -e "${GREEN}✓ PDB applied${NC}"
 # Aguardar rollout
 echo -e "${YELLOW}Waiting for rollout to complete...${NC}"
 kubectl rollout status deployment/lead-score-app -n lead-score --timeout=5m
+kubectl rollout status deployment/lead-score-worker -n lead-score --timeout=5m
+kubectl rollout status deployment/lead-registration-worker -n lead-score --timeout=5m
 echo -e "${GREEN}✓ Rollout completed${NC}"
 
 # Verificar status
