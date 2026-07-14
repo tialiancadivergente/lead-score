@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { MetaSyncSchedule, MetaSyncStep } from '../database/entities/meta-ads/meta-sync-schedule.entity';
+import {
+  MetaSyncSchedule,
+  MetaSyncStep,
+} from '../database/entities/meta-ads/meta-sync-schedule.entity';
 import { MetaAdsService } from './meta-ads.service';
 
 interface CreateMetaSyncScheduleDto {

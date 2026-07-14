@@ -317,7 +317,9 @@ export class MarketingDashboardService {
 
   private parseTableSorting(query: MarketingDashboardTableQueryDto) {
     const sortBy = query.sortBy ?? 'spend';
-    const sortOrder = (query.sortOrder ?? 'desc').toLowerCase() as 'asc' | 'desc';
+    const sortOrder = (query.sortOrder ?? 'desc').toLowerCase() as
+      | 'asc'
+      | 'desc';
 
     if (!MarketingDashboardService.TABLE_SORT_FIELDS.has(sortBy)) {
       throw new BadRequestException(

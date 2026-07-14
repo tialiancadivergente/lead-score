@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class LeadRegistrationWorkerIndexes1782000000000
-  implements MigrationInterface
-{
+export class LeadRegistrationWorkerIndexes1782000000000 implements MigrationInterface {
   name = 'LeadRegistrationWorkerIndexes1782000000000';
   transaction = false;
 

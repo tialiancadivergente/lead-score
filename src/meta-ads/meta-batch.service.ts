@@ -417,51 +417,82 @@ export class MetaBatchService {
         {
           method: 'GET',
           relative_url: this.buildInsightUrl(
-            accountId, level, breakdowns, timeIncrement, dateParam, limit,
+            accountId,
+            level,
+            breakdowns,
+            timeIncrement,
+            dateParam,
+            limit,
           ),
         },
       ]);
       if (response.code === 200) {
-        const parsed = JSON.parse(response.body) as MetaPagedResponse<MetaInsightRow>;
-        this.logger.log(`[retry full limit=${limit}] account ${accountId}: ${parsed.data?.length ?? 0} rows`);
+        const parsed = JSON.parse(
+          response.body,
+        ) as MetaPagedResponse<MetaInsightRow>;
+        this.logger.log(
+          `[retry full limit=${limit}] account ${accountId}: ${parsed.data?.length ?? 0} rows`,
+        );
         return parsed.data ?? [];
       }
       const errMsg = this.formatBatchErrorBody(response.body);
       if (response.code === 500 && errMsg.includes('code=1')) {
-        this.logger.warn(`account ${accountId} too large at full limit=${limit}, retrying smaller`);
+        this.logger.warn(
+          `account ${accountId} too large at full limit=${limit}, retrying smaller`,
+        );
         continue;
       }
-      this.logger.error(`account ${accountId} retry failed (limit=${limit}): ${response.code} ${errMsg}`);
+      this.logger.error(
+        `account ${accountId} retry failed (limit=${limit}): ${response.code} ${errMsg}`,
+      );
       return [];
     }
 
     // Full fields exhausted — retry with slim fields (no video metrics)
-    this.logger.warn(`account ${accountId} switching to slim fields (no video metrics)`);
+    this.logger.warn(
+      `account ${accountId} switching to slim fields (no video metrics)`,
+    );
     const slimLimits = [200, 100, 50];
     for (const limit of slimLimits) {
       const [response] = await this.executeGraphBatch(accessToken, [
         {
           method: 'GET',
           relative_url: this.buildInsightUrl(
-            accountId, level, breakdowns, timeIncrement, dateParam, limit, true,
+            accountId,
+            level,
+            breakdowns,
+            timeIncrement,
+            dateParam,
+            limit,
+            true,
           ),
         },
       ]);
       if (response.code === 200) {
-        const parsed = JSON.parse(response.body) as MetaPagedResponse<MetaInsightRow>;
-        this.logger.log(`[retry slim limit=${limit}] account ${accountId}: ${parsed.data?.length ?? 0} rows`);
+        const parsed = JSON.parse(
+          response.body,
+        ) as MetaPagedResponse<MetaInsightRow>;
+        this.logger.log(
+          `[retry slim limit=${limit}] account ${accountId}: ${parsed.data?.length ?? 0} rows`,
+        );
         return parsed.data ?? [];
       }
       const errMsg = this.formatBatchErrorBody(response.body);
       if (response.code === 500 && errMsg.includes('code=1')) {
-        this.logger.warn(`account ${accountId} still too large at slim limit=${limit}`);
+        this.logger.warn(
+          `account ${accountId} still too large at slim limit=${limit}`,
+        );
         continue;
       }
-      this.logger.error(`account ${accountId} slim retry failed (limit=${limit}): ${response.code} ${errMsg}`);
+      this.logger.error(
+        `account ${accountId} slim retry failed (limit=${limit}): ${response.code} ${errMsg}`,
+      );
       return [];
     }
 
-    this.logger.error(`account ${accountId} exhausted all retry strategies, skipping`);
+    this.logger.error(
+      `account ${accountId} exhausted all retry strategies, skipping`,
+    );
     return [];
   }
 

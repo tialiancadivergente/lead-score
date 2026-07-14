@@ -52,7 +52,8 @@ export class RolesService {
     if (dto.name !== undefined) {
       const name = this.parseName(dto.name);
       const existing = await this.roleRepo.findOne({ where: { name } });
-      if (existing && existing.id !== id) throw new ConflictException('Papel ja cadastrado.');
+      if (existing && existing.id !== id)
+        throw new ConflictException('Papel ja cadastrado.');
       role.name = name;
     }
     if (dto.description !== undefined) {
@@ -70,7 +71,9 @@ export class RolesService {
   async remove(id: string): Promise<void> {
     const role = await this.getRoleOrThrow(id);
     if (role.isSystem) {
-      throw new BadRequestException('Papeis de sistema nao podem ser excluidos.');
+      throw new BadRequestException(
+        'Papeis de sistema nao podem ser excluidos.',
+      );
     }
     await this.roleRepo.delete(id);
   }
@@ -98,9 +101,13 @@ export class RolesService {
   private async getPermissions(permissionIds: string[]): Promise<Permission[]> {
     if (!Array.isArray(permissionIds) || permissionIds.length === 0) return [];
     const uniqueIds = Array.from(new Set(permissionIds));
-    const permissions = await this.permissionRepo.find({ where: { id: In(uniqueIds) } });
+    const permissions = await this.permissionRepo.find({
+      where: { id: In(uniqueIds) },
+    });
     if (permissions.length !== uniqueIds.length) {
-      throw new BadRequestException('Uma ou mais permissoes nao foram encontradas.');
+      throw new BadRequestException(
+        'Uma ou mais permissoes nao foram encontradas.',
+      );
     }
     return permissions;
   }
@@ -124,25 +131,34 @@ export class RolesService {
   private parseName(value: unknown): string {
     const name = this.parseRequiredString(value, 'name', 60).toLowerCase();
     if (!/^[a-z0-9_]+$/.test(name)) {
-      throw new BadRequestException('name deve conter apenas letras, numeros e underline.');
+      throw new BadRequestException(
+        'name deve conter apenas letras, numeros e underline.',
+      );
     }
     return name;
   }
 
-  private parseRequiredString(value: unknown, field: string, max: number): string {
+  private parseRequiredString(
+    value: unknown,
+    field: string,
+    max: number,
+  ): string {
     if (typeof value !== 'string' || !value.trim()) {
       throw new BadRequestException(`${field} e obrigatorio.`);
     }
     const normalized = value.trim();
-    if (normalized.length > max) throw new BadRequestException(`${field} excede ${max} caracteres.`);
+    if (normalized.length > max)
+      throw new BadRequestException(`${field} excede ${max} caracteres.`);
     return normalized;
   }
 
   private parseOptionalString(value: unknown, max: number): string | null {
     if (value === null || value === undefined || value === '') return null;
-    if (typeof value !== 'string') throw new BadRequestException('description deve ser string.');
+    if (typeof value !== 'string')
+      throw new BadRequestException('description deve ser string.');
     const normalized = value.trim();
-    if (normalized.length > max) throw new BadRequestException(`description excede ${max} caracteres.`);
+    if (normalized.length > max)
+      throw new BadRequestException(`description excede ${max} caracteres.`);
     return normalized || null;
   }
 }

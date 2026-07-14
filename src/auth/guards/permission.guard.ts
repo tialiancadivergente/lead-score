@@ -1,4 +1,9 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import {
   REQUIRE_PERMISSION_KEY,
@@ -35,7 +40,11 @@ export class PermissionGuard implements CanActivate {
 
     if (
       user &&
-      this.permissionsService.hasPermission(user, required.module, required.action)
+      this.permissionsService.hasPermission(
+        user,
+        required.module,
+        required.action,
+      )
     ) {
       return true;
     }

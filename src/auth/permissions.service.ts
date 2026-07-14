@@ -52,11 +52,16 @@ export class PermissionsService {
       }));
   }
 
-  hasPermission(user: { isSuperAdmin: boolean; permissions: PermissionGroup[] }, module: string, action: string) {
+  hasPermission(
+    user: { isSuperAdmin: boolean; permissions: PermissionGroup[] },
+    module: string,
+    action: string,
+  ) {
     if (user.isSuperAdmin) return true;
     return user.permissions.some(
       (permission) =>
-        permission.module === module && permission.actions.includes(action as never),
+        permission.module === module &&
+        permission.actions.includes(action as never),
     );
   }
 }

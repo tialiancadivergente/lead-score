@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddUniqueActivePagePerLaunch1781060000000
-  implements MigrationInterface
-{
+export class AddUniqueActivePagePerLaunch1781060000000 implements MigrationInterface {
   name = 'AddUniqueActivePagePerLaunch1781060000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

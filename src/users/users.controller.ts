@@ -79,7 +79,9 @@ export class UsersController {
 
   @Post(':id/force-password-reset')
   @RequirePermission('users', 'update')
-  forcePasswordReset(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
+  forcePasswordReset(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
     return this.usersService.forcePasswordReset(id);
   }
 

@@ -905,7 +905,9 @@ export class FormManagementService {
       throw new BadRequestException('Nao e permitido repetir tier_id.');
     }
 
-    const tierIds = Array.from(new Set(parsedItems.map((item) => item.tier_id)));
+    const tierIds = Array.from(
+      new Set(parsedItems.map((item) => item.tier_id)),
+    );
     const tiers = tierIds.length
       ? await this.leadscoreTierRepo.find({ where: { id: In(tierIds) } })
       : [];

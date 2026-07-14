@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateMetaSyncScheduleTable1770000000061
-  implements MigrationInterface
-{
+export class CreateMetaSyncScheduleTable1770000000061 implements MigrationInterface {
   async up(runner: QueryRunner): Promise<void> {
     await runner.query(`
       CREATE TABLE meta_sync_schedule (

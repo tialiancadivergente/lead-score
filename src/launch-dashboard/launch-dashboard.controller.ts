@@ -58,7 +58,9 @@ export class LaunchDashboardController {
 
   // ─── Notifications ───────────────────────────────────────────────────────
 
-  @ApiOperation({ summary: 'Lista todos os monitoramentos configurados com métricas atuais' })
+  @ApiOperation({
+    summary: 'Lista todos os monitoramentos configurados com métricas atuais',
+  })
   @Get('notifications')
   getNotifications() {
     return this.service.getNotifications();

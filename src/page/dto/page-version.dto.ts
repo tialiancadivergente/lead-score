@@ -32,7 +32,10 @@ export class PageVersionResponseDto {
   @ApiProperty({ example: 1 })
   version_number!: number;
 
-  @ApiProperty({ nullable: true, example: 'https://cdn.example.com/page-v1.png' })
+  @ApiProperty({
+    nullable: true,
+    example: 'https://cdn.example.com/page-v1.png',
+  })
   template_image_url!: string | null;
 
   @ApiProperty({ nullable: true, example: 'https://figma.com/file/example' })

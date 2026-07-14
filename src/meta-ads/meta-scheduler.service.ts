@@ -79,15 +79,20 @@ export class MetaSchedulerService implements OnModuleInit {
     const mm = String(now.getUTCMinutes()).padStart(2, '0');
     const hhmm = `${hh}:${mm}`;
 
-    const due = await this.metaSyncScheduleService.getActiveSchedulesForTime(hhmm);
+    const due =
+      await this.metaSyncScheduleService.getActiveSchedulesForTime(hhmm);
     for (const schedule of due) {
       this.logger.log(
         `Running scheduled Meta sync "${schedule.name ?? schedule.id}" (${schedule.sync_step}, ${schedule.period_preset})`,
       );
-      void this.metaSyncScheduleService.runNow(schedule.id).catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        this.logger.error(`Scheduled Meta sync ${schedule.id} failed: ${msg}`);
-      });
+      void this.metaSyncScheduleService
+        .runNow(schedule.id)
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          this.logger.error(
+            `Scheduled Meta sync ${schedule.id} failed: ${msg}`,
+          );
+        });
     }
   }
 

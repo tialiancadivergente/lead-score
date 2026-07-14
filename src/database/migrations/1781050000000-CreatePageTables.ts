@@ -125,7 +125,9 @@ export class CreatePageTables1781050000000 implements MigrationInterface {
       `ALTER TABLE "page" DROP CONSTRAINT "FK_page_form_version"`,
     );
     await queryRunner.query(`DROP INDEX "UQ_page_active_launch"`);
-    await queryRunner.query(`ALTER TABLE "page" DROP CONSTRAINT "FK_page_form"`);
+    await queryRunner.query(
+      `ALTER TABLE "page" DROP CONSTRAINT "FK_page_form"`,
+    );
     await queryRunner.query(
       `ALTER TABLE "page" DROP CONSTRAINT "FK_page_season"`,
     );

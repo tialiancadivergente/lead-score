@@ -10,13 +10,19 @@ export class ListPageItemDto {
   @ApiProperty({ example: 'Pagina de Captura - Lancamento X' })
   name!: string;
 
-  @ApiProperty({ nullable: true, example: '4c88a392-6e6f-417e-822a-5be7221900fd' })
+  @ApiProperty({
+    nullable: true,
+    example: '4c88a392-6e6f-417e-822a-5be7221900fd',
+  })
   launch_id!: string | null;
 
   @ApiProperty({ nullable: true, example: 'O Resgate dos Otimistas' })
   launch_name?: string | null;
 
-  @ApiProperty({ nullable: true, example: 'b2aee9b9-bb96-4cd7-b7e4-5fde7ac352de' })
+  @ApiProperty({
+    nullable: true,
+    example: 'b2aee9b9-bb96-4cd7-b7e4-5fde7ac352de',
+  })
   season_id!: string | null;
 
   @ApiProperty({ example: '7405904f-64b9-4b2e-a067-a5fa246e1d55' })

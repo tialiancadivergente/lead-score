@@ -146,7 +146,11 @@ export class BootstrapService {
           action: 'auth.bootstrap',
           resource: 'users',
           resourceId: saved.id,
-          metadata: { email: saved.email, created, userAgent: context.userAgent },
+          metadata: {
+            email: saved.email,
+            created,
+            userAgent: context.userAgent,
+          },
           ip: context.ip,
         }),
       );
@@ -163,7 +167,10 @@ export class BootstrapService {
     });
   }
 
-  private constantTimeTokenMatches(provided: string, expected: string): boolean {
+  private constantTimeTokenMatches(
+    provided: string,
+    expected: string,
+  ): boolean {
     const providedHash = createHash('sha256').update(provided).digest();
     const expectedHash = createHash('sha256').update(expected).digest();
     return timingSafeEqual(providedHash, expectedHash);

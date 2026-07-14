@@ -72,13 +72,18 @@ export class UsersService {
 
   async create(dto: CreateUserDto) {
     const email = this.parseEmail(dto.email);
-    const existing = await this.userRepo.findOne({ where: { email }, withDeleted: true });
+    const existing = await this.userRepo.findOne({
+      where: { email },
+      withDeleted: true,
+    });
     if (existing) throw new ConflictException('Email ja cadastrado.');
 
     const user = this.userRepo.create({
       name: this.parseRequiredString(dto.name, 'name', 120),
       email,
-      passwordHash: await this.authService.hashPassword(this.parsePassword(dto.password)),
+      passwordHash: await this.authService.hashPassword(
+        this.parsePassword(dto.password),
+      ),
       isActive: true,
       roles: await this.getRoles(dto.roleIds ?? []),
     });
@@ -88,14 +93,20 @@ export class UsersService {
 
   async update(id: string, dto: UpdateUserDto) {
     const user = await this.getUserOrThrow(id);
-    if (dto.name !== undefined) user.name = this.parseRequiredString(dto.name, 'name', 120);
+    if (dto.name !== undefined)
+      user.name = this.parseRequiredString(dto.name, 'name', 120);
     if (dto.email !== undefined) {
       const email = this.parseEmail(dto.email);
-      const existing = await this.userRepo.findOne({ where: { email }, withDeleted: true });
-      if (existing && existing.id !== id) throw new ConflictException('Email ja cadastrado.');
+      const existing = await this.userRepo.findOne({
+        where: { email },
+        withDeleted: true,
+      });
+      if (existing && existing.id !== id)
+        throw new ConflictException('Email ja cadastrado.');
       user.email = email;
     }
-    if (dto.isActive !== undefined) user.isActive = this.parseBoolean(dto.isActive, 'isActive');
+    if (dto.isActive !== undefined)
+      user.isActive = this.parseBoolean(dto.isActive, 'isActive');
     return this.mapUser(await this.userRepo.save(user));
   }
 
@@ -119,7 +130,8 @@ export class UsersService {
 
   async remove(id: string): Promise<void> {
     const result = await this.userRepo.softDelete(id);
-    if (!result.affected) throw new NotFoundException('Usuario nao encontrado.');
+    if (!result.affected)
+      throw new NotFoundException('Usuario nao encontrado.');
   }
 
   private async getUserOrThrow(id: string): Promise<User> {
@@ -127,7 +139,8 @@ export class UsersService {
       where: { id },
       relations: { roles: true },
     });
-    if (!user || user.deletedAt) throw new NotFoundException('Usuario nao encontrado.');
+    if (!user || user.deletedAt)
+      throw new NotFoundException('Usuario nao encontrado.');
     return user;
   }
 
@@ -174,16 +187,22 @@ export class UsersService {
 
   private parsePassword(value: unknown): string {
     const password = this.parseRequiredString(value, 'password', 255);
-    if (password.length < 8) throw new BadRequestException('Senha deve ter ao menos 8 caracteres.');
+    if (password.length < 8)
+      throw new BadRequestException('Senha deve ter ao menos 8 caracteres.');
     return password;
   }
 
-  private parseRequiredString(value: unknown, field: string, max: number): string {
+  private parseRequiredString(
+    value: unknown,
+    field: string,
+    max: number,
+  ): string {
     if (typeof value !== 'string' || !value.trim()) {
       throw new BadRequestException(`${field} e obrigatorio.`);
     }
     const normalized = value.trim();
-    if (normalized.length > max) throw new BadRequestException(`${field} excede ${max} caracteres.`);
+    if (normalized.length > max)
+      throw new BadRequestException(`${field} excede ${max} caracteres.`);
     return normalized;
   }
 

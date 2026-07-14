@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddNotificationConfigToLaunchDashboard1781700000000
-  implements MigrationInterface
-{
+export class AddNotificationConfigToLaunchDashboard1781700000000 implements MigrationInterface {
   name = 'AddNotificationConfigToLaunchDashboard1781700000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

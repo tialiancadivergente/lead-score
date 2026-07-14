@@ -367,7 +367,7 @@ export class MetaAdsService {
 
     const MAX_LOG_ENTRIES = 200;
     const logBuffer: string[] = [];
-    let totalRecords = 0;
+    const totalRecords = 0;
     let failedCount = 0;
     let doneCount = 0;
 
@@ -413,15 +413,27 @@ export class MetaAdsService {
     for (const { connectionId, accountIds } of targets) {
       for (const accountId of accountIds) {
         for (const chunk of chunks) {
-          allJobDefs.push({ connectionId, accountId, since: chunk.since, until: chunk.until });
+          allJobDefs.push({
+            connectionId,
+            accountId,
+            since: chunk.since,
+            until: chunk.until,
+          });
         }
       }
     }
 
-    execution.metadata = { totalJobs: allJobDefs.length, doneJobs: 0, logs: [] };
+    execution.metadata = {
+      totalJobs: allJobDefs.length,
+      doneJobs: 0,
+      logs: [],
+    };
     await this.executionRepo.save(execution);
 
-    await appendLog('info', `Fase 1: disparando ${allJobDefs.length} jobs na Meta...`);
+    await appendLog(
+      'info',
+      `Fase 1: disparando ${allJobDefs.length} jobs na Meta...`,
+    );
 
     const pending: PendingJob[] = [];
     const startErrors: string[] = [];
@@ -459,7 +471,14 @@ export class MetaAdsService {
 
     if (pending.length === 0 || this.abortRequests.has(execution.id)) {
       this.abortRequests.delete(execution.id);
-      await this.finalizeExecution(execution, totalRecords, failedCount, allJobDefs.length, true, logBuffer);
+      await this.finalizeExecution(
+        execution,
+        totalRecords,
+        failedCount,
+        allJobDefs.length,
+        true,
+        logBuffer,
+      );
       return;
     }
 
@@ -521,11 +540,16 @@ export class MetaAdsService {
 
   async pollRunningBulkJobs(): Promise<void> {
     const running = await this.executionRepo.find({
-      where: { status: 'running', step: 'insights' } as FindOptionsWhere<MetaSyncExecution>,
+      where: {
+        status: 'running',
+        step: 'insights',
+      } as FindOptionsWhere<MetaSyncExecution>,
     });
 
     for (const execution of running) {
-      const pending = execution.metadata?.pendingJobs as BulkPendingJob[] | undefined;
+      const pending = execution.metadata?.pendingJobs as
+        | BulkPendingJob[]
+        | undefined;
       if (!pending || pending.length === 0) continue;
       if (this.pollingExecutions.has(execution.id)) continue;
 
@@ -536,112 +560,141 @@ export class MetaAdsService {
     }
   }
 
-  private async processPendingJobs(execution: MetaSyncExecution): Promise<void> {
+  private async processPendingJobs(
+    execution: MetaSyncExecution,
+  ): Promise<void> {
     try {
-    this.logger.log(`[BulkInsights ${execution.id}] Cron tick: verificando ${((execution.metadata?.pendingJobs as unknown[]) ?? []).length} jobs pendentes`);
-    const meta = execution.metadata!;
-    const pendingJobs = (meta.pendingJobs ?? []) as BulkPendingJob[];
-    let totalRecords = ((meta.totalRecords as number) ?? 0);
-    let failedCount = ((meta.failedCount as number) ?? 0);
-    let doneCount = ((meta.doneJobs as number) ?? 0);
-    const totalJobs = ((meta.totalJobs as number) ?? pendingJobs.length);
-    const logBuffer = [...((meta.logs as string[]) ?? [])];
-    const MAX_LOG_ENTRIES = 200;
+      this.logger.log(
+        `[BulkInsights ${execution.id}] Cron tick: verificando ${((execution.metadata?.pendingJobs as unknown[]) ?? []).length} jobs pendentes`,
+      );
+      const meta = execution.metadata!;
+      const pendingJobs = (meta.pendingJobs ?? []) as BulkPendingJob[];
+      let totalRecords = (meta.totalRecords as number) ?? 0;
+      let failedCount = (meta.failedCount as number) ?? 0;
+      let doneCount = (meta.doneJobs as number) ?? 0;
+      const totalJobs = (meta.totalJobs as number) ?? pendingJobs.length;
+      const logBuffer = [...((meta.logs as string[]) ?? [])];
+      const MAX_LOG_ENTRIES = 200;
 
-    const ts = () => new Date().toISOString().slice(11, 19);
-    const appendLog = (level: 'info' | 'error', msg: string) => {
-      const entry = `[${ts()}] ${level === 'error' ? '✗' : '✓'} ${msg}`;
-      logBuffer.push(entry);
-      if (logBuffer.length > MAX_LOG_ENTRIES) logBuffer.shift();
-      if (level === 'error') {
-        this.logger.error(`[BulkInsights ${execution.id}] ${msg}`);
-      } else {
-        this.logger.log(`[BulkInsights ${execution.id}] ${msg}`);
-      }
-    };
+      const ts = () => new Date().toISOString().slice(11, 19);
+      const appendLog = (level: 'info' | 'error', msg: string) => {
+        const entry = `[${ts()}] ${level === 'error' ? '✗' : '✓'} ${msg}`;
+        logBuffer.push(entry);
+        if (logBuffer.length > MAX_LOG_ENTRIES) logBuffer.shift();
+        if (level === 'error') {
+          this.logger.error(`[BulkInsights ${execution.id}] ${msg}`);
+        } else {
+          this.logger.log(`[BulkInsights ${execution.id}] ${msg}`);
+        }
+      };
 
-    const stillPending: BulkPendingJob[] = [];
+      const stillPending: BulkPendingJob[] = [];
 
-    const checks = await Promise.allSettled(
-      pendingJobs.map(async (job) => {
-        const status = await this.jobService.checkJob({
-          connectionId: job.connectionId,
-          reportRunId: job.reportRunId,
-        });
-        return { job, status };
-      }),
-    );
-
-    for (let i = 0; i < checks.length; i++) {
-      const check = checks[i];
-      const job = pendingJobs[i];
-      const label = `${job.accountId} [${job.since}→${job.until}]`;
-
-      if (check.status === 'rejected') {
-        stillPending.push(job);
-        continue;
-      }
-
-      const { status } = check.value;
-
-      if (status.async_status === 'Job Complete' || status.async_status === 'Job Completed') {
-        try {
-          const rows = await this.jobService.getJobResults({
+      const checks = await Promise.allSettled(
+        pendingJobs.map(async (job) => {
+          const status = await this.jobService.checkJob({
             connectionId: job.connectionId,
             reportRunId: job.reportRunId,
           });
-          const saved = await this.processor.saveInsights(job.accountId, rows);
-          totalRecords += saved;
-          doneCount++;
-          appendLog('info', `${label}: ${saved} registros — ${doneCount}/${totalJobs} concluídos`);
-        } catch (err: unknown) {
+          return { job, status };
+        }),
+      );
+
+      for (let i = 0; i < checks.length; i++) {
+        const check = checks[i];
+        const job = pendingJobs[i];
+        const label = `${job.accountId} [${job.since}→${job.until}]`;
+
+        if (check.status === 'rejected') {
+          stillPending.push(job);
+          continue;
+        }
+
+        const { status } = check.value;
+
+        if (
+          status.async_status === 'Job Complete' ||
+          status.async_status === 'Job Completed'
+        ) {
+          try {
+            const rows = await this.jobService.getJobResults({
+              connectionId: job.connectionId,
+              reportRunId: job.reportRunId,
+            });
+            const saved = await this.processor.saveInsights(
+              job.accountId,
+              rows,
+            );
+            totalRecords += saved;
+            doneCount++;
+            appendLog(
+              'info',
+              `${label}: ${saved} registros — ${doneCount}/${totalJobs} concluídos`,
+            );
+          } catch (err: unknown) {
+            failedCount++;
+            doneCount++;
+            appendLog(
+              'error',
+              `${label}: erro ao buscar resultados — ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        } else if (
+          status.async_status === 'Job Failed' ||
+          status.async_status === 'Job Skipped'
+        ) {
           failedCount++;
           doneCount++;
-          appendLog('error', `${label}: erro ao buscar resultados — ${err instanceof Error ? err.message : String(err)}`);
-        }
-      } else if (
-        status.async_status === 'Job Failed' ||
-        status.async_status === 'Job Skipped'
-      ) {
-        failedCount++;
-        doneCount++;
-        appendLog('error', `${label}: ${status.async_status}`);
-      } else {
-        stillPending.push({ ...job, pct: status.async_percent_completion });
-        if (status.async_percent_completion === 100) {
-          appendLog('info', `${label}: 100% mas status="${status.async_status}" — aguardando transição`);
+          appendLog('error', `${label}: ${status.async_status}`);
+        } else {
+          stillPending.push({ ...job, pct: status.async_percent_completion });
+          if (status.async_percent_completion === 100) {
+            appendLog(
+              'info',
+              `${label}: 100% mas status="${status.async_status}" — aguardando transição`,
+            );
+          }
         }
       }
-    }
 
-    const updatedMeta = {
-      ...meta,
-      totalJobs,
-      doneJobs: doneCount,
-      failedCount,
-      totalRecords,
-      logs: [...logBuffer],
-      pendingJobs: stillPending,
-    };
+      const updatedMeta = {
+        ...meta,
+        totalJobs,
+        doneJobs: doneCount,
+        failedCount,
+        totalRecords,
+        logs: [...logBuffer],
+        pendingJobs: stillPending,
+      };
 
-    if (stillPending.length === 0) {
-      execution.metadata = updatedMeta;
-      await this.finalizeExecution(execution, totalRecords, failedCount, totalJobs, false, logBuffer);
-    } else {
-      execution.records_processed = totalRecords;
-      execution.metadata = updatedMeta;
-      await this.executionRepo.save(execution);
+      if (stillPending.length === 0) {
+        execution.metadata = updatedMeta;
+        await this.finalizeExecution(
+          execution,
+          totalRecords,
+          failedCount,
+          totalJobs,
+          false,
+          logBuffer,
+        );
+      } else {
+        execution.records_processed = totalRecords;
+        execution.metadata = updatedMeta;
+        await this.executionRepo.save(execution);
 
-      const pcts = (stillPending as Array<{ pct?: number }>)
-        .map((j) => j.pct ?? 0);
-      const avgPct = Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length);
-      const minPct = Math.min(...pcts);
-      const maxPct = Math.max(...pcts);
-      appendLog(
-        'info',
-        `${stillPending.length}/${totalJobs} jobs pendentes — progresso: min=${minPct}% avg=${avgPct}% max=${maxPct}% — próxima verificação em 30s`,
-      );
-    }
+        const pcts = (stillPending as Array<{ pct?: number }>).map(
+          (j) => j.pct ?? 0,
+        );
+        const avgPct = Math.round(
+          pcts.reduce((a, b) => a + b, 0) / pcts.length,
+        );
+        const minPct = Math.min(...pcts);
+        const maxPct = Math.max(...pcts);
+        appendLog(
+          'info',
+          `${stillPending.length}/${totalJobs} jobs pendentes — progresso: min=${minPct}% avg=${avgPct}% max=${maxPct}% — próxima verificação em 30s`,
+        );
+      }
     } catch (err: unknown) {
       this.logger.error(
         `[BulkInsights ${execution.id}] processPendingJobs error: ${err instanceof Error ? err.message : String(err)}`,
@@ -1122,13 +1175,18 @@ export class MetaAdsService {
     });
   }
 
-  async abortExecution(id: string): Promise<{ aborted: boolean; message: string }> {
+  async abortExecution(
+    id: string,
+  ): Promise<{ aborted: boolean; message: string }> {
     const execution = await this.executionRepo.findOne({ where: { id } });
     if (!execution) {
       return { aborted: false, message: 'Execução não encontrada.' };
     }
     if (execution.status !== 'running') {
-      return { aborted: false, message: `Execução já finalizada com status: ${execution.status}` };
+      return {
+        aborted: false,
+        message: `Execução já finalizada com status: ${execution.status}`,
+      };
     }
     this.abortRequests.add(id);
     execution.status = 'aborted';

@@ -414,7 +414,8 @@ export class MetaAdsOAuthService {
   }
 
   private async fetchAdAccounts(accessToken: string) {
-    const accountFields = 'id,account_id,name,account_status,currency,timezone_name,business';
+    const accountFields =
+      'id,account_id,name,account_status,currency,timezone_name,business';
     const seenIds = new Set<string>();
     const allAccounts: MetaAdAccount[] = [];
 

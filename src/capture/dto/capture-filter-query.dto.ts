@@ -39,4 +39,16 @@ export class CaptureFilterQueryDto {
     example: 'true',
   })
   quiz_answered?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filtro por email da pessoa vinculada a capture.',
+    example: 'lead@example.com',
+  })
+  email?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filtro por telefone da pessoa vinculada a capture.',
+    example: '+5511999999999',
+  })
+  phone?: string;
 }

@@ -62,6 +62,8 @@ export class CaptureController {
     required: false,
     example: 'f70d2c2f-31cb-4d66-8321-a18aa9f19e18',
   })
+  @ApiQuery({ name: 'email', required: false, example: 'lead@example.com' })
+  @ApiQuery({ name: 'phone', required: false, example: '+5511999999999' })
   @ApiProduces('text/csv')
   @ApiResponse({
     status: 200,
@@ -99,6 +101,8 @@ export class CaptureController {
     required: false,
     example: 'f70d2c2f-31cb-4d66-8321-a18aa9f19e18',
   })
+  @ApiQuery({ name: 'email', required: false, example: 'lead@example.com' })
+  @ApiQuery({ name: 'phone', required: false, example: '+5511999999999' })
   @ApiProduces(
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   )
@@ -169,6 +173,8 @@ export class CaptureController {
     example: 'true',
     description: 'true para respondeu quiz, false para não respondeu.',
   })
+  @ApiQuery({ name: 'email', required: false, example: 'lead@example.com' })
+  @ApiQuery({ name: 'phone', required: false, example: '+5511999999999' })
   @ApiResponse({
     status: 200,
     description: 'Lista de captures retornada com sucesso.',

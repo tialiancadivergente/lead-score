@@ -30,6 +30,8 @@ type CaptureFilters = {
   temperatureId?: string;
   seasonId?: string;
   quizAnswered?: boolean;
+  email?: string;
+  phone?: string;
 };
 
 type CaptureFilterQuery = Pick<
@@ -40,6 +42,8 @@ type CaptureFilterQuery = Pick<
   | 'temperature_id'
   | 'season_id'
   | 'quiz_answered'
+  | 'email'
+  | 'phone'
 >;
 
 type CaptureRawRow = {
@@ -382,6 +386,8 @@ export class CaptureService {
       temperatureId: this.parseUuid(query.temperature_id, 'temperature_id'),
       seasonId: this.parseUuid(query.season_id, 'season_id'),
       quizAnswered: this.parseBoolean(query.quiz_answered, 'quiz_answered'),
+      email: this.normalizeEmail(query.email),
+      phone: this.normalizePhone(query.phone, 'phone'),
     };
 
     if (
@@ -419,6 +425,29 @@ export class CaptureService {
     throw new BadRequestException(
       `${fieldName} invalido. Use true/false (ou 1/0).`,
     );
+  }
+
+  private normalizeEmail(value: string | undefined): string | undefined {
+    const normalized =
+      typeof value === 'string' ? value.trim().toLowerCase() : '';
+    return normalized || undefined;
+  }
+
+  private normalizePhone(
+    value: string | undefined,
+    fieldName: string,
+  ): string | undefined {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+
+    const hasPlus = trimmed.startsWith('+');
+    const digits = trimmed.replace(/\D+/g, '');
+    if (!digits) {
+      throw new BadRequestException(`${fieldName} deve conter digitos.`);
+    }
+
+    return hasPlus ? `+${digits}` : digits;
   }
 
   private parseDateBoundary(
@@ -541,6 +570,36 @@ export class CaptureService {
 
     if (filters.quizAnswered === false) {
       qb.andWhere('capture.form_version_id IS NULL');
+    }
+
+    if (filters.email) {
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM person_identifier pi_email
+          INNER JOIN identifier_type it_email
+            ON it_email.id = pi_email.identifier_type_id
+          WHERE pi_email.person_id = capture.person_id
+            AND it_email.code = 'EMAIL'
+            AND pi_email.value_normalized = :email
+        )`,
+        { email: filters.email },
+      );
+    }
+
+    if (filters.phone) {
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM person_identifier pi_phone
+          INNER JOIN identifier_type it_phone
+            ON it_phone.id = pi_phone.identifier_type_id
+          WHERE pi_phone.person_id = capture.person_id
+            AND it_phone.code = 'PHONE'
+            AND pi_phone.value_normalized = :phone
+        )`,
+        { phone: filters.phone },
+      );
     }
   }
 

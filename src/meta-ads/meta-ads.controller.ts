@@ -606,7 +606,9 @@ export class MetaAdsController {
   @Post('sync-schedules')
   @RequirePermission('meta_ads', 'create')
   createSyncSchedule(@Body() body: Record<string, unknown>) {
-    return this.metaSyncScheduleService.create(body as unknown as Parameters<MetaSyncScheduleService['create']>[0]);
+    return this.metaSyncScheduleService.create(
+      body as unknown as Parameters<MetaSyncScheduleService['create']>[0],
+    );
   }
 
   @ApiOperation({ summary: 'Remover agendamento de sync Meta' })

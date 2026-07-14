@@ -61,7 +61,10 @@ export class AuthService {
       throw new UnauthorizedException('Credenciais invalidas.');
     }
 
-    const passwordMatches = await bcrypt.compare(dto.password ?? '', user.passwordHash);
+    const passwordMatches = await bcrypt.compare(
+      dto.password ?? '',
+      user.passwordHash,
+    );
     if (!passwordMatches) {
       this.registerFailure(email);
       throw new UnauthorizedException('Credenciais invalidas.');
@@ -126,7 +129,9 @@ export class AuthService {
 
   async forgotPassword(dto: ForgotPasswordDto) {
     const email = this.parseEmail(dto.email);
-    const user = await this.userRepo.findOne({ where: { email, isActive: true } });
+    const user = await this.userRepo.findOne({
+      where: { email, isActive: true },
+    });
 
     if (user && !user.deletedAt) {
       const token = await this.createPasswordResetToken(user);
@@ -169,9 +174,13 @@ export class AuthService {
     );
     const newPassword = this.parsePassword(dto.newPassword);
     const user = await this.userRepo.findOne({ where: { id: userId } });
-    if (!user || user.deletedAt) throw new NotFoundException('Usuario nao encontrado.');
+    if (!user || user.deletedAt)
+      throw new NotFoundException('Usuario nao encontrado.');
 
-    const passwordMatches = await bcrypt.compare(currentPassword, user.passwordHash);
+    const passwordMatches = await bcrypt.compare(
+      currentPassword,
+      user.passwordHash,
+    );
     if (!passwordMatches) {
       throw new UnauthorizedException('Senha atual invalida.');
     }
@@ -202,7 +211,10 @@ export class AuthService {
     const payload: JwtPayload = { sub: user.id, email: user.email };
     const accessToken = await this.jwtService.signAsync(payload, {
       secret: this.config.get<string>('JWT_ACCESS_SECRET', 'change-me-access'),
-      expiresIn: this.config.get<string>('JWT_ACCESS_EXPIRES_IN', '15m') as never,
+      expiresIn: this.config.get<string>(
+        'JWT_ACCESS_EXPIRES_IN',
+        '15m',
+      ) as never,
     });
     const refreshToken = randomBytes(64).toString('base64url');
     const refreshTtlMs = this.parseDurationMs(

@@ -306,7 +306,9 @@ export class PageService {
       relations: ['page'],
     });
     if (!headline) {
-      throw new NotFoundException(`Headline nao encontrada para id=${headlineId}.`);
+      throw new NotFoundException(
+        `Headline nao encontrada para id=${headlineId}.`,
+      );
     }
     if (
       dto.content === undefined &&
@@ -337,7 +339,9 @@ export class PageService {
       .andWhere('page_id = :pageId', { pageId })
       .execute();
     if (!result.affected) {
-      throw new NotFoundException(`Headline nao encontrada para id=${headlineId}.`);
+      throw new NotFoundException(
+        `Headline nao encontrada para id=${headlineId}.`,
+      );
     }
   }
 
@@ -426,7 +430,12 @@ export class PageService {
     const saved = await this.dataSource.transaction(async (manager) => {
       const [abbreviation, versionNumber] = await Promise.all([
         this.nextScopedAbbreviation(manager, 'page_version', pageId, 'v'),
-        this.nextScopedNumber(manager, 'page_version', pageId, 'version_number'),
+        this.nextScopedNumber(
+          manager,
+          'page_version',
+          pageId,
+          'version_number',
+        ),
       ]);
       const pageVersionRepo = manager.getRepository(PageVersion);
       return await pageVersionRepo.save(
@@ -454,7 +463,9 @@ export class PageService {
       relations: ['page'],
     });
     if (!version) {
-      throw new NotFoundException(`Versao da page nao encontrada para id=${versionId}.`);
+      throw new NotFoundException(
+        `Versao da page nao encontrada para id=${versionId}.`,
+      );
     }
     if (
       dto.template_image_url === undefined &&
@@ -487,7 +498,9 @@ export class PageService {
       .andWhere('page_id = :pageId', { pageId })
       .execute();
     if (!result.affected) {
-      throw new NotFoundException(`Versao da page nao encontrada para id=${versionId}.`);
+      throw new NotFoundException(
+        `Versao da page nao encontrada para id=${versionId}.`,
+      );
     }
   }
 
@@ -528,7 +541,10 @@ export class PageService {
           page,
           temperature,
           tag_id: this.parseRequiredText(dto.tag_id, 'tag_id'),
-          redirect_url: this.parseRequiredText(dto.redirect_url, 'redirect_url'),
+          redirect_url: this.parseRequiredText(
+            dto.redirect_url,
+            'redirect_url',
+          ),
           active: this.parseOptionalBoolean(dto.active, 'active') ?? true,
         }),
       );
@@ -861,7 +877,10 @@ export class PageService {
     return value;
   }
 
-  private parseOptionalArray<T>(value: T[] | undefined, fieldName: string): T[] {
+  private parseOptionalArray<T>(
+    value: T[] | undefined,
+    fieldName: string,
+  ): T[] {
     if (value === undefined || value === null) return [];
     if (!Array.isArray(value)) {
       throw new BadRequestException(`${fieldName} deve ser um array.`);
@@ -903,9 +922,7 @@ export class PageService {
     };
   }
 
-  private mapHeadlineResponse(
-    headline: PageHeadline,
-  ): PageHeadlineResponseDto {
+  private mapHeadlineResponse(headline: PageHeadline): PageHeadlineResponseDto {
     return {
       id: headline.id,
       abbreviation: headline.abbreviation,

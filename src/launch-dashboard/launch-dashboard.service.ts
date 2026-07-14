@@ -113,15 +113,18 @@ export class LaunchDashboardService {
     if (dto.questionKeyConsciousness !== undefined)
       config.question_key_consciousness = dto.questionKeyConsciousness;
     if (dto.positiveOptionKeyConsciousness !== undefined)
-      config.positive_option_key_consciousness = dto.positiveOptionKeyConsciousness;
+      config.positive_option_key_consciousness =
+        dto.positiveOptionKeyConsciousness;
     if (dto.questionKeyKnowsExpert !== undefined)
       config.question_key_knows_expert = dto.questionKeyKnowsExpert;
     if (dto.positiveOptionKeyKnowsExpert !== undefined)
-      config.positive_option_key_knows_expert = dto.positiveOptionKeyKnowsExpert;
+      config.positive_option_key_knows_expert =
+        dto.positiveOptionKeyKnowsExpert;
     if (dto.questionKeyKnowsAlliance !== undefined)
       config.question_key_knows_alliance = dto.questionKeyKnowsAlliance;
     if (dto.positiveOptionKeyKnowsAlliance !== undefined)
-      config.positive_option_key_knows_alliance = dto.positiveOptionKeyKnowsAlliance;
+      config.positive_option_key_knows_alliance =
+        dto.positiveOptionKeyKnowsAlliance;
 
     if (dto.notificationMetrics !== undefined) {
       config.notification_metrics =
@@ -191,7 +194,10 @@ export class LaunchDashboardService {
           this.queryLeadsCount(query),
         ]);
 
-        const summary = this.buildSummaryMetrics(media, leadsCount, { sales: 0, revenue: 0 });
+        const summary = this.buildSummaryMetrics(media, leadsCount, {
+          sales: 0,
+          revenue: 0,
+        });
 
         const n = (v: string | null) => (v != null ? Number(v) : null);
         const targetMap: Record<string, number | null> = {
@@ -298,7 +304,10 @@ export class LaunchDashboardService {
         });
         seenOptions.set(row.questionKey, new Set());
       }
-      if (row.optionKey && !seenOptions.get(row.questionKey)!.has(row.optionKey)) {
+      if (
+        row.optionKey &&
+        !seenOptions.get(row.questionKey)!.has(row.optionKey)
+      ) {
         seenOptions.get(row.questionKey)!.add(row.optionKey);
         map.get(row.questionKey)!.options.push({
           optionKey: row.optionKey,
@@ -714,11 +723,18 @@ export class LaunchDashboardService {
       qb.andWhere('p.report_date <= :dateTo', { dateTo: query.dateTo });
     }
     if (query.externalAccountId) {
-      const ids = query.externalAccountId.split(',').map((s) => s.trim()).filter(Boolean);
+      const ids = query.externalAccountId
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       if (ids.length === 1) {
-        qb.andWhere('p.external_account_id = :externalAccountId', { externalAccountId: ids[0] });
+        qb.andWhere('p.external_account_id = :externalAccountId', {
+          externalAccountId: ids[0],
+        });
       } else if (ids.length > 1) {
-        qb.andWhere('p.external_account_id IN (:...externalAccountIds)', { externalAccountIds: ids });
+        qb.andWhere('p.external_account_id IN (:...externalAccountIds)', {
+          externalAccountIds: ids,
+        });
       }
     }
     if (query.externalCampaignId) {
