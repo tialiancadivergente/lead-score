@@ -179,6 +179,23 @@ export class LaunchDashboardController {
     return this.service.getAwarenessMetrics(query);
   }
 
+  // ─── Explicação das métricas (pra conferência) ─────────────────────────────
+
+  @ApiOperation({
+    summary:
+      'Explica a fórmula e os números usados em cada métrica do resumo/consciência — para conferência',
+  })
+  @ApiQuery({ name: 'launchId', required: false })
+  @ApiQuery({ name: 'seasonId', required: false })
+  @ApiQuery({ name: 'dateFrom', required: true, example: '2026-04-01' })
+  @ApiQuery({ name: 'dateTo', required: true, example: '2026-04-30' })
+  @ApiQuery({ name: 'externalAccountId', required: false })
+  @ApiQuery({ name: 'externalCampaignId', required: false })
+  @Get('metric-explanations')
+  getMetricExplanations(@Query() query: LaunchDashboardQueryDto) {
+    return this.service.getMetricExplanations(query);
+  }
+
   // ─── Tier distribution ────────────────────────────────────────────────────
 
   @ApiOperation({

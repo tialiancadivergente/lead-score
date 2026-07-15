@@ -719,6 +719,9 @@ export class LaunchDashboardService {
       totalLeads,
       totalFormResponses: totalResponses,
       surveyResponseRate,
+      consciousnessCount,
+      knowsExpertCount,
+      knowsAllianceCount,
       consciousnessRate: rate(consciousnessCount),
       knowsExpertRate: rate(knowsExpertCount),
       knowsAllianceRate: rate(knowsAllianceCount),
@@ -727,6 +730,181 @@ export class LaunchDashboardService {
         knowsExpert: !!config?.question_key_knows_expert,
         knowsAlliance: !!config?.question_key_knows_alliance,
       },
+    };
+  }
+
+  // ─── Explicação das métricas (pra conferência) ─────────────────────────────
+
+  // Chaves aqui casam 1:1 com os campos já retornados por getSummary/
+  // getAwarenessMetrics — o front pega o mesmo nome de campo que já usa pra
+  // renderizar o card e busca a explicação correspondente aqui, sem precisar
+  // de um mapeamento próprio. Reaproveita os dois métodos, não recalcula nada.
+  async getMetricExplanations(query: LaunchDashboardQueryDto) {
+    this.validateDates(query);
+
+    const [{ summary }, awareness] = await Promise.all([
+      this.getSummary(query),
+      this.getAwarenessMetrics(query),
+    ]);
+
+    const metrics: Record<
+      string,
+      {
+        label: string;
+        formula: string;
+        value: number | null;
+        inputs: Record<string, number | null>;
+      }
+    > = {
+      spend: {
+        label: 'Gasto',
+        formula:
+          'Soma do investimento (spend) de todos os anúncios no período e filtros selecionados.',
+        value: summary.spend,
+        inputs: { spend: summary.spend },
+      },
+      leads: {
+        label: 'Leads (cadastros)',
+        formula:
+          'Contagem de cadastros distintos (por pessoa) no período, filtrado por lançamento/temporada.',
+        value: summary.leads,
+        inputs: { leads: summary.leads },
+      },
+      organicLeads: {
+        label: 'Leads orgânicos',
+        formula:
+          'Dentre os leads acima, quantos têm origem "orgânico" (sem tráfego pago).',
+        value: summary.organicLeads,
+        inputs: { organicLeads: summary.organicLeads, leads: summary.leads },
+      },
+      cpl: {
+        label: 'Custo por Lead (CPL)',
+        formula: 'Gasto ÷ Leads',
+        value: summary.cpl,
+        inputs: { spend: summary.spend, leads: summary.leads },
+      },
+      connectRate: {
+        label: 'Connect Rate',
+        formula: 'Page Views de Destino ÷ Cliques no link do anúncio',
+        value: summary.connectRate,
+        inputs: {
+          landingPageViews: summary.landingPageViews,
+          inlineLinkClicks: summary.inlineLinkClicks,
+        },
+      },
+      txPgvCheckout: {
+        label: 'Conversão de Páginas (Tx PgV→Checkout)',
+        formula: 'Inícios de Checkout ÷ Page Views de Destino',
+        value: summary.txPgvCheckout,
+        inputs: {
+          initiateCheckouts: summary.initiateCheckouts,
+          landingPageViews: summary.landingPageViews,
+        },
+      },
+      cpc: {
+        label: 'CPC',
+        formula: 'Gasto ÷ Cliques no link',
+        value: summary.cpc,
+        inputs: { spend: summary.spend, clicks: summary.clicks },
+      },
+      cpm: {
+        label: 'CPM',
+        formula: '(Gasto ÷ Impressões) × 1000',
+        value: summary.cpm,
+        inputs: { spend: summary.spend, impressions: summary.impressions },
+      },
+      ctr: {
+        label: 'CTR',
+        formula: 'Cliques no link ÷ Impressões',
+        value: summary.ctr,
+        inputs: { clicks: summary.clicks, impressions: summary.impressions },
+      },
+      initiateCheckouts: {
+        label: 'Inícios de Checkout',
+        formula:
+          'Soma de eventos de início de checkout reportados pelo Meta no período (considera as variantes desse evento).',
+        value: summary.initiateCheckouts,
+        inputs: { initiateCheckouts: summary.initiateCheckouts },
+      },
+      sales: {
+        label: 'Vendas Hotmart',
+        formula:
+          'Contagem de vendas com status aprovado/completo na Hotmart, vinculadas aos produtos ativos do lançamento, no período.',
+        value: summary.sales,
+        inputs: { sales: summary.sales },
+      },
+      revenue: {
+        label: 'Receita',
+        formula: 'Soma do valor (price) das vendas Hotmart contadas acima.',
+        value: summary.revenue,
+        inputs: { revenue: summary.revenue, sales: summary.sales },
+      },
+      txCheckoutSale: {
+        label: 'Tx Checkout→Venda',
+        formula: 'Vendas ÷ Inícios de Checkout',
+        value: summary.txCheckoutSale,
+        inputs: {
+          sales: summary.sales,
+          initiateCheckouts: summary.initiateCheckouts,
+        },
+      },
+      cpa: {
+        label: 'CPA (custo por venda)',
+        formula: 'Gasto ÷ Vendas',
+        value: summary.cpa,
+        inputs: { spend: summary.spend, sales: summary.sales },
+      },
+      consciousnessRate: {
+        label: 'Taxa de Consciência',
+        formula:
+          'Respostas do formulário cujo texto livre contém alguma palavra-chave de consciência, dividido pelo total de respostas ao formulário.',
+        value: awareness.consciousnessRate,
+        inputs: {
+          consciousnessCount: awareness.consciousnessCount,
+          totalFormResponses: awareness.totalFormResponses,
+        },
+      },
+      knowsExpertRate: {
+        label: 'Taxa de Conhece o Especialista',
+        formula:
+          'Respostas que marcaram a opção configurada como positiva para "conhece o especialista", dividido pelo total de respostas ao formulário.',
+        value: awareness.knowsExpertRate,
+        inputs: {
+          knowsExpertCount: awareness.knowsExpertCount,
+          totalFormResponses: awareness.totalFormResponses,
+        },
+      },
+      knowsAllianceRate: {
+        label: 'Taxa de Conhece Aliança',
+        formula:
+          'Respostas que marcaram a opção configurada como positiva para "conhece a Aliança", dividido pelo total de respostas ao formulário.',
+        value: awareness.knowsAllianceRate,
+        inputs: {
+          knowsAllianceCount: awareness.knowsAllianceCount,
+          totalFormResponses: awareness.totalFormResponses,
+        },
+      },
+      surveyResponseRate: {
+        label: 'Taxa de Resposta à Pesquisa',
+        formula: 'Total de respostas ao formulário ÷ Total de leads.',
+        value: awareness.surveyResponseRate,
+        inputs: {
+          totalFormResponses: awareness.totalFormResponses,
+          totalLeads: awareness.totalLeads,
+        },
+      },
+    };
+
+    return {
+      filters: {
+        launchId: query.launchId ?? null,
+        seasonId: query.seasonId ?? null,
+        dateFrom: query.dateFrom ?? null,
+        dateTo: query.dateTo ?? null,
+        externalAccountId: query.externalAccountId ?? null,
+        externalCampaignId: query.externalCampaignId ?? null,
+      },
+      metrics,
     };
   }
 
