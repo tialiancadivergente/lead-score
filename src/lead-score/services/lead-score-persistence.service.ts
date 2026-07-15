@@ -149,6 +149,21 @@ export class LeadScorePersistenceService {
         })
         .orderBy('capture.created_at', 'DESC')
         .getOne();
+
+      if (!capture) {
+        capture = await captureRepo
+          .createQueryBuilder('capture')
+          .leftJoinAndSelect('capture.person', 'person')
+          .leftJoinAndSelect('capture.form_version', 'form_version')
+          .where(
+            "capture.metadata -> 'leadRegistrationRequestIds' ? :requestId",
+            {
+              requestId: leadRegistrationRequestId,
+            },
+          )
+          .orderBy('capture.created_at', 'DESC')
+          .getOne();
+      }
     }
 
     if (!capture) {

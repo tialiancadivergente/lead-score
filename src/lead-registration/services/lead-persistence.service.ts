@@ -25,6 +25,8 @@ import {
 
 @Injectable()
 export class LeadPersistenceService {
+  private readonly leadRegistrationDedupeWindowMs = 5 * 60 * 1000;
+
   constructor(
     @InjectRepository(Capture)
     private readonly captureRepo: Repository<Capture>,
@@ -76,6 +78,193 @@ export class LeadPersistenceService {
     }
 
     return Object.keys(out).length ? out : undefined;
+  }
+
+  private pickObject(
+    obj: Record<string, unknown>,
+    key: string,
+  ): Record<string, unknown> | undefined {
+    const value = obj?.[key];
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : undefined;
+  }
+
+  private pickMarketingString(
+    payload: Record<string, unknown>,
+    key: string,
+  ): string | undefined {
+    const fromRoot = this.pickNonEmptyTrimmedString(payload, key);
+    if (fromRoot) return fromRoot;
+
+    const utms = this.pickObject(payload, 'utms');
+    return utms ? this.pickNonEmptyTrimmedString(utms, key) : undefined;
+  }
+
+  private normalizeDedupePart(value?: string): string {
+    return typeof value === 'string' ? value.trim().toLowerCase() : '';
+  }
+
+  private normalizeUrlForDedupe(value?: string): string | undefined {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+
+    try {
+      const withProtocol = /^https?:\/\//i.test(trimmed)
+        ? trimmed
+        : `https://${trimmed}`;
+      const parsed = new URL(withProtocol);
+      parsed.hash = '';
+      return parsed.toString().replace(/\/$/, '').toLowerCase();
+    } catch {
+      return trimmed.replace(/\/$/, '').toLowerCase();
+    }
+  }
+
+  private pickLeadRegistrationUrl(
+    payload: Record<string, unknown>,
+  ): string | undefined {
+    const metadados = this.pickObject(payload, 'metadados');
+    const utms = this.pickObject(payload, 'utms');
+
+    const explicitUrl =
+      this.pickNonEmptyTrimmedString(payload, 'url') ??
+      (metadados
+        ? this.pickNonEmptyTrimmedString(metadados, 'url')
+        : undefined) ??
+      (utms ? this.pickNonEmptyTrimmedString(utms, 'url') : undefined);
+    if (explicitUrl) return this.normalizeUrlForDedupe(explicitUrl);
+
+    const page = this.pickNonEmptyTrimmedString(payload, 'page');
+    const path = this.pickNonEmptyTrimmedString(payload, 'path');
+    if (!page && !path) return undefined;
+
+    if (page && /^https?:\/\//i.test(page)) {
+      const base = page.replace(/\/$/, '');
+      const suffix = path ? (path.startsWith('/') ? path : `/${path}`) : '';
+      return this.normalizeUrlForDedupe(`${base}${suffix}`);
+    }
+
+    const suffix = path ? (path.startsWith('/') ? path : `/${path}`) : '';
+    return this.normalizeUrlForDedupe(`${page ?? ''}${suffix}`);
+  }
+
+  private buildLeadRegistrationDedupe(
+    payload: Record<string, unknown>,
+    params: {
+      email?: string;
+      phone?: string;
+      tagId: string;
+      launchCode: string;
+      seasonCode: string;
+    },
+  ):
+    | {
+        key: string;
+        fields: Record<string, string>;
+        url?: string;
+      }
+    | undefined {
+    const fields = {
+      email: this.normalizeDedupePart(params.email),
+      telefone: this.normalizeDedupePart(params.phone),
+      tag_id: this.normalizeDedupePart(params.tagId),
+      launch: this.normalizeDedupePart(params.launchCode),
+      season: this.normalizeDedupePart(params.seasonCode),
+      utm_source: this.normalizeDedupePart(
+        this.pickMarketingString(payload, 'utm_source'),
+      ),
+      utm_medium: this.normalizeDedupePart(
+        this.pickMarketingString(payload, 'utm_medium'),
+      ),
+      utm_campaign: this.normalizeDedupePart(
+        this.pickMarketingString(payload, 'utm_campaign'),
+      ),
+      utm_content: this.normalizeDedupePart(
+        this.pickMarketingString(payload, 'utm_content'),
+      ),
+      utm_term: this.normalizeDedupePart(
+        this.pickMarketingString(payload, 'utm_term'),
+      ),
+      utm_id: this.normalizeDedupePart(
+        this.pickMarketingString(payload, 'utm_id'),
+      ),
+      url: this.normalizeDedupePart(this.pickLeadRegistrationUrl(payload)),
+    };
+
+    if (!fields.email && !fields.telefone) return undefined;
+
+    const raw = [
+      fields.email,
+      fields.telefone,
+      fields.tag_id,
+      fields.launch,
+      fields.season,
+      fields.utm_source,
+      fields.utm_medium,
+      fields.utm_campaign,
+      fields.utm_content,
+      fields.utm_term,
+      fields.utm_id,
+      fields.url,
+    ].join('|');
+
+    return {
+      key: this.sha256Hex(raw),
+      fields,
+      url: fields.url || undefined,
+    };
+  }
+
+  private pickStringArray(obj: Record<string, unknown>, key: string): string[] {
+    const value = obj[key];
+    if (!Array.isArray(value)) return [];
+
+    return value.filter((item): item is string => typeof item === 'string');
+  }
+
+  private buildLeadRegistrationMetadata(
+    existingMetadata: unknown,
+    payload: Record<string, unknown>,
+    requestId: string | null,
+    leadRegistrationDedupe:
+      | {
+          key: string;
+          fields: Record<string, string>;
+          url?: string;
+        }
+      | undefined,
+  ): Record<string, unknown> {
+    const previous =
+      existingMetadata && typeof existingMetadata === 'object'
+        ? (existingMetadata as Record<string, unknown>)
+        : {};
+
+    const requestIds = new Set<string>([
+      ...this.pickStringArray(previous, 'leadRegistrationRequestIds'),
+    ]);
+    const previousRequestId = this.pickNonEmptyTrimmedString(
+      previous,
+      'requestId',
+    );
+    if (previousRequestId) requestIds.add(previousRequestId);
+    if (requestId) requestIds.add(requestId);
+
+    return {
+      ...previous,
+      ...payload,
+      ...(requestIds.size
+        ? { leadRegistrationRequestIds: Array.from(requestIds) }
+        : {}),
+      ...(leadRegistrationDedupe
+        ? {
+            leadRegistrationDedupeKey: leadRegistrationDedupe.key,
+            leadRegistrationDedupeKeyFields: leadRegistrationDedupe.fields,
+            leadRegistrationUrl: leadRegistrationDedupe.url,
+          }
+        : {}),
+    };
   }
 
   private normalizeUtmSource(utmSource?: string): string | undefined {
@@ -366,6 +555,16 @@ export class LeadPersistenceService {
         resolvedLaunch.id,
         seasonCode,
       );
+      const leadRegistrationDedupe = this.buildLeadRegistrationDedupe(
+        payloadObj,
+        {
+          email,
+          phone,
+          tagId,
+          launchCode,
+          seasonCode,
+        },
+      );
 
       // Idempotência simples para retries do consumer:
       // se já existir um capture com o mesmo requestId, não cria outro.
@@ -437,12 +636,46 @@ export class LeadPersistenceService {
             }
           }
 
+          existing.metadata = this.buildLeadRegistrationMetadata(
+            existing.metadata,
+            payloadObj,
+            requestId,
+            leadRegistrationDedupe,
+          );
+
           await captureRepository.save(existing);
           return { captureId: existing.id, reused: true };
         }
       }
 
       // Se utm_source vier preenchido, tenta resolver platform pelo "source" (não é erro se não achar)
+      if (leadRegistrationDedupe) {
+        const dedupeWindowStart = new Date(
+          Date.now() - this.leadRegistrationDedupeWindowMs,
+        );
+        const existingRecent = await captureRepository
+          .createQueryBuilder('capture')
+          .where("capture.metadata ->> 'leadRegistrationDedupeKey' = :key", {
+            key: leadRegistrationDedupe.key,
+          })
+          .andWhere('capture.created_at >= :dedupeWindowStart', {
+            dedupeWindowStart,
+          })
+          .orderBy('capture.created_at', 'DESC')
+          .getOne();
+
+        if (existingRecent) {
+          existingRecent.metadata = this.buildLeadRegistrationMetadata(
+            existingRecent.metadata,
+            payloadObj,
+            requestId,
+            leadRegistrationDedupe,
+          );
+          await captureRepository.save(existingRecent);
+          return { captureId: existingRecent.id, reused: true };
+        }
+      }
+
       const incomingUtmSource = this.pickString(payloadObj, 'utm_source');
       const normalizedUtmSource = this.normalizeUtmSource(incomingUtmSource);
       const resolvedPlatform = normalizedUtmSource
@@ -490,7 +723,12 @@ export class LeadPersistenceService {
         launch: resolvedLaunch,
         season: resolvedSeason,
         utms: utmsJsonb,
-        metadata: payloadObj,
+        metadata: this.buildLeadRegistrationMetadata(
+          undefined,
+          payloadObj,
+          requestId,
+          leadRegistrationDedupe,
+        ),
       });
       const savedCapture = await captureRepository.save(capture);
 
