@@ -17,6 +17,7 @@ import { LeadscoreTier } from '../database/entities/leadscore/leadscore-tier.ent
 import { Temperature } from '../database/entities/marketing/temperature.entity';
 import { UpsertLaunchDashboardConfigDto } from './dto/upsert-launch-dashboard-config.dto';
 import { LaunchDashboardQueryDto } from './dto/launch-dashboard-query.dto';
+import { CompareLaunchesDto } from './dto/compare-launches.dto';
 
 type MediaAgg = {
   spend: number;
@@ -320,6 +321,75 @@ export class LaunchDashboardService {
     return Array.from(map.values());
   }
 
+  // ─── Lead profile (distribuição de respostas do quiz) ─────────────────────
+
+  async getLeadProfile(query: LaunchDashboardQueryDto, questionKey?: string) {
+    this.validateDates(query);
+
+    // Reaproveita getAvailableQuestions pra ter a lista completa de opções por
+    // pergunta (inclusive as com 0 respostas) — só perguntas de múltipla
+    // escolha entram aqui, texto livre não tem uma "distribuição" bem definida.
+    const availableQuestions = await this.getAvailableQuestions(
+      query.launchId,
+      query.seasonId,
+    );
+    const eligibleQuestions = availableQuestions.filter(
+      (q) =>
+        q.options.length > 0 && (!questionKey || q.questionKey === questionKey),
+    );
+
+    if (eligibleQuestions.length === 0) {
+      return { questions: [] };
+    }
+
+    const keys = eligibleQuestions.map((q) => q.questionKey);
+
+    const qb = this.formAnswerRepo
+      .createQueryBuilder('fa')
+      .innerJoin(FormResponse, 'fr', 'fr.id = fa.form_response_id')
+      .innerJoin(Capture, 'c', 'c.id = fr.capture_id')
+      .innerJoin(Question, 'q', 'q.id = fa.question_id')
+      .innerJoin(QuestionOption, 'qo', 'qo.id = fa.option_id')
+      .andWhere('q.question_key IN (:...keys)', { keys });
+
+    this.applyFormResponseFilters(qb, query);
+
+    const rows = await qb
+      .select('q.question_key', 'questionKey')
+      .addSelect('qo.option_key', 'optionKey')
+      .addSelect('COUNT(DISTINCT fr.id)', 'count')
+      .groupBy('q.question_key')
+      .addGroupBy('qo.option_key')
+      .getRawMany<{ questionKey: string; optionKey: string; count: string }>();
+
+    const countMap = new Map<string, number>();
+    for (const row of rows) {
+      countMap.set(`${row.questionKey}::${row.optionKey}`, Number(row.count));
+    }
+
+    const questions = eligibleQuestions.map((q) => {
+      const rawDistribution = q.options.map((opt) => ({
+        optionKey: opt.optionKey,
+        optionText: opt.optionText,
+        count: countMap.get(`${q.questionKey}::${opt.optionKey}`) ?? 0,
+      }));
+      const total = rawDistribution.reduce((sum, d) => sum + d.count, 0);
+
+      return {
+        questionKey: q.questionKey,
+        questionText: q.questionText,
+        totalAnswered: total,
+        distribution: rawDistribution.map((d) => ({
+          ...d,
+          percentage:
+            total > 0 ? Number(((d.count / total) * 100).toFixed(2)) : 0,
+        })),
+      };
+    });
+
+    return { questions };
+  }
+
   // ─── Summary ──────────────────────────────────────────────────────────────
 
   async getSummary(query: LaunchDashboardQueryDto) {
@@ -382,6 +452,56 @@ export class LaunchDashboardService {
     });
 
     return { timeseries };
+  }
+
+  // ─── Comparativo entre lançamentos ────────────────────────────────────────
+
+  // Alinha cada lançamento pelo próprio dateFrom (dayIndex=0 = primeiro dia
+  // do range informado para aquele lançamento) em vez de por data absoluta —
+  // é o que permite comparar "semana 1 do ORO" com "semana 1 do LDI" mesmo
+  // que tenham rodado em calendários diferentes. Não existe uma "data de
+  // início" própria do Launch hoje, então quem define o que é "dia 0" de cada
+  // lançamento é o dateFrom que o chamador passar.
+  async compareLaunches(dto: CompareLaunchesDto) {
+    if (!Array.isArray(dto.launches) || dto.launches.length < 2) {
+      throw new BadRequestException(
+        'Informe ao menos 2 lançamentos em "launches" para comparar.',
+      );
+    }
+
+    const launches = await Promise.all(
+      dto.launches.map(async (item) => {
+        const query: LaunchDashboardQueryDto = {
+          launchId: item.launchId,
+          dateFrom: item.dateFrom,
+          dateTo: item.dateTo,
+        };
+        const { timeseries } = await this.getTimeseries(query);
+
+        let cumulativeLeads = 0;
+        const series = timeseries.map((row, index) => {
+          cumulativeLeads += row.leads;
+          return {
+            dayIndex: index,
+            date: row.date,
+            spend: row.spend,
+            leads: row.leads,
+            cumulativeLeads,
+            cpl: row.cpl,
+          };
+        });
+
+        return {
+          launchId: item.launchId,
+          label: item.label ?? item.launchId,
+          dateFrom: item.dateFrom,
+          dateTo: item.dateTo,
+          series,
+        };
+      }),
+    );
+
+    return { launches };
   }
 
   // ─── Funnel table ─────────────────────────────────────────────────────────
@@ -473,6 +593,82 @@ export class LaunchDashboardService {
     }
 
     return Array.from(groups.values());
+  }
+
+  // ─── Ranking de criativos ─────────────────────────────────────────────────
+
+  async getTopCreatives(query: LaunchDashboardQueryDto, limit = 5) {
+    this.validateDates(query);
+
+    const currentTable = await this.getFunnelTable({
+      ...query,
+      groupBy: 'adName',
+    });
+
+    // CPL null (sem lead no período) não é rankeável — fica de fora do pódio.
+    const ranked = currentTable.items
+      .filter(
+        (item): item is typeof item & { cpl: number } => item.cpl !== null,
+      )
+      .sort((a, b) => a.cpl - b.cpl)
+      .slice(0, limit);
+
+    if (ranked.length === 0) {
+      return { items: [] };
+    }
+
+    // Período anterior de mesma duração, imediatamente antes do dateFrom —
+    // usado só para calcular a tendência (CPL subiu/caiu) de cada criativo.
+    const from = new Date(`${query.dateFrom}T00:00:00.000Z`);
+    const to = new Date(`${query.dateTo}T00:00:00.000Z`);
+    const durationDays =
+      Math.round((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    const previousDateTo = this.subtractDays(query.dateFrom!, 1);
+    const previousDateFrom = this.subtractDays(
+      previousDateTo,
+      durationDays - 1,
+    );
+
+    const previousTable = await this.getFunnelTable({
+      ...query,
+      dateFrom: previousDateFrom,
+      dateTo: previousDateTo,
+      groupBy: 'adName',
+    });
+    const previousCplByName = new Map(
+      previousTable.items
+        .filter((item) => item.adName !== null)
+        .map((item) => [item.adName as string, item.cpl]),
+    );
+
+    const items = ranked.map((item, index) => {
+      const previousCpl = item.adName
+        ? (previousCplByName.get(item.adName) ?? null)
+        : null;
+
+      let trend: 'up' | 'down' | 'flat' | 'new' = 'new';
+      if (previousCpl !== null) {
+        trend =
+          item.cpl > previousCpl
+            ? 'up' // CPL subiu = pior
+            : item.cpl < previousCpl
+              ? 'down' // CPL caiu = melhor
+              : 'flat';
+      }
+
+      return {
+        rank: index + 1,
+        adName: item.adName,
+        externalAdIds: item.externalAdIds,
+        spend: item.spend,
+        leads: item.leads,
+        cpl: item.cpl,
+        previousCpl,
+        trend,
+      };
+    });
+
+    return { items };
   }
 
   // ─── Awareness metrics ────────────────────────────────────────────────────
@@ -666,6 +862,138 @@ export class LaunchDashboardService {
     }
   }
 
+  // ─── Health score ─────────────────────────────────────────────────────────
+
+  // Métricas elegíveis pro score de saúde: cada uma só entra na média se o
+  // lançamento tiver a meta correspondente configurada. "Gasto" fica de fora
+  // de propósito — estar acima/abaixo da meta de investimento não é
+  // claramente bom ou ruim sem contexto de ritmo, então não vira nota.
+  private static readonly HEALTH_SCORE_METRICS: {
+    key: string;
+    label: string;
+    direction: 'higher_is_better' | 'lower_is_better';
+  }[] = [
+    { key: 'LEADS', label: 'Leads', direction: 'higher_is_better' },
+    { key: 'CPL', label: 'Custo por lead', direction: 'lower_is_better' },
+    {
+      key: 'CONNECT_RATE',
+      label: 'Connect rate',
+      direction: 'higher_is_better',
+    },
+    {
+      key: 'PAGE_CONVERSION',
+      label: 'Conversão de páginas',
+      direction: 'higher_is_better',
+    },
+    { key: 'CPC', label: 'CPC', direction: 'lower_is_better' },
+    { key: 'CPM', label: 'CPM', direction: 'lower_is_better' },
+    { key: 'CTR', label: 'CTR', direction: 'higher_is_better' },
+    {
+      key: 'SURVEY_RESPONSE_RATE',
+      label: 'Taxa de resposta à pesquisa',
+      direction: 'higher_is_better',
+    },
+    {
+      key: 'CONSCIOUSNESS_RATE',
+      label: 'Taxa de consciência',
+      direction: 'higher_is_better',
+    },
+    {
+      key: 'KNOWS_EXPERT_RATE',
+      label: 'Taxa de conhece o especialista',
+      direction: 'higher_is_better',
+    },
+    {
+      key: 'KNOWS_ALLIANCE_RATE',
+      label: 'Taxa de conhece Aliança',
+      direction: 'higher_is_better',
+    },
+  ];
+
+  async getHealthScore(query: LaunchDashboardQueryDto) {
+    this.validateDates(query);
+
+    const config = query.launchId ? await this.getConfig(query.launchId) : null;
+
+    const [{ summary }, awareness] = await Promise.all([
+      this.getSummary(query),
+      this.getAwarenessMetrics(query),
+    ]);
+
+    const targetMap: Record<string, number | null | undefined> = {
+      LEADS: config?.target_leads,
+      CPL: config?.target_cpl,
+      CONNECT_RATE: config?.target_connect_rate,
+      PAGE_CONVERSION: config?.target_page_conversion,
+      CPC: config?.target_cpc,
+      CPM: config?.target_cpm,
+      CTR: config?.target_ctr,
+      SURVEY_RESPONSE_RATE: config?.target_survey_response_rate,
+      CONSCIOUSNESS_RATE: config?.target_consciousness_rate,
+      KNOWS_EXPERT_RATE: config?.target_knows_expert_rate,
+      KNOWS_ALLIANCE_RATE: config?.target_knows_alliance_rate,
+    };
+
+    const currentMap: Record<string, number | null> = {
+      LEADS: summary.leads,
+      CPL: summary.cpl,
+      CONNECT_RATE: summary.connectRate,
+      PAGE_CONVERSION: summary.txPgvCheckout,
+      CPC: summary.cpc,
+      CPM: summary.cpm,
+      CTR: summary.ctr,
+      SURVEY_RESPONSE_RATE: awareness.surveyResponseRate,
+      CONSCIOUSNESS_RATE: awareness.consciousnessRate,
+      KNOWS_EXPERT_RATE: awareness.knowsExpertRate,
+      KNOWS_ALLIANCE_RATE: awareness.knowsAllianceRate,
+    };
+
+    const metrics = LaunchDashboardService.HEALTH_SCORE_METRICS.map((m) => {
+      const target = targetMap[m.key];
+      const current = currentMap[m.key];
+
+      if (target === null || target === undefined || target === 0) {
+        return { ...m, current, target: target ?? null, score: null };
+      }
+      if (current === null) {
+        return { ...m, current: null, target, score: null };
+      }
+
+      const ratio =
+        m.direction === 'higher_is_better'
+          ? current / target
+          : target / current;
+      const score = Math.max(0, Math.min(100, ratio * 100));
+
+      return { ...m, current, target, score: Number(score.toFixed(2)) };
+    });
+
+    const scored = metrics.filter(
+      (m): m is typeof m & { score: number } => m.score !== null,
+    );
+    const overallScore =
+      scored.length > 0
+        ? Number(
+            (
+              scored.reduce((sum, m) => sum + m.score, 0) / scored.length
+            ).toFixed(2),
+          )
+        : null;
+
+    const grade =
+      overallScore === null
+        ? null
+        : overallScore >= 85
+          ? 'A'
+          : overallScore >= 70
+            ? 'B'
+            : overallScore >= 50
+              ? 'C'
+              : 'D';
+
+    return { score: overallScore, grade, metrics };
+  }
+
   // ─── Tier distribution ────────────────────────────────────────────────────
 
   async getTierDistribution(query: LaunchDashboardQueryDto) {
@@ -713,6 +1041,27 @@ export class LaunchDashboardService {
       externalAccountId: a.external_account_id,
       accountName: a.external_account_name ?? a.external_account_id,
     }));
+  }
+
+  // ─── Campaigns (para filtro por nome) ──────────────────────────────────────
+
+  // dateFrom/dateTo aqui são opcionais de propósito — é uma lista pra popular
+  // um select de campanha, então por padrão mostra todas as campanhas já
+  // vistas pra conta selecionada, independente do período escolhido no filtro
+  // principal da tela.
+  async getCampaigns(query: LaunchDashboardQueryDto) {
+    const qb = this.perfRepo.createQueryBuilder('p');
+    this.applyMediaFilters(qb, query);
+    qb.andWhere('p.external_campaign_id IS NOT NULL');
+
+    const rows = await qb
+      .select('p.external_campaign_id', 'value')
+      .addSelect('MAX(p.campaign_name)', 'label')
+      .groupBy('p.external_campaign_id')
+      .orderBy('MAX(p.campaign_name)', 'ASC')
+      .getRawMany<{ value: string; label: string | null }>();
+
+    return rows.map((r) => ({ value: r.value, label: r.label ?? r.value }));
   }
 
   // ─── Media queries ────────────────────────────────────────────────────────
@@ -1161,6 +1510,12 @@ export class LaunchDashboardService {
     const d = new Date(`${date}T00:00:00.000Z`);
     d.setUTCDate(d.getUTCDate() + 1);
     return d.toISOString();
+  }
+
+  private subtractDays(date: string, days: number): string {
+    const d = new Date(`${date}T00:00:00.000Z`);
+    d.setUTCDate(d.getUTCDate() - days);
+    return d.toISOString().slice(0, 10);
   }
 
   private dateRange(from: string, to: string): string[] {

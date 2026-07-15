@@ -3,18 +3,26 @@ import {
   Controller,
   Get,
   Param,
+  Post,
   Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
 
-import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
 import { LaunchDashboardQueryDto } from './dto/launch-dashboard-query.dto';
 import { UpsertLaunchDashboardConfigDto } from './dto/upsert-launch-dashboard-config.dto';
+import { CompareLaunchesDto } from './dto/compare-launches.dto';
 import { LaunchDashboardService } from './launch-dashboard.service';
 
 @ApiTags('launch-dashboard')
@@ -90,6 +98,20 @@ export class LaunchDashboardController {
   @Get('ad-accounts')
   getAdAccounts(@Query() query: LaunchDashboardQueryDto) {
     return this.service.getAdAccounts(query);
+  }
+
+  // ─── Campaigns ────────────────────────────────────────────────────────────
+
+  @ApiOperation({
+    summary:
+      'Lista campanhas (id + nome) já vistas, para popular um select de campanha por nome',
+  })
+  @ApiQuery({ name: 'dateFrom', required: false })
+  @ApiQuery({ name: 'dateTo', required: false })
+  @ApiQuery({ name: 'externalAccountId', required: false })
+  @Get('campaigns')
+  getCampaigns(@Query() query: LaunchDashboardQueryDto) {
+    return this.service.getCampaigns(query);
   }
 
   // ─── Summary ──────────────────────────────────────────────────────────────
@@ -169,5 +191,78 @@ export class LaunchDashboardController {
   @Get('tier-distribution')
   getTierDistribution(@Query() query: LaunchDashboardQueryDto) {
     return this.service.getTierDistribution(query);
+  }
+
+  // ─── Health score ─────────────────────────────────────────────────────────
+
+  @ApiOperation({
+    summary:
+      'Score de saúde do lançamento (0-100 + grau A-D) combinando todos os indicadores vs metas configuradas',
+  })
+  @ApiQuery({ name: 'launchId', required: false })
+  @ApiQuery({ name: 'seasonId', required: false })
+  @ApiQuery({ name: 'dateFrom', required: true, example: '2026-04-01' })
+  @ApiQuery({ name: 'dateTo', required: true, example: '2026-04-30' })
+  @Get('health-score')
+  getHealthScore(@Query() query: LaunchDashboardQueryDto) {
+    return this.service.getHealthScore(query);
+  }
+
+  // ─── Ranking de criativos ─────────────────────────────────────────────────
+
+  @ApiOperation({
+    summary:
+      'Top N criativos por CPL (menor primeiro) com tendência vs período anterior de mesma duração',
+  })
+  @ApiQuery({ name: 'launchId', required: false })
+  @ApiQuery({ name: 'seasonId', required: false })
+  @ApiQuery({ name: 'dateFrom', required: true, example: '2026-04-01' })
+  @ApiQuery({ name: 'dateTo', required: true, example: '2026-04-30' })
+  @ApiQuery({ name: 'limit', required: false, example: 5 })
+  @Get('top-creatives')
+  getTopCreatives(
+    @Query() query: LaunchDashboardQueryDto,
+    @Query('limit') limit?: string,
+  ) {
+    const parsedLimit = limit ? parseInt(limit, 10) : undefined;
+    return this.service.getTopCreatives(
+      query,
+      Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+    );
+  }
+
+  // ─── Lead profile ─────────────────────────────────────────────────────────
+
+  @ApiOperation({
+    summary:
+      'Distribuição das respostas do quiz (escolaridade, renda, estado civil etc) no período',
+  })
+  @ApiQuery({ name: 'launchId', required: false })
+  @ApiQuery({ name: 'seasonId', required: false })
+  @ApiQuery({ name: 'dateFrom', required: true, example: '2026-04-01' })
+  @ApiQuery({ name: 'dateTo', required: true, example: '2026-04-30' })
+  @ApiQuery({
+    name: 'questionKey',
+    required: false,
+    description: 'Filtra a distribuição para uma única pergunta',
+  })
+  @Get('lead-profile')
+  getLeadProfile(
+    @Query() query: LaunchDashboardQueryDto,
+    @Query('questionKey') questionKey?: string,
+  ) {
+    return this.service.getLeadProfile(query, questionKey);
+  }
+
+  // ─── Comparativo entre lançamentos ────────────────────────────────────────
+
+  @ApiOperation({
+    summary:
+      'Compara 2+ lançamentos alinhados por dia relativo (dia 0 = dateFrom de cada um), em leads acumulados e CPL',
+  })
+  @ApiBody({ type: CompareLaunchesDto })
+  @Post('compare')
+  compareLaunches(@Body() dto: CompareLaunchesDto) {
+    return this.service.compareLaunches(dto);
   }
 }
