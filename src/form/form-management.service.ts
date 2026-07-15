@@ -37,14 +37,17 @@ import {
 } from './dto/question-management.dto';
 import {
   CreateLeadscoreDto,
+  CreateLeadscoreTierDto,
   LeadscoreOptionPointResponseDto,
   LeadscoreRangePointResponseDto,
   LeadscoreResponseDto,
+  LeadscoreTierResponseDto,
   LeadscoreTierRuleResponseDto,
   ReplaceLeadscoreOptionPointsDto,
   ReplaceLeadscoreRangePointsDto,
   ReplaceLeadscoreTierRulesDto,
   UpdateLeadscoreDto,
+  UpdateLeadscoreTierDto,
 } from './dto/score-management.dto';
 import {
   CreateFullFormPayloadDto,
@@ -852,6 +855,64 @@ export class FormManagementService {
     });
 
     return await this.listScoreRangePoints(leadscoreId);
+  }
+
+  async listTiers(): Promise<LeadscoreTierResponseDto[]> {
+    const tiers = await this.leadscoreTierRepo.find({ order: { code: 'ASC' } });
+    return tiers.map((tier) => this.mapLeadscoreTier(tier));
+  }
+
+  async createTier(
+    dto: CreateLeadscoreTierDto,
+  ): Promise<LeadscoreTierResponseDto> {
+    const code = dto.code?.trim();
+    const name = dto.name?.trim();
+    if (!code) throw new BadRequestException('code e obrigatorio.');
+    if (!name) throw new BadRequestException('name e obrigatorio.');
+
+    const existing = await this.leadscoreTierRepo.findOne({ where: { code } });
+    if (existing) {
+      throw new BadRequestException(`Ja existe uma faixa com code="${code}".`);
+    }
+
+    const tier = await this.leadscoreTierRepo.save(
+      this.leadscoreTierRepo.create({ code, name }),
+    );
+    return this.mapLeadscoreTier(tier);
+  }
+
+  async updateTier(
+    id: string,
+    dto: UpdateLeadscoreTierDto,
+  ): Promise<LeadscoreTierResponseDto> {
+    const tier = await this.leadscoreTierRepo.findOne({ where: { id } });
+    if (!tier) {
+      throw new NotFoundException(
+        `LeadscoreTier nao encontrado para id=${id}.`,
+      );
+    }
+
+    if (dto.code !== undefined) {
+      const code = dto.code.trim();
+      if (!code) throw new BadRequestException('code nao pode ser vazio.');
+      const existing = await this.leadscoreTierRepo.findOne({
+        where: { code },
+      });
+      if (existing && existing.id !== id) {
+        throw new BadRequestException(
+          `Ja existe uma faixa com code="${code}".`,
+        );
+      }
+      tier.code = code;
+    }
+    if (dto.name !== undefined) {
+      const name = dto.name.trim();
+      if (!name) throw new BadRequestException('name nao pode ser vazio.');
+      tier.name = name;
+    }
+
+    const saved = await this.leadscoreTierRepo.save(tier);
+    return this.mapLeadscoreTier(saved);
   }
 
   async listScoreTierRules(
@@ -1906,6 +1967,10 @@ export class FormManagementService {
       created_at: row.created_at.toISOString(),
       updated_at: row.updated_at.toISOString(),
     };
+  }
+
+  private mapLeadscoreTier(row: LeadscoreTier): LeadscoreTierResponseDto {
+    return { id: row.id, code: row.code, name: row.name };
   }
 
   private mapLeadscoreTierRule(

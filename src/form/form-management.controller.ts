@@ -42,14 +42,17 @@ import {
 } from './dto/question-management.dto';
 import {
   CreateLeadscoreDto,
+  CreateLeadscoreTierDto,
   LeadscoreOptionPointResponseDto,
   LeadscoreRangePointResponseDto,
   LeadscoreResponseDto,
+  LeadscoreTierResponseDto,
   LeadscoreTierRuleResponseDto,
   ReplaceLeadscoreOptionPointsDto,
   ReplaceLeadscoreRangePointsDto,
   ReplaceLeadscoreTierRulesDto,
   UpdateLeadscoreDto,
+  UpdateLeadscoreTierDto,
 } from './dto/score-management.dto';
 import {
   CreateFullFormPayloadDto,
@@ -439,6 +442,40 @@ export class FormManagementController {
     @Body() dto: ReplaceLeadscoreRangePointsDto,
   ) {
     return await this.service.replaceScoreRangePoints(leadscoreId, dto);
+  }
+
+  @Get('scores/tiers')
+  @ApiOperation({
+    summary: 'Lista todas as faixas (tiers) de leadscore cadastradas',
+  })
+  @ApiResponse({ status: 200, type: LeadscoreTierResponseDto, isArray: true })
+  async listTiers() {
+    return await this.service.listTiers();
+  }
+
+  @Post('scores/tiers')
+  @RequirePermission('forms', 'create')
+  @ApiOperation({
+    summary: 'Cria uma nova faixa (tier) de leadscore, ex: "A+"',
+  })
+  @ApiBody({ type: CreateLeadscoreTierDto })
+  @ApiResponse({ status: 201, type: LeadscoreTierResponseDto })
+  async createTier(@Body() dto: CreateLeadscoreTierDto) {
+    return await this.service.createTier(dto);
+  }
+
+  @Patch('scores/tiers/:id')
+  @RequirePermission('forms', 'update')
+  @ApiOperation({
+    summary: 'Atualiza code/name de uma faixa (tier) de leadscore',
+  })
+  @ApiBody({ type: UpdateLeadscoreTierDto })
+  @ApiResponse({ status: 200, type: LeadscoreTierResponseDto })
+  async updateTier(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: UpdateLeadscoreTierDto,
+  ) {
+    return await this.service.updateTier(id, dto);
   }
 
   @Get('scores/:leadscoreId/tier-rules')

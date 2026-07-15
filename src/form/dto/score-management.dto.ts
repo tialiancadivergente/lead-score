@@ -117,6 +117,33 @@ export class ReplaceLeadscoreRangePointsDto {
   items!: UpsertLeadscoreRangePointItemDto[];
 }
 
+export class LeadscoreTierResponseDto {
+  @ApiProperty({ example: '81fb42e8-f942-4864-bc00-6e2e3beb9908' })
+  id!: string;
+
+  @ApiProperty({ example: 'A+' })
+  code!: string;
+
+  @ApiProperty({ example: 'A+' })
+  name!: string;
+}
+
+export class CreateLeadscoreTierDto {
+  @ApiProperty({ example: 'A+' })
+  code!: string;
+
+  @ApiProperty({ example: 'A+' })
+  name!: string;
+}
+
+export class UpdateLeadscoreTierDto {
+  @ApiPropertyOptional({ example: 'A+' })
+  code?: string;
+
+  @ApiPropertyOptional({ example: 'A Plus' })
+  name?: string;
+}
+
 export class LeadscoreTierRuleResponseDto {
   @ApiProperty({ example: 'f94c3f1d-c1f9-4e80-9ab9-aea933d4f233' })
   id!: string;

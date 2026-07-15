@@ -14,6 +14,7 @@ import { MetaAdPerformance } from '../database/entities/meta-ads/meta-ad-perform
 import { MarketingConnectionAccount } from '../database/entities/marketing-sync/marketing-connection-account.entity';
 import { LeadscoreResult } from '../database/entities/leadscore/leadscore-result.entity';
 import { LeadscoreTier } from '../database/entities/leadscore/leadscore-tier.entity';
+import { Temperature } from '../database/entities/marketing/temperature.entity';
 import { UpsertLaunchDashboardConfigDto } from './dto/upsert-launch-dashboard-config.dto';
 import { LaunchDashboardQueryDto } from './dto/launch-dashboard-query.dto';
 
@@ -324,14 +325,22 @@ export class LaunchDashboardService {
   async getSummary(query: LaunchDashboardQueryDto) {
     this.validateDates(query);
 
-    const [media, leadsCount, salesData] = await Promise.all([
-      this.queryMediaAggregated(query),
-      this.queryLeadsCount(query),
-      this.querySalesAggregated(query),
-    ]);
+    const [media, leadsCount, organicLeadsCount, salesData] = await Promise.all(
+      [
+        this.queryMediaAggregated(query),
+        this.queryLeadsCount(query),
+        this.queryOrganicLeadsCount(query),
+        this.querySalesAggregated(query),
+      ],
+    );
 
     return {
-      summary: this.buildSummaryMetrics(media, leadsCount, salesData),
+      summary: this.buildSummaryMetrics(
+        media,
+        leadsCount,
+        salesData,
+        organicLeadsCount,
+      ),
     };
   }
 
@@ -386,32 +395,84 @@ export class LaunchDashboardService {
       this.querySalesByAd(query),
     ]);
 
-    const items = mediaRows.map((row) => {
+    const rawItems = mediaRows.map((row) => {
       const leads = leadsByAd.get(row.externalAdId) ?? 0;
       const sale = salesByAd.get(row.externalAdId) ?? { sales: 0, revenue: 0 };
 
       return {
         ...row,
+        externalAdIds: [row.externalAdId],
         leads,
         sales: sale.sales,
         revenue: sale.revenue,
-        ctr: this.div(row.clicks, row.impressions),
-        cpc: this.div(row.spend, row.clicks),
-        cpm:
-          row.impressions > 0
-            ? Number(((row.spend * 1000) / row.impressions).toFixed(6))
-            : null,
-        connectRate: this.div(row.landingPageViews, row.inlineLinkClicks),
-        txPgvCheckout: this.div(row.initiateCheckouts, row.landingPageViews),
-        txCheckoutSale: this.div(sale.sales, row.initiateCheckouts),
-        cpl: this.div(row.spend, leads),
-        cpa: this.div(row.spend, sale.sales),
       };
     });
+
+    const merged =
+      query.groupBy === 'adName'
+        ? this.groupFunnelItemsByAdName(rawItems)
+        : rawItems;
+
+    const items = merged.map((row) => ({
+      ...row,
+      ctr: this.div(row.clicks, row.impressions),
+      cpc: this.div(row.spend, row.clicks),
+      cpm:
+        row.impressions > 0
+          ? Number(((row.spend * 1000) / row.impressions).toFixed(6))
+          : null,
+      connectRate: this.div(row.landingPageViews, row.inlineLinkClicks),
+      txPgvCheckout: this.div(row.initiateCheckouts, row.landingPageViews),
+      txCheckoutSale: this.div(row.sales, row.initiateCheckouts),
+      cpl: this.div(row.spend, row.leads),
+      cpa: this.div(row.spend, row.sales),
+    }));
 
     items.sort((a, b) => b.spend - a.spend);
 
     return { items, total: items.length };
+  }
+
+  // Consolida linhas que compartilham o mesmo ad_name (nomenclatura do
+  // criativo), já que o mesmo criativo pode gerar um external_ad_id novo a
+  // cada campanha/reupload. Anúncios sem nome (adName null) NÃO são
+  // agrupados entre si — cada um fica na própria chave, pra não misturar
+  // criativos sem nomenclatura como se fossem o mesmo.
+  private groupFunnelItemsByAdName<
+    T extends FunnelAdRow & {
+      externalAdIds: string[];
+      leads: number;
+      sales: number;
+      revenue: number;
+    },
+  >(items: T[]): T[] {
+    const groups = new Map<string, T>();
+
+    for (const item of items) {
+      const key = item.adName ?? `__id:${item.externalAdId}`;
+      const existing = groups.get(key);
+
+      if (!existing) {
+        groups.set(key, { ...item });
+        continue;
+      }
+
+      existing.externalAdIds = [
+        ...existing.externalAdIds,
+        ...item.externalAdIds,
+      ];
+      existing.spend += item.spend;
+      existing.impressions += item.impressions;
+      existing.clicks += item.clicks;
+      existing.inlineLinkClicks += item.inlineLinkClicks;
+      existing.landingPageViews += item.landingPageViews;
+      existing.initiateCheckouts += item.initiateCheckouts;
+      existing.leads += item.leads;
+      existing.sales += item.sales;
+      existing.revenue += item.revenue;
+    }
+
+    return Array.from(groups.values());
   }
 
   // ─── Awareness metrics ────────────────────────────────────────────────────
@@ -432,10 +493,9 @@ export class LaunchDashboardService {
     const [consciousnessCount, knowsExpertCount, knowsAllianceCount] =
       await Promise.all([
         config?.question_key_consciousness
-          ? this.queryPositiveAnswerCount(
+          ? this.queryConsciousnessKeywordCount(
               query,
               config.question_key_consciousness,
-              config.positive_option_key_consciousness,
             )
           : Promise.resolve(null),
         config?.question_key_knows_expert
@@ -486,6 +546,67 @@ export class LaunchDashboardService {
       .select('COUNT(DISTINCT fr.id)', 'responses')
       .getRawOne<{ responses: string }>();
     return Number(row?.responses ?? 0);
+  }
+
+  // Palavras que classificam uma resposta livre como "consciente" (ver PDF
+  // "Ajustes Dashboard", item 19). Correspondência por substring (case
+  // insensitive) — cobre variações/conjugações naturalmente, já que várias
+  // palavras da própria lista já são variações umas das outras
+  // (financeira/financeiro/financeiramente). "permissao" sem acento é
+  // incluído à parte pois nem toda resposta livre chega acentuada.
+  private static readonly CONSCIOUSNESS_KEYWORDS = [
+    'destravar',
+    'dinheiro',
+    'financeira',
+    'financeiramente',
+    'financeiro',
+    'medo',
+    'permissão',
+    'permissao',
+    'profissional',
+    'prosperar',
+    'prosperidade',
+    'resolver',
+    'resultados',
+  ];
+
+  // Conta form_response distintas cuja resposta em TEXTO LIVRE (answer_text)
+  // contém pelo menos uma das CONSCIOUSNESS_KEYWORDS — substitui o antigo
+  // critério baseado em opção de múltipla escolha (positive_option_key) só
+  // para a métrica de consciência.
+  private async queryConsciousnessKeywordCount(
+    query: LaunchDashboardQueryDto,
+    questionKey: string,
+  ): Promise<number> {
+    const qb = this.formAnswerRepo
+      .createQueryBuilder('fa')
+      .innerJoin(FormResponse, 'fr', 'fr.id = fa.form_response_id')
+      .innerJoin(Capture, 'c', 'c.id = fr.capture_id')
+      .innerJoin(
+        Question,
+        'q',
+        'q.id = fa.question_id AND q.question_key = :questionKey',
+        { questionKey },
+      )
+      .andWhere('fa.answer_text IS NOT NULL');
+
+    const keywordConditions = LaunchDashboardService.CONSCIOUSNESS_KEYWORDS.map(
+      (_keyword, index) => `fa.answer_text ILIKE :keyword${index}`,
+    ).join(' OR ');
+    const keywordParams = Object.fromEntries(
+      LaunchDashboardService.CONSCIOUSNESS_KEYWORDS.map((keyword, index) => [
+        `keyword${index}`,
+        `%${keyword}%`,
+      ]),
+    );
+    qb.andWhere(`(${keywordConditions})`, keywordParams);
+
+    this.applyFormResponseFilters(qb, query);
+
+    const row = await qb
+      .select('COUNT(DISTINCT fr.id)', 'count')
+      .getRawOne<{ count: string }>();
+    return Number(row?.count ?? 0);
   }
 
   private async queryPositiveAnswerCount(
@@ -608,7 +729,12 @@ export class LaunchDashboardService {
         'COALESCE(SUM(CAST(p.impressions AS BIGINT)), 0)',
         'impressions',
       )
-      .addSelect('COALESCE(SUM(CAST(p.clicks AS BIGINT)), 0)', 'clicks')
+      // "Cliques"/CTR/CPC do dashboard usam link click (clique no link do anúncio),
+      // não o clique genérico do Meta (que inclui curtida/comentário/etc).
+      .addSelect(
+        'COALESCE(SUM(CAST(p.inline_link_clicks AS BIGINT)), 0)',
+        'clicks',
+      )
       .addSelect(
         'COALESCE(SUM(CAST(p.inline_link_clicks AS BIGINT)), 0)',
         'inlineLinkClicks',
@@ -644,7 +770,11 @@ export class LaunchDashboardService {
         'COALESCE(SUM(CAST(p.impressions AS BIGINT)), 0)',
         'impressions',
       )
-      .addSelect('COALESCE(SUM(CAST(p.clicks AS BIGINT)), 0)', 'clicks')
+      // Ver nota em queryMediaAggregated: "clicks" = link click, não clique genérico.
+      .addSelect(
+        'COALESCE(SUM(CAST(p.inline_link_clicks AS BIGINT)), 0)',
+        'clicks',
+      )
       .groupBy('p.report_date')
       .orderBy('p.report_date', 'ASC')
       .getRawMany<Record<string, string>>();
@@ -677,7 +807,11 @@ export class LaunchDashboardService {
         'COALESCE(SUM(CAST(p.impressions AS BIGINT)), 0)',
         'impressions',
       )
-      .addSelect('COALESCE(SUM(CAST(p.clicks AS BIGINT)), 0)', 'clicks')
+      // Ver nota em queryMediaAggregated: "clicks" = link click, não clique genérico.
+      .addSelect(
+        'COALESCE(SUM(CAST(p.inline_link_clicks AS BIGINT)), 0)',
+        'clicks',
+      )
       .addSelect(
         'COALESCE(SUM(CAST(p.inline_link_clicks AS BIGINT)), 0)',
         'inlineLinkClicks',
@@ -761,6 +895,26 @@ export class LaunchDashboardService {
   ): Promise<number> {
     const qb = this.captureRepo.createQueryBuilder('c');
     this.applyCaptureFilters(qb, query);
+    qb.andWhere('c.person_id IS NOT NULL');
+    const row = await qb
+      .select('COUNT(DISTINCT c.person_id)', 'leads')
+      .getRawOne<{ leads: string }>();
+    return Number(row?.leads ?? 0);
+  }
+
+  // Leads com temperature.abbreviation = 'org' (cadastro orgânico, sem
+  // origem de tráfego pago) — mesmo seed usado em lead-persistence.service.ts.
+  private async queryOrganicLeadsCount(
+    query: LaunchDashboardQueryDto,
+  ): Promise<number> {
+    const qb = this.captureRepo.createQueryBuilder('c');
+    this.applyCaptureFilters(qb, query);
+    qb.innerJoin(
+      Temperature,
+      't',
+      't.id = c.temperature_id AND t.abbreviation = :abbr',
+      { abbr: 'org' },
+    );
     qb.andWhere('c.person_id IS NOT NULL');
     const row = await qb
       .select('COUNT(DISTINCT c.person_id)', 'leads')
@@ -951,6 +1105,7 @@ export class LaunchDashboardService {
     media: MediaAgg,
     leadsCount: number,
     salesData: { sales: number; revenue: number },
+    organicLeadsCount = 0,
   ) {
     return {
       spend: media.spend,
@@ -959,6 +1114,7 @@ export class LaunchDashboardService {
       inlineLinkClicks: media.inlineLinkClicks,
       landingPageViews: media.landingPageViews,
       leads: leadsCount,
+      organicLeads: organicLeadsCount,
       initiateCheckouts: media.initiateCheckouts,
       sales: salesData.sales,
       revenue: salesData.revenue,

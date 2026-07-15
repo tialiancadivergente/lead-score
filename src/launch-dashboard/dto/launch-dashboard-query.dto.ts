@@ -24,4 +24,12 @@ export class LaunchDashboardQueryDto {
 
   @ApiPropertyOptional()
   externalAdId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Agrupamento da tabela de funil: "ad" (por external_ad_id, default) ou "adName" (consolida todos os anúncios com o mesmo nome/nomenclatura)',
+    enum: ['ad', 'adName'],
+    example: 'adName',
+  })
+  groupBy?: 'ad' | 'adName';
 }

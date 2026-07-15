@@ -131,6 +131,13 @@ export class LaunchDashboardController {
   @ApiQuery({ name: 'externalCampaignId', required: false })
   @ApiQuery({ name: 'externalAdsetId', required: false })
   @ApiQuery({ name: 'externalAdId', required: false })
+  @ApiQuery({
+    name: 'groupBy',
+    required: false,
+    enum: ['ad', 'adName'],
+    description:
+      'ad (default) = uma linha por external_ad_id; adName = consolida anúncios com o mesmo nome',
+  })
   @Get('funnel')
   getFunnelTable(@Query() query: LaunchDashboardQueryDto) {
     return this.service.getFunnelTable(query);

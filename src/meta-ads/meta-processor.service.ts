@@ -188,6 +188,8 @@ export class MetaProcessorService {
       ]);
       const initiateCheckouts = this.extractActionTotal(row.actions, [
         'initiate_checkout',
+        'offsite_conversion.fb_pixel_initiate_checkout',
+        'omni_initiated_checkout',
       ]);
       const purchases = this.extractActionTotal(row.actions, [
         'purchase',
