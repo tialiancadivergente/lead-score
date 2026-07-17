@@ -1,8 +1,10 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
   ParseUUIDPipe,
+  Post,
   Query,
   Res,
   UseGuards,
@@ -20,9 +22,12 @@ import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
+import { CaptureExportJob } from '../database/entities/capture/capture-export-job.entity';
 import { CaptureService } from './capture.service';
+import { CaptureExportJobResponseDto } from './dto/capture-export-job-response.dto';
 import { CaptureQuizAnswersResponseDto } from './dto/capture-quiz-answers-response.dto';
 import { CaptureFilterQueryDto } from './dto/capture-filter-query.dto';
+import { CreateCaptureExportJobDto } from './dto/create-capture-export-job.dto';
 import { ListCaptureQueryDto } from './dto/list-capture-query.dto';
 import { CaptureListResponseDto } from './dto/list-capture-response.dto';
 
@@ -125,6 +130,70 @@ export class CaptureController {
     res.send(excelFile);
   }
 
+  @Post('export/jobs')
+  @ApiOperation({
+    summary: 'Cria um job assincrono de export (CSV ou Excel)',
+    description:
+      'Dispara o processamento em background e retorna imediatamente o id do job. ' +
+      'Use GET export/jobs/:id para acompanhar o progresso e GET export/jobs/:id/download ' +
+      'para baixar o arquivo quando o status for "completed". Recomendado para qualquer ' +
+      'volume que nao seja pequeno, pois os endpoints export/csv e export/excel rodam ' +
+      'de forma sincrona e podem sofrer timeout do ingress em datasets grandes.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Job criado com sucesso.',
+    type: CaptureExportJobResponseDto,
+  })
+  async createExportJob(
+    @Body() body: CreateCaptureExportJobDto,
+  ): Promise<CaptureExportJobResponseDto> {
+    const { format, ...query } = body;
+    const job = await this.captureService.createExportJob(query, format);
+    return this.toJobResponse(job);
+  }
+
+  @Get('export/jobs/:id')
+  @ApiOperation({
+    summary: 'Consulta o status/progresso de um job de export',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Status do job retornado com sucesso.',
+    type: CaptureExportJobResponseDto,
+  })
+  async getExportJob(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<CaptureExportJobResponseDto> {
+    const job = await this.captureService.getExportJobStatus(id);
+    return this.toJobResponse(job);
+  }
+
+  @Get('export/jobs/:id/download')
+  @ApiOperation({
+    summary: 'Baixa o arquivo gerado por um job de export concluido',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Arquivo gerado com sucesso.',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Job ainda nao foi concluido.',
+  })
+  async downloadExportJob(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Res() res: Response,
+  ) {
+    const file = await this.captureService.getExportJobFile(id);
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.fileName}"`,
+    );
+    res.send(file.data);
+  }
+
   @Get(':id/quiz-answers')
   @ApiOperation({
     summary: 'Retorna as respostas do quiz para uma capture',
@@ -187,5 +256,28 @@ export class CaptureController {
   private buildExportFileName(extension: 'csv' | 'xlsx') {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     return `capture-export-${timestamp}.${extension}`;
+  }
+
+  private toJobResponse(job: CaptureExportJob): CaptureExportJobResponseDto {
+    const percent =
+      job.total_items && job.total_items > 0
+        ? Math.min(
+            100,
+            Math.round((job.processed_items / job.total_items) * 100),
+          )
+        : 0;
+
+    return {
+      id: job.id,
+      format: job.format,
+      status: job.status,
+      total_items: job.total_items ?? null,
+      processed_items: job.processed_items,
+      percent: job.status === 'completed' ? 100 : percent,
+      error_message: job.error_message ?? null,
+      created_at: job.created_at.toISOString(),
+      started_at: job.started_at ? job.started_at.toISOString() : null,
+      completed_at: job.completed_at ? job.completed_at.toISOString() : null,
+    };
   }
 }

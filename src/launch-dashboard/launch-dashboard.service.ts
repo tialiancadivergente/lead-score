@@ -343,6 +343,7 @@ export class LaunchDashboardService {
     }
 
     const keys = eligibleQuestions.map((q) => q.questionKey);
+    const campaignAdIds = await this.resolveCampaignScopedAdIds(query);
 
     const qb = this.formAnswerRepo
       .createQueryBuilder('fa')
@@ -352,7 +353,7 @@ export class LaunchDashboardService {
       .innerJoin(QuestionOption, 'qo', 'qo.id = fa.option_id')
       .andWhere('q.question_key IN (:...keys)', { keys });
 
-    this.applyFormResponseFilters(qb, query);
+    this.applyFormResponseFilters(qb, query, campaignAdIds);
 
     const rows = await qb
       .select('q.question_key', 'questionKey')
@@ -395,11 +396,13 @@ export class LaunchDashboardService {
   async getSummary(query: LaunchDashboardQueryDto) {
     this.validateDates(query);
 
+    const campaignAdIds = await this.resolveCampaignScopedAdIds(query);
+
     const [media, leadsCount, organicLeadsCount, salesData] = await Promise.all(
       [
         this.queryMediaAggregated(query),
-        this.queryLeadsCount(query),
-        this.queryOrganicLeadsCount(query),
+        this.queryLeadsCount(query, campaignAdIds),
+        this.queryOrganicLeadsCount(query, campaignAdIds),
         this.querySalesAggregated(query),
       ],
     );
@@ -419,9 +422,11 @@ export class LaunchDashboardService {
   async getTimeseries(query: LaunchDashboardQueryDto) {
     this.validateDates(query);
 
+    const campaignAdIds = await this.resolveCampaignScopedAdIds(query);
+
     const [mediaRows, leadRows, saleRows] = await Promise.all([
       this.queryMediaTimeseries(query),
-      this.queryLeadsTimeseries(query),
+      this.queryLeadsTimeseries(query, campaignAdIds),
       this.querySalesTimeseries(query),
     ]);
 
@@ -677,10 +682,11 @@ export class LaunchDashboardService {
     this.validateDates(query);
 
     const config = query.launchId ? await this.getConfig(query.launchId) : null;
+    const campaignAdIds = await this.resolveCampaignScopedAdIds(query);
 
     const [totalLeads, totalResponses] = await Promise.all([
-      this.queryLeadsCount(query),
-      this.queryFormResponseCount(query),
+      this.queryLeadsCount(query, campaignAdIds),
+      this.queryFormResponseCount(query, campaignAdIds),
     ]);
 
     const surveyResponseRate =
@@ -692,6 +698,7 @@ export class LaunchDashboardService {
           ? this.queryConsciousnessKeywordCount(
               query,
               config.question_key_consciousness,
+              campaignAdIds,
             )
           : Promise.resolve(null),
         config?.question_key_knows_expert
@@ -699,6 +706,7 @@ export class LaunchDashboardService {
               query,
               config.question_key_knows_expert,
               config.positive_option_key_knows_expert,
+              campaignAdIds,
             )
           : Promise.resolve(null),
         config?.question_key_knows_alliance
@@ -706,6 +714,7 @@ export class LaunchDashboardService {
               query,
               config.question_key_knows_alliance,
               config.positive_option_key_knows_alliance,
+              campaignAdIds,
             )
           : Promise.resolve(null),
       ]);
@@ -903,6 +912,7 @@ export class LaunchDashboardService {
         dateTo: query.dateTo ?? null,
         externalAccountId: query.externalAccountId ?? null,
         externalCampaignId: query.externalCampaignId ?? null,
+        campaignNameContains: query.campaignNameContains ?? null,
       },
       metrics,
     };
@@ -910,12 +920,13 @@ export class LaunchDashboardService {
 
   private async queryFormResponseCount(
     query: LaunchDashboardQueryDto,
+    campaignAdIds?: string[] | null,
   ): Promise<number> {
     const qb = this.formResponseRepo
       .createQueryBuilder('fr')
       .innerJoin(Capture, 'c', 'c.id = fr.capture_id')
       .andWhere('fr.capture_id IS NOT NULL');
-    this.applyFormResponseFilters(qb, query);
+    this.applyFormResponseFilters(qb, query, campaignAdIds);
     const row = await qb
       .select('COUNT(DISTINCT fr.id)', 'responses')
       .getRawOne<{ responses: string }>();
@@ -951,6 +962,7 @@ export class LaunchDashboardService {
   private async queryConsciousnessKeywordCount(
     query: LaunchDashboardQueryDto,
     questionKey: string,
+    campaignAdIds?: string[] | null,
   ): Promise<number> {
     const qb = this.formAnswerRepo
       .createQueryBuilder('fa')
@@ -975,7 +987,7 @@ export class LaunchDashboardService {
     );
     qb.andWhere(`(${keywordConditions})`, keywordParams);
 
-    this.applyFormResponseFilters(qb, query);
+    this.applyFormResponseFilters(qb, query, campaignAdIds);
 
     const row = await qb
       .select('COUNT(DISTINCT fr.id)', 'count')
@@ -987,6 +999,7 @@ export class LaunchDashboardService {
     query: LaunchDashboardQueryDto,
     questionKey: string,
     positiveOptionKey?: string,
+    campaignAdIds?: string[] | null,
   ): Promise<number> {
     const qb = this.formAnswerRepo
       .createQueryBuilder('fa')
@@ -1010,7 +1023,7 @@ export class LaunchDashboardService {
     // sem positiveOptionKey: conta qualquer form_response que tenha uma linha de form_answer
     // para essa question_key — a existência da linha já indica que o lead respondeu
 
-    this.applyFormResponseFilters(qb, query);
+    this.applyFormResponseFilters(qb, query, campaignAdIds);
 
     const row = await qb
       .select('COUNT(DISTINCT fr.id)', 'count')
@@ -1021,6 +1034,7 @@ export class LaunchDashboardService {
   private applyFormResponseFilters(
     qb: SelectQueryBuilder<any>,
     query: LaunchDashboardQueryDto,
+    campaignAdIds?: string[] | null,
   ) {
     if (query.launchId) {
       qb.andWhere('c.launch_id = :launchId', { launchId: query.launchId });
@@ -1038,6 +1052,7 @@ export class LaunchDashboardService {
         captureTo: this.nextDay(query.dateTo),
       });
     }
+    this.applyCampaignAdIdsFilter(qb, campaignAdIds);
   }
 
   // ─── Health score ─────────────────────────────────────────────────────────
@@ -1177,13 +1192,15 @@ export class LaunchDashboardService {
   async getTierDistribution(query: LaunchDashboardQueryDto) {
     this.validateDates(query);
 
+    const campaignAdIds = await this.resolveCampaignScopedAdIds(query);
+
     const qb = this.leadscoreResultRepo
       .createQueryBuilder('lr')
       .innerJoin(FormResponse, 'fr', 'fr.id = lr.form_response_id')
       .innerJoin(Capture, 'c', 'c.id = fr.capture_id')
       .innerJoin(LeadscoreTier, 'lt', 'lt.id = lr.tier_id');
 
-    this.applyFormResponseFilters(qb, query);
+    this.applyFormResponseFilters(qb, query, campaignAdIds);
 
     const rows = await qb
       .select('lt.code', 'tier')
@@ -1403,6 +1420,11 @@ export class LaunchDashboardService {
         externalCampaignId: query.externalCampaignId,
       });
     }
+    if (query.campaignNameContains) {
+      qb.andWhere('p.campaign_name ILIKE :campaignNameContains', {
+        campaignNameContains: `%${query.campaignNameContains}%`,
+      });
+    }
     if (query.externalAdsetId) {
       qb.andWhere('p.external_adset_id = :externalAdsetId', {
         externalAdsetId: query.externalAdsetId,
@@ -1415,13 +1437,41 @@ export class LaunchDashboardService {
     }
   }
 
+  // Leads/vendas/respostas de formulário não têm campaign_name — só
+  // external_ad_id. Pra um filtro de campanha (exato ou "contém") refletir
+  // nesses números também, resolve aqui quais external_ad_id batem com os
+  // filtros de mídia atualmente ativos, e usa isso pra restringir as queries
+  // do lado de capture. Retorna null quando não há filtro de
+  // campanha/adset ativo (nada a restringir).
+  private async resolveCampaignScopedAdIds(
+    query: LaunchDashboardQueryDto,
+  ): Promise<string[] | null> {
+    if (
+      !query.externalCampaignId &&
+      !query.campaignNameContains &&
+      !query.externalAdsetId
+    ) {
+      return null;
+    }
+
+    const qb = this.perfRepo.createQueryBuilder('p');
+    this.applyMediaFilters(qb, query);
+
+    const rows = await qb
+      .select('DISTINCT p.external_ad_id', 'externalAdId')
+      .getRawMany<{ externalAdId: string }>();
+
+    return rows.map((r) => r.externalAdId);
+  }
+
   // ─── Capture / leads queries ──────────────────────────────────────────────
 
   private async queryLeadsCount(
     query: LaunchDashboardQueryDto,
+    campaignAdIds?: string[] | null,
   ): Promise<number> {
     const qb = this.captureRepo.createQueryBuilder('c');
-    this.applyCaptureFilters(qb, query);
+    this.applyCaptureFilters(qb, query, campaignAdIds);
     qb.andWhere('c.person_id IS NOT NULL');
     const row = await qb
       .select('COUNT(DISTINCT c.person_id)', 'leads')
@@ -1433,9 +1483,10 @@ export class LaunchDashboardService {
   // origem de tráfego pago) — mesmo seed usado em lead-persistence.service.ts.
   private async queryOrganicLeadsCount(
     query: LaunchDashboardQueryDto,
+    campaignAdIds?: string[] | null,
   ): Promise<number> {
     const qb = this.captureRepo.createQueryBuilder('c');
-    this.applyCaptureFilters(qb, query);
+    this.applyCaptureFilters(qb, query, campaignAdIds);
     qb.innerJoin(
       Temperature,
       't',
@@ -1449,9 +1500,12 @@ export class LaunchDashboardService {
     return Number(row?.leads ?? 0);
   }
 
-  private async queryLeadsTimeseries(query: LaunchDashboardQueryDto) {
+  private async queryLeadsTimeseries(
+    query: LaunchDashboardQueryDto,
+    campaignAdIds?: string[] | null,
+  ) {
     const qb = this.captureRepo.createQueryBuilder('c');
-    this.applyCaptureFilters(qb, query);
+    this.applyCaptureFilters(qb, query, campaignAdIds);
     qb.andWhere('c.person_id IS NOT NULL');
 
     const rows = await qb
@@ -1487,6 +1541,7 @@ export class LaunchDashboardService {
   private applyCaptureFilters(
     qb: ReturnType<Repository<Capture>['createQueryBuilder']>,
     query: LaunchDashboardQueryDto,
+    campaignAdIds?: string[] | null,
   ) {
     if (query.launchId) {
       qb.andWhere('c.launch_id = :launchId', { launchId: query.launchId });
@@ -1509,6 +1564,22 @@ export class LaunchDashboardService {
         externalAdId: query.externalAdId,
       });
     }
+    this.applyCampaignAdIdsFilter(qb, campaignAdIds);
+  }
+
+  // Aplica a restrição resolvida por resolveCampaignScopedAdIds. campaignAdIds
+  // === null/undefined = sem filtro de campanha ativo, não restringe nada.
+  // Array vazio = filtro ativo mas nenhum anúncio bateu, força 0 resultados.
+  private applyCampaignAdIdsFilter(
+    qb: { andWhere: (sql: string, params?: object) => unknown },
+    campaignAdIds?: string[] | null,
+  ) {
+    if (campaignAdIds === undefined || campaignAdIds === null) return;
+    if (campaignAdIds.length === 0) {
+      qb.andWhere('1 = 0');
+      return;
+    }
+    qb.andWhere('c.external_ad_id IN (:...campaignAdIds)', { campaignAdIds });
   }
 
   // ─── Hotmart sales queries ────────────────────────────────────────────────

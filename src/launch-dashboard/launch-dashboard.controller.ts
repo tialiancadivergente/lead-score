@@ -123,6 +123,12 @@ export class LaunchDashboardController {
   @ApiQuery({ name: 'dateTo', required: true, example: '2026-04-30' })
   @ApiQuery({ name: 'externalAccountId', required: false })
   @ApiQuery({ name: 'externalCampaignId', required: false })
+  @ApiQuery({
+    name: 'campaignNameContains',
+    required: false,
+    description:
+      'Filtra campanhas cujo nome contém esse texto (reflete em tudo)',
+  })
   @ApiQuery({ name: 'externalAdsetId', required: false })
   @ApiQuery({ name: 'externalAdId', required: false })
   @Get('summary')
@@ -151,6 +157,12 @@ export class LaunchDashboardController {
   @ApiQuery({ name: 'dateTo', required: true, example: '2026-04-30' })
   @ApiQuery({ name: 'externalAccountId', required: false })
   @ApiQuery({ name: 'externalCampaignId', required: false })
+  @ApiQuery({
+    name: 'campaignNameContains',
+    required: false,
+    description:
+      'Filtra campanhas cujo nome contém esse texto (reflete em tudo)',
+  })
   @ApiQuery({ name: 'externalAdsetId', required: false })
   @ApiQuery({ name: 'externalAdId', required: false })
   @ApiQuery({
@@ -191,6 +203,12 @@ export class LaunchDashboardController {
   @ApiQuery({ name: 'dateTo', required: true, example: '2026-04-30' })
   @ApiQuery({ name: 'externalAccountId', required: false })
   @ApiQuery({ name: 'externalCampaignId', required: false })
+  @ApiQuery({
+    name: 'campaignNameContains',
+    required: false,
+    description:
+      'Filtra campanhas cujo nome contém esse texto (reflete em tudo)',
+  })
   @Get('metric-explanations')
   getMetricExplanations(@Query() query: LaunchDashboardQueryDto) {
     return this.service.getMetricExplanations(query);
