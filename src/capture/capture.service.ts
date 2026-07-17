@@ -60,6 +60,8 @@ type CaptureRawRow = {
   form_version_id: string | null;
   person_id: string | null;
   name: string | null;
+  capture_email: string | null;
+  capture_phone: string | null;
   platform_id: string | null;
   platform_name: string | null;
   strategy_id: string | null;
@@ -476,6 +478,10 @@ export class CaptureService {
   ): SelectQueryBuilder<Capture> {
     const externalAdExpression =
       "COALESCE(capture.utms ->> 'h_ad_id', capture.metadata -> 'utms' ->> 'h_ad_id', capture.metadata ->> 'h_ad_id')";
+    const captureEmailExpression =
+      "NULLIF(TRIM(capture.metadata ->> 'email'), '')";
+    const capturePhoneExpression =
+      "NULLIF(TRIM(COALESCE(capture.metadata ->> 'telefone', capture.metadata ->> 'phone')), '')";
 
     const qb = this.captureRepo
       .createQueryBuilder('capture')
@@ -516,6 +522,8 @@ export class CaptureService {
       ])
       .addSelect(externalAdExpression, 'external_ad_id')
       .addSelect(externalAdExpression, 'external_ad_name')
+      .addSelect(captureEmailExpression, 'capture_email')
+      .addSelect(capturePhoneExpression, 'capture_phone')
       .orderBy('capture.created_at', 'DESC')
       .addOrderBy('capture.id', 'DESC');
 
@@ -574,31 +582,45 @@ export class CaptureService {
 
     if (filters.email) {
       qb.andWhere(
-        `EXISTS (
-          SELECT 1
-          FROM person_identifier pi_email
-          INNER JOIN identifier_type it_email
-            ON it_email.id = pi_email.identifier_type_id
-          WHERE pi_email.person_id = capture.person_id
-            AND it_email.code = 'EMAIL'
-            AND pi_email.value_normalized = :email
+        `(NULLIF(LOWER(TRIM(capture.metadata ->> 'email')), '') = :email
+          OR (
+            NULLIF(TRIM(capture.metadata ->> 'email'), '') IS NULL
+            AND EXISTS (
+              SELECT 1
+              FROM person_identifier pi_email
+              INNER JOIN identifier_type it_email
+                ON it_email.id = pi_email.identifier_type_id
+              WHERE pi_email.person_id = capture.person_id
+                AND it_email.code = 'EMAIL'
+                AND pi_email.value_normalized = :email
+            )
+          )
         )`,
         { email: filters.email },
       );
     }
 
     if (filters.phone) {
+      const phoneDigits = filters.phone.replace(/\D+/g, '');
       qb.andWhere(
-        `EXISTS (
-          SELECT 1
-          FROM person_identifier pi_phone
-          INNER JOIN identifier_type it_phone
-            ON it_phone.id = pi_phone.identifier_type_id
-          WHERE pi_phone.person_id = capture.person_id
-            AND it_phone.code = 'PHONE'
-            AND pi_phone.value_normalized = :phone
+        `(regexp_replace(COALESCE(capture.metadata ->> 'telefone', capture.metadata ->> 'phone', ''), '\\D', '', 'g') = :phoneDigits
+          OR (
+            NULLIF(TRIM(COALESCE(capture.metadata ->> 'telefone', capture.metadata ->> 'phone')), '') IS NULL
+            AND EXISTS (
+              SELECT 1
+              FROM person_identifier pi_phone
+              INNER JOIN identifier_type it_phone
+                ON it_phone.id = pi_phone.identifier_type_id
+              WHERE pi_phone.person_id = capture.person_id
+                AND it_phone.code = 'PHONE'
+                AND (
+                  pi_phone.value_normalized = :phone
+                  OR regexp_replace(pi_phone.value_normalized, '\\D', '', 'g') = :phoneDigits
+                )
+            )
+          )
         )`,
-        { phone: filters.phone },
+        { phone: filters.phone, phoneDigits },
       );
     }
   }
@@ -643,8 +665,14 @@ export class CaptureService {
       created_at: this.toIsoString(row.created_at),
       person_id: row.person_id,
       name: row.name,
-      person_email: personContacts.get(row.person_id ?? '')?.email ?? null,
-      person_phone: personContacts.get(row.person_id ?? '')?.phone ?? null,
+      person_email:
+        row.capture_email ??
+        personContacts.get(row.person_id ?? '')?.email ??
+        null,
+      person_phone:
+        row.capture_phone ??
+        personContacts.get(row.person_id ?? '')?.phone ??
+        null,
       platform_id: row.platform_id,
       platform_name: row.platform_name,
       strategy_id: row.strategy_id,
