@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -8,6 +9,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import ExcelJS from 'exceljs';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Capture } from '../database/entities/capture/capture.entity';
+import {
+  CaptureExportFormat,
+  CaptureExportJob,
+} from '../database/entities/capture/capture-export-job.entity';
 import { FormAnswer } from '../database/entities/form/form-answer.entity';
 import { FormResponse } from '../database/entities/form/form-response.entity';
 import { LeadscoreResult } from '../database/entities/leadscore/leadscore-result.entity';
@@ -124,6 +129,7 @@ export class CaptureService {
   private static readonly UUID_REGEX =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   private static readonly PERSON_CONTACTS_BATCH_SIZE = 2000;
+  private static readonly EXPORT_BATCH_SIZE = 2000;
   private static readonly EXPORT_COLUMNS: CaptureExportColumn[] = [
     { key: 'id', header: 'id' },
     { key: 'page', header: 'page' },
@@ -164,6 +170,8 @@ export class CaptureService {
     private readonly formAnswerRepo: Repository<FormAnswer>,
     @InjectRepository(LeadscoreResult)
     private readonly leadscoreResultRepo: Repository<LeadscoreResult>,
+    @InjectRepository(CaptureExportJob)
+    private readonly exportJobRepo: Repository<CaptureExportJob>,
   ) {}
 
   async getCaptureQuizAnswers(
@@ -288,14 +296,212 @@ export class CaptureService {
     };
   }
 
+  // @deprecated: prefer createExportJob + polling for anything but small exports; this blocks on the HTTP request.
   async exportCapturesCsv(query: CaptureFilterQueryDto): Promise<string> {
     const startedAt = Date.now();
     this.logger.log('Capture CSV export started.');
 
     const { items, questionHeaders, answersByCapture } =
       await this.buildExportDataset(query);
-    const columns = CaptureService.EXPORT_COLUMNS;
+    const csv = this.buildExportCsvBuffer(
+      items,
+      questionHeaders,
+      answersByCapture,
+    ).toString('utf-8');
 
+    this.logger.log(
+      `Capture CSV export finished in ${Date.now() - startedAt}ms (items=${items.length}).`,
+    );
+
+    return csv;
+  }
+
+  // @deprecated: prefer createExportJob + polling for anything but small exports; this blocks on the HTTP request.
+  async exportCapturesExcel(query: CaptureFilterQueryDto): Promise<Buffer> {
+    const startedAt = Date.now();
+    this.logger.log('Capture Excel export started.');
+
+    const { items, questionHeaders, answersByCapture } =
+      await this.buildExportDataset(query);
+    const out = await this.buildExportExcelBuffer(
+      items,
+      questionHeaders,
+      answersByCapture,
+    );
+
+    this.logger.log(
+      `Capture Excel export finished in ${Date.now() - startedAt}ms (items=${items.length}).`,
+    );
+
+    return out;
+  }
+
+  async createExportJob(
+    query: CaptureFilterQueryDto,
+    format: CaptureExportFormat,
+  ): Promise<CaptureExportJob> {
+    this.parseFilters(query);
+
+    const job = await this.exportJobRepo.save(
+      this.exportJobRepo.create({
+        format,
+        filters: { ...query },
+        status: 'pending',
+        processed_items: 0,
+      }),
+    );
+
+    void this.processExportJob(job.id, query, format);
+
+    return job;
+  }
+
+  async getExportJobStatus(jobId: string): Promise<CaptureExportJob> {
+    const job = await this.exportJobRepo.findOne({ where: { id: jobId } });
+    if (!job) {
+      throw new NotFoundException(
+        `Job de export nao encontrado para id=${jobId}.`,
+      );
+    }
+    return job;
+  }
+
+  async getExportJobFile(jobId: string): Promise<{
+    fileName: string;
+    contentType: string;
+    data: Buffer;
+  }> {
+    const job = await this.getExportJobStatus(jobId);
+    if (job.status !== 'completed' || !job.file_data) {
+      throw new ConflictException(
+        `Job ${jobId} ainda nao foi concluido (status=${job.status}).`,
+      );
+    }
+
+    return {
+      fileName: job.file_name ?? `capture-export.${job.format}`,
+      contentType:
+        job.format === 'xlsx'
+          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          : 'text/csv; charset=utf-8',
+      data: job.file_data,
+    };
+  }
+
+  private async processExportJob(
+    jobId: string,
+    query: CaptureFilterQueryDto,
+    format: CaptureExportFormat,
+  ): Promise<void> {
+    const startedAt = Date.now();
+    this.logger.log(`Capture export job ${jobId} started (format=${format}).`);
+
+    try {
+      await this.exportJobRepo.update(jobId, {
+        status: 'processing',
+        started_at: new Date(),
+      });
+
+      const filters = this.parseFilters(query);
+
+      const countQb = this.captureRepo.createQueryBuilder('capture');
+      this.applyFilters(countQb, filters);
+      const totalItems = await countQb.getCount();
+      await this.exportJobRepo.update(jobId, { total_items: totalItems });
+
+      const allItems: CaptureListItemDto[] = [];
+      const globalAnswersByCapture = new Map<string, Map<string, string>>();
+      const globalQuestionLabelsByKey = new Map<string, string>();
+
+      let cursor: { createdAt: Date; id: string } | undefined;
+      let processed = 0;
+
+      for (;;) {
+        const rows = await this.buildExportBatchQuery(
+          filters,
+          cursor,
+          CaptureService.EXPORT_BATCH_SIZE,
+        ).getRawMany<CaptureRawRow>();
+
+        if (!rows.length) break;
+
+        const { detailsByCapture, questionLabelsByKey, answersByCapture } =
+          await this.resolveQuizExportData(rows.map((row) => row.id));
+        const items = await this.mapRowsToItems(rows, detailsByCapture);
+
+        allItems.push(...items);
+        for (const [captureId, answerMap] of answersByCapture) {
+          globalAnswersByCapture.set(captureId, answerMap);
+        }
+        for (const [key, label] of questionLabelsByKey) {
+          if (!globalQuestionLabelsByKey.has(key)) {
+            globalQuestionLabelsByKey.set(key, label);
+          }
+        }
+
+        processed += rows.length;
+        await this.exportJobRepo.update(jobId, { processed_items: processed });
+
+        const lastRow = rows[rows.length - 1];
+        const lastCreatedAt =
+          lastRow.created_at instanceof Date
+            ? lastRow.created_at
+            : new Date(lastRow.created_at);
+        cursor = { createdAt: lastCreatedAt, id: lastRow.id };
+
+        if (rows.length < CaptureService.EXPORT_BATCH_SIZE) break;
+      }
+
+      const questionHeaders = [...globalQuestionLabelsByKey.entries()]
+        .sort(([keyA], [keyB]) => keyA.localeCompare(keyB, 'pt-BR'))
+        .map(([, label]) => label);
+
+      const fileName = this.buildExportFileName(format);
+      const fileData =
+        format === 'xlsx'
+          ? await this.buildExportExcelBuffer(
+              allItems,
+              questionHeaders,
+              globalAnswersByCapture,
+            )
+          : this.buildExportCsvBuffer(
+              allItems,
+              questionHeaders,
+              globalAnswersByCapture,
+            );
+
+      await this.exportJobRepo.update(jobId, {
+        status: 'completed',
+        completed_at: new Date(),
+        file_name: fileName,
+        file_data: fileData,
+      });
+
+      this.logger.log(
+        `Capture export job ${jobId} finished in ${Date.now() - startedAt}ms (items=${allItems.length}).`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Capture export job ${jobId} failed: ${message}`);
+      await this.exportJobRepo.update(jobId, {
+        status: 'failed',
+        error_message: message,
+        completed_at: new Date(),
+      });
+    }
+  }
+
+  private buildExportFileName(extension: 'csv' | 'xlsx'): string {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    return `capture-export-${timestamp}.${extension}`;
+  }
+
+  private buildExportCsvBuffer(
+    items: CaptureListItemDto[],
+    questionHeaders: string[],
+    answersByCapture: Map<string, Map<string, string>>,
+  ): Buffer {
+    const columns = CaptureService.EXPORT_COLUMNS;
     const headerRow = [
       ...columns.map((column) => column.header),
       ...questionHeaders,
@@ -315,19 +521,14 @@ export class CaptureService {
       .map((row) => row.map((value) => this.escapeCsv(value)).join(','))
       .join('\r\n');
 
-    this.logger.log(
-      `Capture CSV export finished in ${Date.now() - startedAt}ms (items=${items.length}).`,
-    );
-
-    return `\uFEFF${csv}`;
+    return Buffer.from(`\uFEFF${csv}`, 'utf-8');
   }
 
-  async exportCapturesExcel(query: CaptureFilterQueryDto): Promise<Buffer> {
-    const startedAt = Date.now();
-    this.logger.log('Capture Excel export started.');
-
-    const { items, questionHeaders, answersByCapture } =
-      await this.buildExportDataset(query);
+  private async buildExportExcelBuffer(
+    items: CaptureListItemDto[],
+    questionHeaders: string[],
+    answersByCapture: Map<string, Map<string, string>>,
+  ): Promise<Buffer> {
     const columns = CaptureService.EXPORT_COLUMNS;
     const headers = [
       ...columns.map((column) => column.header),
@@ -358,13 +559,7 @@ export class CaptureService {
     headerRow.commit?.();
 
     const data = await workbook.xlsx.writeBuffer();
-    const out = Buffer.isBuffer(data) ? data : Buffer.from(data);
-
-    this.logger.log(
-      `Capture Excel export finished in ${Date.now() - startedAt}ms (items=${items.length}).`,
-    );
-
-    return out;
+    return Buffer.isBuffer(data) ? data : Buffer.from(data);
   }
 
   private parsePositiveInt(
@@ -536,6 +731,23 @@ export class CaptureService {
     }
 
     return qb;
+  }
+
+  private buildExportBatchQuery(
+    filters: CaptureFilters,
+    after: { createdAt: Date; id: string } | undefined,
+    limit: number,
+  ): SelectQueryBuilder<Capture> {
+    const qb = this.buildDataQuery(filters);
+
+    if (after) {
+      qb.andWhere(
+        '(capture.created_at, capture.id) < (:cursorCreatedAt, :cursorId)',
+        { cursorCreatedAt: after.createdAt, cursorId: after.id },
+      );
+    }
+
+    return qb.limit(limit);
   }
 
   private applyFilters(
@@ -738,6 +950,7 @@ export class CaptureService {
   private async resolveQuizExportData(captureIds: string[]): Promise<{
     detailsByCapture: Map<string, CaptureQuizExportDetail>;
     questionHeaders: string[];
+    questionLabelsByKey: Map<string, string>;
     answersByCapture: Map<string, Map<string, string>>;
   }> {
     const uniqueCaptureIds = [...new Set(captureIds)];
@@ -746,7 +959,12 @@ export class CaptureService {
     const questionLabelsByKey = new Map<string, string>();
 
     if (!uniqueCaptureIds.length) {
-      return { detailsByCapture, questionHeaders: [], answersByCapture };
+      return {
+        detailsByCapture,
+        questionHeaders: [],
+        questionLabelsByKey,
+        answersByCapture,
+      };
     }
 
     const captureIdBatches = this.chunkArray(
@@ -893,7 +1111,12 @@ export class CaptureService {
       .sort(([keyA], [keyB]) => keyA.localeCompare(keyB, 'pt-BR'))
       .map(([, label]) => label);
 
-    return { detailsByCapture, questionHeaders, answersByCapture };
+    return {
+      detailsByCapture,
+      questionHeaders,
+      questionLabelsByKey,
+      answersByCapture,
+    };
   }
 
   private async resolvePersonContacts(personIds: string[]) {

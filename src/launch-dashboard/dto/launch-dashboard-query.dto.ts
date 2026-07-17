@@ -19,6 +19,13 @@ export class LaunchDashboardQueryDto {
   @ApiPropertyOptional()
   externalCampaignId?: string;
 
+  @ApiPropertyOptional({
+    description:
+      'Filtra campanhas cujo nome CONTÉM esse texto (case-insensitive). Reflete em tudo que é derivado de mídia (gasto, leads, vendas, etc), diferente de externalCampaignId que é match exato por id.',
+    example: 'adv169',
+  })
+  campaignNameContains?: string;
+
   @ApiPropertyOptional()
   externalAdsetId?: string;
 
