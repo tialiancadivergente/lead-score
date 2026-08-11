@@ -30,6 +30,12 @@ import { CaptureFilterQueryDto } from './dto/capture-filter-query.dto';
 import { CreateCaptureExportJobDto } from './dto/create-capture-export-job.dto';
 import { ListCaptureQueryDto } from './dto/list-capture-query.dto';
 import { CaptureListResponseDto } from './dto/list-capture-response.dto';
+import { ActiveCampaignGapQueryDto } from './dto/activecampaign-gap-query.dto';
+import { ActiveCampaignGapResponseDto } from './dto/activecampaign-gap-response.dto';
+import { ActiveCampaignMissingContactsQueryDto } from './dto/activecampaign-missing-contacts-query.dto';
+import { ActiveCampaignMissingContactsResponseDto } from './dto/activecampaign-missing-contacts-response.dto';
+import { ActiveCampaignContactTagsQueryDto } from './dto/activecampaign-contact-tags-query.dto';
+import { ActiveCampaignContactTagsResponseDto } from './dto/activecampaign-contact-tags-response.dto';
 
 @ApiTags('Capture')
 @ApiHeader({
@@ -119,7 +125,6 @@ export class CaptureController {
     @Query() query: CaptureFilterQueryDto,
     @Res() res: Response,
   ) {
-    const excelFile = await this.captureService.exportCapturesExcel(query);
     const filename = this.buildExportFileName('xlsx');
 
     res.setHeader(
@@ -127,7 +132,8 @@ export class CaptureController {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(excelFile);
+    res.flushHeaders();
+    await this.captureService.streamCapturesExcel(query, res);
   }
 
   @Post('export/jobs')
@@ -192,6 +198,84 @@ export class CaptureController {
       `attachment; filename="${file.fileName}"`,
     );
     res.send(file.data);
+  }
+
+  @Get('activecampaign-gap')
+  @ApiOperation({
+    summary: 'Conta captures com e sem ID de contato do ActiveCampaign',
+    description:
+      'Retorna o gap de leads por tag_id. O periodo por created_at e opcional.',
+  })
+  @ApiQuery({ name: 'tag_id', required: true, example: '120246' })
+  @ApiQuery({ name: 'start_date', required: false, example: '2026-07-01' })
+  @ApiQuery({ name: 'end_date', required: false, example: '2026-07-25' })
+  @ApiResponse({
+    status: 200,
+    description: 'Gap retornado com sucesso.',
+    type: ActiveCampaignGapResponseDto,
+  })
+  async getActiveCampaignGap(
+    @Query() query: ActiveCampaignGapQueryDto,
+  ): Promise<ActiveCampaignGapResponseDto> {
+    return await this.captureService.getActiveCampaignGap(query);
+  }
+
+  @Get('activecampaign-missing-contacts')
+  @ApiOperation({
+    summary:
+      'Lista captures sem ID de contato do ActiveCampaign na coluna e no metadata',
+    description:
+      'Retorna captures por tag_id e periodo opcional, incluindo email e telefone usados no cadastro do lead.',
+  })
+  @ApiQuery({ name: 'tag_id', required: true, example: '120246' })
+  @ApiQuery({ name: 'start_date', required: false, example: '2026-07-01' })
+  @ApiQuery({ name: 'end_date', required: false, example: '2026-07-25' })
+  @ApiQuery({ name: 'page', required: false, example: '1' })
+  @ApiQuery({ name: 'per_page', required: false, example: '50' })
+  @ApiResponse({
+    status: 200,
+    description: 'Captures sem contato ActiveCampaign retornadas com sucesso.',
+    type: ActiveCampaignMissingContactsResponseDto,
+  })
+  async listActiveCampaignMissingContacts(
+    @Query() query: ActiveCampaignMissingContactsQueryDto,
+  ): Promise<ActiveCampaignMissingContactsResponseDto> {
+    return await this.captureService.listActiveCampaignMissingContacts(query);
+  }
+
+  @Get('activecampaign-contact-tags')
+  @ApiOperation({
+    summary: 'Acompanha associacoes de tag do ActiveCampaign',
+    description:
+      'Lista e resume o resultado da chamada /contactTags salva em capture.metadata.activeCampaign.contactTag, filtrando por tag_id e periodo.',
+  })
+  @ApiQuery({ name: 'tag_id', required: true, example: '885678' })
+  @ApiQuery({ name: 'start_date', required: false, example: '2026-07-01' })
+  @ApiQuery({ name: 'end_date', required: false, example: '2026-07-30' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: [
+      'success',
+      'tag-not-found',
+      'duplicate-tag',
+      'missing-tag-id',
+      'missing-contact-id',
+      'skipped',
+    ],
+    example: 'tag-not-found',
+  })
+  @ApiQuery({ name: 'page', required: false, example: '1' })
+  @ApiQuery({ name: 'per_page', required: false, example: '50' })
+  @ApiResponse({
+    status: 200,
+    description: 'Associacoes de tag retornadas com sucesso.',
+    type: ActiveCampaignContactTagsResponseDto,
+  })
+  async listActiveCampaignContactTags(
+    @Query() query: ActiveCampaignContactTagsQueryDto,
+  ): Promise<ActiveCampaignContactTagsResponseDto> {
+    return await this.captureService.listActiveCampaignContactTags(query);
   }
 
   @Get(':id/quiz-answers')
