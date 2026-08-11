@@ -28,6 +28,9 @@ import {
   CaptureListItemDto,
   CaptureListResponseDto,
 } from './dto/list-capture-response.dto';
+import { CaptureSyncQueryDto } from './dto/capture-sync-query.dto';
+import { CaptureSyncResponseDto } from './dto/capture-sync-response.dto';
+import { CaptureSyncQuestionsResponseDto } from './dto/capture-sync-questions-response.dto';
 import { ActiveCampaignGapQueryDto } from './dto/activecampaign-gap-query.dto';
 import { ActiveCampaignGapResponseDto } from './dto/activecampaign-gap-response.dto';
 import { ActiveCampaignMissingContactsQueryDto } from './dto/activecampaign-missing-contacts-query.dto';
@@ -165,6 +168,43 @@ export class CaptureService {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   private static readonly PERSON_CONTACTS_BATCH_SIZE = 2000;
   private static readonly EXPORT_BATCH_SIZE = 2000;
+  private static readonly SYNC_DEFAULT_LIMIT = 500;
+  private static readonly RESERVED_SYNC_FIELD_NAMES = new Set<string>([
+    'id',
+    'page',
+    'path',
+    'utm_source',
+    'utm_medium',
+    'utm_campaign',
+    'utm_content',
+    'utm_term',
+    'utm_id',
+    'created_at',
+    'quiz_answered',
+    'score_total',
+    'faixa',
+    'quiz_answers',
+    'person_id',
+    'name',
+    'person_email',
+    'person_phone',
+    'platform_id',
+    'platform_name',
+    'strategy_id',
+    'strategy_name',
+    'temperature_id',
+    'temperature_name',
+    'launch_id',
+    'launch_name',
+    'season_id',
+    'season_name',
+    'tag_id',
+    'tag_name',
+    'ad_id',
+    'ad_name',
+    'external_ad_id',
+    'external_ad_name',
+  ]);
   private static readonly EXPORT_COLUMNS: CaptureExportColumn[] = [
     { key: 'id', header: 'id' },
     { key: 'page', header: 'page' },
@@ -778,6 +818,112 @@ export class CaptureService {
     };
   }
 
+  async listCapturesForSync(
+    query: CaptureSyncQueryDto,
+  ): Promise<CaptureSyncResponseDto> {
+    const filters = this.parseFilters(query);
+    const cursor = this.parseSyncCursor(query.since_created_at, query.since_id);
+    const fieldMap = this.parseFieldMap(query.map);
+
+    if (fieldMap.length && !filters.launchId) {
+      throw new BadRequestException(
+        'map exige launch_id (question_key nao e estavel entre lancamentos diferentes).',
+      );
+    }
+
+    const limit = this.parseSyncLimit(query.limit);
+
+    const rows = await this.buildExportBatchQuery(
+      filters,
+      cursor,
+      limit + 1,
+      'asc',
+    ).getRawMany<CaptureRawRow>();
+
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+
+    const { detailsByCapture } = await this.resolveQuizExportData(
+      pageRows.map((row) => row.id),
+    );
+    const items = await this.mapRowsToItems(pageRows, detailsByCapture);
+
+    if (fieldMap.length) {
+      const answerValues = await this.resolveQuizAnswerValuesByQuestionKey(
+        pageRows.map((row) => row.id),
+        fieldMap.map((entry) => entry.questionKey),
+      );
+
+      for (const item of items) {
+        const itemAnswers = answerValues.get(item.id);
+        const itemRecord = item as unknown as Record<string, string | null>;
+        for (const { fieldName, questionKey } of fieldMap) {
+          itemRecord[fieldName] = itemAnswers?.get(questionKey) ?? null;
+        }
+      }
+    }
+
+    const lastRow = pageRows[pageRows.length - 1];
+    const nextCursor = lastRow
+      ? { created_at: this.toIsoString(lastRow.created_at), id: lastRow.id }
+      : null;
+
+    return {
+      items: items as Array<CaptureListItemDto & Record<string, string | null>>,
+      next_cursor: nextCursor,
+      has_more: hasMore,
+    };
+  }
+
+  async listAvailableQuizQuestions(
+    launchId: string,
+  ): Promise<CaptureSyncQuestionsResponseDto> {
+    const rows = await this.formAnswerRepo
+      .createQueryBuilder('fa')
+      .innerJoin('fa.question', 'question')
+      .innerJoin('fa.form_response', 'fr')
+      .innerJoin('fr.capture', 'capture')
+      .distinct(true)
+      .select([
+        'question.question_key AS question_key',
+        'question.question_text AS question_text',
+      ])
+      .where('capture.launch_id = :launchId', { launchId })
+      .orderBy('question.question_key', 'ASC')
+      .getRawMany<{ question_key: string; question_text: string | null }>();
+
+    return { questions: rows };
+  }
+
+  private parseSyncCursor(
+    sinceCreatedAt: string | undefined,
+    sinceId: string | undefined,
+  ): { createdAt: Date; id: string } | undefined {
+    if (!sinceCreatedAt && !sinceId) return undefined;
+    if (!sinceCreatedAt || !sinceId) {
+      throw new BadRequestException(
+        'since_created_at e since_id devem ser informados juntos.',
+      );
+    }
+
+    const createdAt = new Date(sinceCreatedAt);
+    if (Number.isNaN(createdAt.getTime())) {
+      throw new BadRequestException('since_created_at invalido. Use ISO 8601.');
+    }
+    this.parseUuid(sinceId, 'since_id');
+
+    return { createdAt, id: sinceId };
+  }
+
+  private parseSyncLimit(limit: string | undefined): number {
+    if (!limit) return CaptureService.SYNC_DEFAULT_LIMIT;
+    const parsed = Number(limit);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      throw new BadRequestException('limit deve ser um inteiro >= 1.');
+    }
+    return Math.min(parsed, CaptureService.EXPORT_BATCH_SIZE);
+  }
+
   private async processExportJob(
     jobId: string,
     query: CaptureFilterQueryDto,
@@ -1063,6 +1209,40 @@ export class CaptureService {
     );
   }
 
+  private parseFieldMap(
+    mapParam: string | undefined,
+  ): Array<{ fieldName: string; questionKey: string }> {
+    if (!mapParam || !mapParam.trim()) return [];
+
+    const seenFieldNames = new Set<string>();
+    const entries = mapParam.split(',').map((pair) => {
+      const [fieldNameRaw, questionKeyRaw] = pair.split(':');
+      const fieldName = fieldNameRaw?.trim();
+      const questionKey = questionKeyRaw?.trim();
+
+      if (!fieldName || !questionKey) {
+        throw new BadRequestException(
+          `map invalido. Use o formato "campo:question_key,campo2:question_key2" (recebido: "${pair}").`,
+        );
+      }
+      if (CaptureService.RESERVED_SYNC_FIELD_NAMES.has(fieldName)) {
+        throw new BadRequestException(
+          `map invalido: "${fieldName}" ja e um campo padrao da resposta e nao pode ser usado como nome de campo.`,
+        );
+      }
+      if (seenFieldNames.has(fieldName)) {
+        throw new BadRequestException(
+          `map invalido: campo "${fieldName}" duplicado.`,
+        );
+      }
+      seenFieldNames.add(fieldName);
+
+      return { fieldName, questionKey };
+    });
+
+    return entries;
+  }
+
   private normalizeEmail(value: string | undefined): string | undefined {
     const normalized =
       typeof value === 'string' ? value.trim().toLowerCase() : '';
@@ -1237,12 +1417,16 @@ export class CaptureService {
     filters: CaptureFilters,
     after: { createdAt: Date; id: string } | undefined,
     limit: number,
+    direction: 'asc' | 'desc' = 'desc',
   ): SelectQueryBuilder<Capture> {
     const qb = this.buildDataQuery(filters);
+    const order = direction === 'asc' ? 'ASC' : 'DESC';
+    qb.orderBy('capture.created_at', order).addOrderBy('capture.id', order);
 
     if (after) {
+      const operator = direction === 'asc' ? '>' : '<';
       qb.andWhere(
-        '(capture.created_at, capture.id) < (:cursorCreatedAt, :cursorId)',
+        `(capture.created_at, capture.id) ${operator} (:cursorCreatedAt, :cursorId)`,
         { cursorCreatedAt: after.createdAt, cursorId: after.id },
       );
     }
@@ -1665,6 +1849,93 @@ export class CaptureService {
       questionLabelsByKey,
       answersByCapture,
     };
+  }
+
+  // Resolves only the specific question_keys requested by a sync `map`, scoped to the given captures.
+  private async resolveQuizAnswerValuesByQuestionKey(
+    captureIds: string[],
+    questionKeys: string[],
+  ): Promise<Map<string, Map<string, string>>> {
+    const uniqueCaptureIds = [...new Set(captureIds)];
+    const uniqueQuestionKeys = [...new Set(questionKeys)];
+    const out = new Map<string, Map<string, string>>();
+
+    if (!uniqueCaptureIds.length || !uniqueQuestionKeys.length) return out;
+
+    const captureIdBatches = this.chunkArray(
+      uniqueCaptureIds,
+      CaptureService.PERSON_CONTACTS_BATCH_SIZE,
+    );
+
+    for (const captureIdBatch of captureIdBatches) {
+      const latestResponses = await this.formResponseRepo
+        .createQueryBuilder('fr')
+        .select(['fr.id AS form_response_id', 'fr.capture_id AS capture_id'])
+        .where('fr.capture_id IN (:...captureIds)', {
+          captureIds: captureIdBatch,
+        })
+        .orderBy('fr.capture_id', 'ASC')
+        .addOrderBy('fr.submitted_at', 'DESC', 'NULLS LAST')
+        .addOrderBy('fr.created_at', 'DESC')
+        .getRawMany<FormResponseCaptureRawRow>();
+
+      const formResponseByCapture = new Map<string, string>();
+      for (const row of latestResponses) {
+        if (!formResponseByCapture.has(row.capture_id)) {
+          formResponseByCapture.set(row.capture_id, row.form_response_id);
+        }
+      }
+      if (!formResponseByCapture.size) continue;
+
+      const captureByFormResponse = new Map<string, string>();
+      for (const [
+        captureId,
+        formResponseId,
+      ] of formResponseByCapture.entries()) {
+        captureByFormResponse.set(formResponseId, captureId);
+      }
+
+      const formResponseIds = [...new Set(formResponseByCapture.values())];
+      const formResponseIdBatches = this.chunkArray(
+        formResponseIds,
+        CaptureService.PERSON_CONTACTS_BATCH_SIZE,
+      );
+
+      for (const formResponseIdBatch of formResponseIdBatches) {
+        const formAnswers = await this.formAnswerRepo
+          .createQueryBuilder('fa')
+          .leftJoin('fa.question', 'question')
+          .leftJoin('fa.option', 'option')
+          .select([
+            'fa.form_response_id AS form_response_id',
+            'question.question_key AS question_key',
+            'question.question_text AS question_text',
+            'option.option_text AS option_text',
+            'fa.answer_text AS answer_text',
+            'fa.answer_number AS answer_number',
+            'fa.answer_bool AS answer_bool',
+          ])
+          .where('fa.form_response_id IN (:...formResponseIds)', {
+            formResponseIds: formResponseIdBatch,
+          })
+          .andWhere('question.question_key IN (:...questionKeys)', {
+            questionKeys: uniqueQuestionKeys,
+          })
+          .getRawMany<FormAnswerRawRow>();
+
+        for (const answer of formAnswers) {
+          const captureId = captureByFormResponse.get(answer.form_response_id);
+          if (!captureId || !answer.question_key) continue;
+
+          const value = this.formatQuizAnswerValue(answer);
+          const answerMap = out.get(captureId) ?? new Map<string, string>();
+          answerMap.set(answer.question_key, value);
+          out.set(captureId, answerMap);
+        }
+      }
+    }
+
+    return out;
   }
 
   private async resolvePersonContacts(personIds: string[]) {

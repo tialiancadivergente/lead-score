@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { CaptureSyncApiKeyGuard } from '../common/guards/capture-sync-api-key.guard';
 import { AuthModule } from '../auth/auth.module';
 import { Capture } from '../database/entities/capture/capture.entity';
 import { CaptureExportJob } from '../database/entities/capture/capture-export-job.entity';
@@ -9,6 +10,7 @@ import { FormResponse } from '../database/entities/form/form-response.entity';
 import { LeadscoreResult } from '../database/entities/leadscore/leadscore-result.entity';
 import { PersonIdentifier } from '../database/entities/identity/person-identifier.entity';
 import { CaptureController } from './capture.controller';
+import { CaptureSyncController } from './capture-sync.controller';
 import { CaptureService } from './capture.service';
 
 @Module({
@@ -23,7 +25,7 @@ import { CaptureService } from './capture.service';
       LeadscoreResult,
     ]),
   ],
-  controllers: [CaptureController],
-  providers: [CaptureService, ApiKeyGuard],
+  controllers: [CaptureController, CaptureSyncController],
+  providers: [CaptureService, ApiKeyGuard, CaptureSyncApiKeyGuard],
 })
 export class CaptureModule {}
