@@ -155,7 +155,8 @@ export class LeadScorePersistenceService {
           .createQueryBuilder('capture')
           .leftJoinAndSelect('capture.person', 'person')
           .leftJoinAndSelect('capture.form_version', 'form_version')
-          .where(
+          .where("capture.metadata ? 'leadRegistrationRequestIds'")
+          .andWhere(
             "capture.metadata -> 'leadRegistrationRequestIds' ? :requestId",
             {
               requestId: leadRegistrationRequestId,

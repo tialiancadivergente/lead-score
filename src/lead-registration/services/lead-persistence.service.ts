@@ -373,6 +373,36 @@ export class LeadPersistenceService {
     return createHash('sha256').update(value, 'utf8').digest('hex');
   }
 
+  private extractActiveCampaignContactId(
+    activeCampaignResponse: Record<string, any>,
+  ): string | undefined {
+    const directId = this.pickNonEmptyTrimmedString(
+      activeCampaignResponse,
+      'id',
+    );
+    if (directId) return directId;
+
+    const contact =
+      activeCampaignResponse.contact &&
+      typeof activeCampaignResponse.contact === 'object' &&
+      !Array.isArray(activeCampaignResponse.contact)
+        ? (activeCampaignResponse.contact as Record<string, unknown>)
+        : undefined;
+
+    const contactId = contact
+      ? this.pickNonEmptyTrimmedString(contact, 'id')
+      : undefined;
+    if (contactId) return contactId;
+
+    const contacts = Array.isArray(activeCampaignResponse.contacts)
+      ? (activeCampaignResponse.contacts as Array<Record<string, unknown>>)
+      : [];
+
+    return contacts[0]
+      ? this.pickNonEmptyTrimmedString(contacts[0], 'id')
+      : undefined;
+  }
+
   private async ensureIdentifierTypes(
     repo: Repository<IdentifierType>,
     codes: IdentifierTypeCode[],
@@ -866,6 +896,13 @@ export class LeadPersistenceService {
       ...prev,
       activeCampaign: activeCampaignResponse,
     };
+
+    const activeCampaignContactId =
+      this.extractActiveCampaignContactId(activeCampaignResponse);
+    if (activeCampaignContactId) {
+      capture.activecampaign_contact_id = activeCampaignContactId;
+    }
+
     await this.captureRepo.save(capture);
     return { updated: true };
   }

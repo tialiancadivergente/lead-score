@@ -51,6 +51,9 @@ export class Capture {
   @Column({ type: 'text', name: 'external_ad_id', nullable: true })
   external_ad_id?: string;
 
+  @Column({ type: 'text', name: 'activecampaign_contact_id', nullable: true })
+  activecampaign_contact_id?: string;
+
   @Column({ type: 'text', name: 'utm_term', nullable: true })
   utm_term?: string;
 

@@ -108,6 +108,9 @@ export class CaptureListItemDto {
 
   @ApiProperty({ nullable: true })
   external_ad_name!: string | null;
+
+  @ApiProperty({ nullable: true })
+  activecampaign_contact_id!: string | null;
 }
 
 export class CaptureListMetaDto {

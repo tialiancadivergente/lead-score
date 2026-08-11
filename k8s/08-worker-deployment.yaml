@@ -49,7 +49,7 @@ spec:
         - name: SERVICE_BUS_LEAD_SCORE_CONSUMER_ENABLED
           value: "true"
         - name: SERVICE_BUS_LEAD_SCORE_MAX_CONCURRENCY
-          value: "1"
+          value: "3"
         - name: SERVICE_BUS_MARKETING_EXTRACT_CONSUMER_ENABLED
           value: "false"
 

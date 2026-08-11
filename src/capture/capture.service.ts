@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import ExcelJS from 'exceljs';
+import type { Stream } from 'stream';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Capture } from '../database/entities/capture/capture.entity';
 import {
@@ -30,6 +31,21 @@ import {
 import { CaptureSyncQueryDto } from './dto/capture-sync-query.dto';
 import { CaptureSyncResponseDto } from './dto/capture-sync-response.dto';
 import { CaptureSyncQuestionsResponseDto } from './dto/capture-sync-questions-response.dto';
+import { ActiveCampaignGapQueryDto } from './dto/activecampaign-gap-query.dto';
+import { ActiveCampaignGapResponseDto } from './dto/activecampaign-gap-response.dto';
+import { ActiveCampaignMissingContactsQueryDto } from './dto/activecampaign-missing-contacts-query.dto';
+import {
+  ActiveCampaignMissingContactItemDto,
+  ActiveCampaignMissingContactsResponseDto,
+} from './dto/activecampaign-missing-contacts-response.dto';
+import {
+  ActiveCampaignContactTagStatus,
+  ActiveCampaignContactTagsQueryDto,
+} from './dto/activecampaign-contact-tags-query.dto';
+import {
+  ActiveCampaignContactTagItemDto,
+  ActiveCampaignContactTagsResponseDto,
+} from './dto/activecampaign-contact-tags-response.dto';
 
 type CaptureFilters = {
   startDate?: Date;
@@ -86,6 +102,7 @@ type CaptureRawRow = {
   ad_name: string | null;
   external_ad_id: string | null;
   external_ad_name: string | null;
+  activecampaign_contact_id: string | null;
 };
 
 type PersonIdentifierRawRow = {
@@ -125,6 +142,24 @@ type FormAnswerRawRow = {
   answer_text: string | null;
   answer_number: number | null;
   answer_bool: boolean | null;
+};
+
+type ActiveCampaignMissingContactRawRow = {
+  capture_id: string;
+  created_at: Date | string;
+  tag_id: string;
+  email: string | null;
+  phone: string | null;
+  name: string | null;
+  page: string | null;
+  path: string | null;
+};
+
+type ActiveCampaignContactTagRawRow = ActiveCampaignMissingContactRawRow & {
+  status: string;
+  reason: string | null;
+  activecampaign_contact_id: string | null;
+  contact_tag: Record<string, any> | null;
 };
 
 @Injectable()
@@ -195,6 +230,7 @@ export class CaptureService {
     { key: 'tag_id', header: 'tag_id' },
     { key: 'ad_id', header: 'ad_id' },
     { key: 'external_ad_id', header: 'external_ad_id' },
+    { key: 'activecampaign_contact_id', header: 'activecampaign_contact_id' },
   ];
 
   private readonly logger = new Logger(CaptureService.name);
@@ -336,6 +372,288 @@ export class CaptureService {
     };
   }
 
+  async getActiveCampaignGap(
+    query: ActiveCampaignGapQueryDto,
+  ): Promise<ActiveCampaignGapResponseDto> {
+    const tagId = this.parseRequiredString(query.tag_id, 'tag_id');
+    const startDate = this.parseDateBoundary(
+      query.start_date,
+      false,
+      'start_date',
+    );
+    const endDate = this.parseDateBoundary(query.end_date, true, 'end_date');
+
+    if (startDate && endDate && startDate > endDate) {
+      throw new BadRequestException(
+        'start_date deve ser menor ou igual a end_date.',
+      );
+    }
+
+    const activeCampaignContactExpression =
+      "COALESCE(NULLIF(TRIM(capture.activecampaign_contact_id), ''), NULLIF(TRIM(capture.metadata #>> '{activeCampaign,contact,id}'), ''))";
+
+    const qb = this.captureRepo
+      .createQueryBuilder('capture')
+      .select('COUNT(*)::int', 'total_leads')
+      .addSelect(
+        `COUNT(*) FILTER (WHERE ${activeCampaignContactExpression} IS NOT NULL)::int`,
+        'leads_with_activecampaign_contact',
+      )
+      .addSelect(
+        `COUNT(*) FILTER (WHERE ${activeCampaignContactExpression} IS NULL)::int`,
+        'leads_without_activecampaign_contact',
+      )
+      .addSelect(
+        "COUNT(*) FILTER (WHERE NULLIF(TRIM(capture.activecampaign_contact_id), '') IS NOT NULL)::int",
+        'leads_with_activecampaign_contact_id_column',
+      )
+      .addSelect(
+        "COUNT(*) FILTER (WHERE NULLIF(TRIM(capture.activecampaign_contact_id), '') IS NULL AND NULLIF(TRIM(capture.metadata #>> '{activeCampaign,contact,id}'), '') IS NOT NULL)::int",
+        'leads_missing_column_but_with_metadata_contact',
+      )
+      .where('capture.tag_id = :tagId', { tagId });
+
+    if (startDate) {
+      qb.andWhere('capture.created_at >= :startDate', { startDate });
+    }
+
+    if (endDate) {
+      qb.andWhere('capture.created_at <= :endDate', { endDate });
+    }
+
+    const row = await qb.getRawOne<{
+      total_leads: number | string | null;
+      leads_with_activecampaign_contact: number | string | null;
+      leads_without_activecampaign_contact: number | string | null;
+      leads_with_activecampaign_contact_id_column: number | string | null;
+      leads_missing_column_but_with_metadata_contact: number | string | null;
+    }>();
+
+    return {
+      tag_id: tagId,
+      start_date: startDate ? startDate.toISOString() : null,
+      end_date: endDate ? endDate.toISOString() : null,
+      total_leads: this.toNumber(row?.total_leads),
+      leads_with_activecampaign_contact: this.toNumber(
+        row?.leads_with_activecampaign_contact,
+      ),
+      leads_without_activecampaign_contact: this.toNumber(
+        row?.leads_without_activecampaign_contact,
+      ),
+      leads_with_activecampaign_contact_id_column: this.toNumber(
+        row?.leads_with_activecampaign_contact_id_column,
+      ),
+      leads_missing_column_but_with_metadata_contact: this.toNumber(
+        row?.leads_missing_column_but_with_metadata_contact,
+      ),
+    };
+  }
+
+  async listActiveCampaignMissingContacts(
+    query: ActiveCampaignMissingContactsQueryDto,
+  ): Promise<ActiveCampaignMissingContactsResponseDto> {
+    const tagId = this.parseRequiredString(query.tag_id, 'tag_id');
+    const startDate = this.parseDateBoundary(
+      query.start_date,
+      false,
+      'start_date',
+    );
+    const endDate = this.parseDateBoundary(query.end_date, true, 'end_date');
+    const page = this.parsePositiveInt(query.page, 1, 'page');
+    const perPage = Math.min(
+      this.parsePositiveInt(query.per_page, 50, 'per_page'),
+      200,
+    );
+
+    if (startDate && endDate && startDate > endDate) {
+      throw new BadRequestException(
+        'start_date deve ser menor ou igual a end_date.',
+      );
+    }
+
+    const countQb = this.buildActiveCampaignMissingContactsBaseQuery(
+      tagId,
+      startDate,
+      endDate,
+    );
+    const dataQb = this.buildActiveCampaignMissingContactsBaseQuery(
+      tagId,
+      startDate,
+      endDate,
+    )
+      .leftJoin('capture.person', 'person')
+      .select([
+        'capture.id AS capture_id',
+        'capture.created_at AS created_at',
+        'capture.tag_id AS tag_id',
+        'capture.page AS page',
+        'capture.path AS path',
+        'person.nome_consolidado AS name',
+      ])
+      .addSelect("NULLIF(TRIM(capture.metadata ->> 'email'), '')", 'email')
+      .addSelect(
+        "NULLIF(TRIM(COALESCE(capture.metadata ->> 'telefone', capture.metadata ->> 'phone')), '')",
+        'phone',
+      )
+      .orderBy('capture.created_at', 'DESC')
+      .addOrderBy('capture.id', 'DESC')
+      .offset((page - 1) * perPage)
+      .limit(perPage);
+
+    const [totalItems, rows] = await Promise.all([
+      countQb.getCount(),
+      dataQb.getRawMany<ActiveCampaignMissingContactRawRow>(),
+    ]);
+
+    const items: ActiveCampaignMissingContactItemDto[] = rows.map((row) => ({
+      capture_id: row.capture_id,
+      created_at: this.toIsoString(row.created_at),
+      tag_id: row.tag_id,
+      email: row.email,
+      phone: row.phone,
+      name: row.name,
+      page: row.page,
+      path: row.path,
+    }));
+
+    return {
+      tag_id: tagId,
+      start_date: startDate ? startDate.toISOString() : null,
+      end_date: endDate ? endDate.toISOString() : null,
+      items,
+      meta: {
+        page,
+        per_page: perPage,
+        total_items: totalItems,
+        total_pages: totalItems > 0 ? Math.ceil(totalItems / perPage) : 0,
+      },
+    };
+  }
+
+  async listActiveCampaignContactTags(
+    query: ActiveCampaignContactTagsQueryDto,
+  ): Promise<ActiveCampaignContactTagsResponseDto> {
+    const tagId = this.parseRequiredString(query.tag_id, 'tag_id');
+    const startDate = this.parseDateBoundary(
+      query.start_date,
+      false,
+      'start_date',
+    );
+    const endDate = this.parseDateBoundary(query.end_date, true, 'end_date');
+    const status = this.parseActiveCampaignContactTagStatus(query.status);
+    const page = this.parsePositiveInt(query.page, 1, 'page');
+    const perPage = Math.min(
+      this.parsePositiveInt(query.per_page, 50, 'per_page'),
+      200,
+    );
+
+    if (startDate && endDate && startDate > endDate) {
+      throw new BadRequestException(
+        'start_date deve ser menor ou igual a end_date.',
+      );
+    }
+
+    const summaryQb = this.buildActiveCampaignContactTagsBaseQuery(
+      tagId,
+      startDate,
+      endDate,
+    )
+      .select(
+        `COALESCE(NULLIF(TRIM(capture.metadata #>> '{activeCampaign,contactTag,reason}'), ''), 'success')`,
+        'status',
+      )
+      .addSelect('COUNT(*)::int', 'total')
+      .groupBy('status')
+      .orderBy('total', 'DESC');
+
+    const countQb = this.buildActiveCampaignContactTagsBaseQuery(
+      tagId,
+      startDate,
+      endDate,
+      status,
+    );
+
+    const dataQb = this.buildActiveCampaignContactTagsBaseQuery(
+      tagId,
+      startDate,
+      endDate,
+      status,
+    )
+      .leftJoin('capture.person', 'person')
+      .select([
+        'capture.id AS capture_id',
+        'capture.created_at AS created_at',
+        'capture.tag_id AS tag_id',
+        'capture.page AS page',
+        'capture.path AS path',
+        'person.nome_consolidado AS name',
+      ])
+      .addSelect(
+        `COALESCE(NULLIF(TRIM(capture.metadata #>> '{activeCampaign,contactTag,reason}'), ''), 'success')`,
+        'status',
+      )
+      .addSelect(
+        "NULLIF(TRIM(capture.metadata #>> '{activeCampaign,contactTag,reason}'), '')",
+        'reason',
+      )
+      .addSelect(
+        "COALESCE(NULLIF(TRIM(capture.activecampaign_contact_id), ''), NULLIF(TRIM(capture.metadata #>> '{activeCampaign,contact,id}'), ''))",
+        'activecampaign_contact_id',
+      )
+      .addSelect("NULLIF(TRIM(capture.metadata ->> 'email'), '')", 'email')
+      .addSelect(
+        "NULLIF(TRIM(COALESCE(capture.metadata ->> 'telefone', capture.metadata ->> 'phone')), '')",
+        'phone',
+      )
+      .addSelect(
+        "capture.metadata -> 'activeCampaign' -> 'contactTag'",
+        'contact_tag',
+      )
+      .orderBy('capture.created_at', 'DESC')
+      .addOrderBy('capture.id', 'DESC')
+      .offset((page - 1) * perPage)
+      .limit(perPage);
+
+    const [summaryRows, totalItems, rows] = await Promise.all([
+      summaryQb.getRawMany<{ status: string; total: number | string }>(),
+      countQb.getCount(),
+      dataQb.getRawMany<ActiveCampaignContactTagRawRow>(),
+    ]);
+
+    const items: ActiveCampaignContactTagItemDto[] = rows.map((row) => ({
+      capture_id: row.capture_id,
+      created_at: this.toIsoString(row.created_at),
+      tag_id: row.tag_id,
+      status: row.status,
+      reason: row.reason,
+      activecampaign_contact_id: row.activecampaign_contact_id,
+      email: row.email,
+      phone: row.phone,
+      name: row.name,
+      page: row.page,
+      path: row.path,
+      contact_tag: row.contact_tag,
+    }));
+
+    return {
+      tag_id: tagId,
+      start_date: startDate ? startDate.toISOString() : null,
+      end_date: endDate ? endDate.toISOString() : null,
+      status: status ?? null,
+      summary: summaryRows.map((row) => ({
+        status: row.status,
+        total: this.toNumber(row.total),
+      })),
+      items,
+      meta: {
+        page,
+        per_page: perPage,
+        total_items: totalItems,
+        total_pages: totalItems > 0 ? Math.ceil(totalItems / perPage) : 0,
+      },
+    };
+  }
+
   // @deprecated: prefer createExportJob + polling for anything but small exports; this blocks on the HTTP request.
   async exportCapturesCsv(query: CaptureFilterQueryDto): Promise<string> {
     const startedAt = Date.now();
@@ -374,6 +692,78 @@ export class CaptureService {
     );
 
     return out;
+  }
+
+  async streamCapturesExcel(
+    query: CaptureFilterQueryDto,
+    stream: Stream,
+  ): Promise<void> {
+    const startedAt = Date.now();
+    this.logger.log('Capture Excel stream export started.');
+
+    const filters = this.parseFilters(query);
+    const questionHeaders = await this.collectExportQuestionHeaders(filters);
+    const columns = CaptureService.EXPORT_COLUMNS;
+    const headers = [
+      ...columns.map((column) => column.header),
+      ...questionHeaders,
+    ];
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream,
+      useStyles: true,
+      useSharedStrings: false,
+    });
+    const worksheet = workbook.addWorksheet('captures');
+
+    worksheet.columns = headers.map((header) => ({
+      header,
+      key: header,
+      width: 24,
+    }));
+
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.commit();
+
+    let cursor: { createdAt: Date; id: string } | undefined;
+    let processed = 0;
+
+    for (;;) {
+      const rows = await this.buildExportBatchQuery(
+        filters,
+        cursor,
+        CaptureService.EXPORT_BATCH_SIZE,
+      ).getRawMany<CaptureRawRow>();
+
+      if (!rows.length) break;
+
+      const { detailsByCapture, answersByCapture } =
+        await this.resolveQuizExportData(rows.map((row) => row.id));
+      const items = await this.mapRowsToItems(rows, detailsByCapture);
+      this.addExportExcelRows(
+        worksheet,
+        items,
+        questionHeaders,
+        answersByCapture,
+      );
+
+      processed += rows.length;
+      const lastRow = rows[rows.length - 1];
+      const lastCreatedAt =
+        lastRow.created_at instanceof Date
+          ? lastRow.created_at
+          : new Date(lastRow.created_at);
+      cursor = { createdAt: lastCreatedAt, id: lastRow.id };
+
+      if (rows.length < CaptureService.EXPORT_BATCH_SIZE) break;
+    }
+
+    await worksheet.commit();
+    await workbook.commit();
+
+    this.logger.log(
+      `Capture Excel stream export finished in ${Date.now() - startedAt}ms (items=${processed}).`,
+    );
   }
 
   async createExportJob(
@@ -689,6 +1079,29 @@ export class CaptureService {
       width: 24,
     }));
 
+    this.addExportExcelRows(
+      worksheet,
+      items,
+      questionHeaders,
+      answersByCapture,
+    );
+
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.commit?.();
+
+    const data = await workbook.xlsx.writeBuffer();
+    return Buffer.isBuffer(data) ? data : Buffer.from(data);
+  }
+
+  private addExportExcelRows(
+    worksheet: ExcelJS.Worksheet,
+    items: CaptureListItemDto[],
+    questionHeaders: string[],
+    answersByCapture: Map<string, Map<string, string>>,
+  ): void {
+    const columns = CaptureService.EXPORT_COLUMNS;
+
     for (const item of items) {
       const baseColumns = columns.map((column) =>
         this.toExportCaptureValue(item, column.key),
@@ -697,15 +1110,9 @@ export class CaptureService {
       const questionColumns = questionHeaders.map((questionHeader) =>
         this.toExportString(answerMap?.get(questionHeader) ?? ''),
       );
-      worksheet.addRow([...baseColumns, ...questionColumns]);
+      const row = worksheet.addRow([...baseColumns, ...questionColumns]);
+      row.commit?.();
     }
-
-    const headerRow = worksheet.getRow(1);
-    headerRow.font = { bold: true };
-    headerRow.commit?.();
-
-    const data = await workbook.xlsx.writeBuffer();
-    return Buffer.isBuffer(data) ? data : Buffer.from(data);
   }
 
   private parsePositiveInt(
@@ -719,6 +1126,38 @@ export class CaptureService {
       throw new BadRequestException(`${fieldName} deve ser um inteiro >= 1.`);
     }
     return parsed;
+  }
+
+  private parseRequiredString(
+    value: string | undefined,
+    fieldName: string,
+  ): string {
+    const normalized = typeof value === 'string' ? value.trim() : '';
+    if (!normalized) {
+      throw new BadRequestException(`${fieldName} e obrigatorio.`);
+    }
+    return normalized;
+  }
+
+  private parseActiveCampaignContactTagStatus(
+    value: string | undefined,
+  ): ActiveCampaignContactTagStatus | undefined {
+    if (!value) return undefined;
+    const normalized = value.trim().toLowerCase();
+    const allowed: ActiveCampaignContactTagStatus[] = [
+      'success',
+      'tag-not-found',
+      'duplicate-tag',
+      'missing-tag-id',
+      'missing-contact-id',
+      'skipped',
+    ];
+    if (!allowed.includes(normalized as ActiveCampaignContactTagStatus)) {
+      throw new BadRequestException(
+        `status invalido. Use: ${allowed.join(', ')}.`,
+      );
+    }
+    return normalized as ActiveCampaignContactTagStatus;
   }
 
   private parseFilters(query: CaptureFilterQuery): CaptureFilters {
@@ -847,6 +1286,66 @@ export class CaptureService {
     return parsed;
   }
 
+  private buildActiveCampaignMissingContactsBaseQuery(
+    tagId: string,
+    startDate: Date | undefined,
+    endDate: Date | undefined,
+  ): SelectQueryBuilder<Capture> {
+    const activeCampaignContactExpression =
+      "COALESCE(NULLIF(TRIM(capture.activecampaign_contact_id), ''), NULLIF(TRIM(capture.metadata #>> '{activeCampaign,contact,id}'), ''))";
+
+    const qb = this.captureRepo
+      .createQueryBuilder('capture')
+      .where('capture.tag_id = :tagId', { tagId })
+      .andWhere(`${activeCampaignContactExpression} IS NULL`);
+
+    if (startDate) {
+      qb.andWhere('capture.created_at >= :startDate', { startDate });
+    }
+
+    if (endDate) {
+      qb.andWhere('capture.created_at <= :endDate', { endDate });
+    }
+
+    return qb;
+  }
+
+  private buildActiveCampaignContactTagsBaseQuery(
+    tagId: string,
+    startDate: Date | undefined,
+    endDate: Date | undefined,
+    status?: ActiveCampaignContactTagStatus,
+  ): SelectQueryBuilder<Capture> {
+    const reasonExpression =
+      "NULLIF(TRIM(capture.metadata #>> '{activeCampaign,contactTag,reason}'), '')";
+
+    const qb = this.captureRepo
+      .createQueryBuilder('capture')
+      .where('capture.tag_id = :tagId', { tagId })
+      .andWhere("capture.metadata ? 'activeCampaign'")
+      .andWhere("(capture.metadata -> 'activeCampaign') ? 'contactTag'");
+
+    if (startDate) {
+      qb.andWhere('capture.created_at >= :startDate', { startDate });
+    }
+
+    if (endDate) {
+      qb.andWhere('capture.created_at <= :endDate', { endDate });
+    }
+
+    if (status === 'success') {
+      qb.andWhere(`${reasonExpression} IS NULL`);
+    } else if (status === 'skipped') {
+      qb.andWhere(`${reasonExpression} IS NOT NULL`);
+    } else if (status) {
+      qb.andWhere(`${reasonExpression} = :contactTagStatus`, {
+        contactTagStatus: status,
+      });
+    }
+
+    return qb;
+  }
+
   private buildDataQuery(
     filters: CaptureFilters,
     pagination?: { page: number; perPage: number },
@@ -887,6 +1386,7 @@ export class CaptureService {
         'capture.season_id AS season_id',
         'capture.tag_id AS tag_id',
         'capture.ad_id AS ad_id',
+        'capture.activecampaign_contact_id AS activecampaign_contact_id',
         'platform.name AS platform_name',
         'strategy.name AS strategy_name',
         'temperature.name AS temperature_name',
@@ -1034,6 +1534,44 @@ export class CaptureService {
     return { items, questionHeaders, answersByCapture };
   }
 
+  private async collectExportQuestionHeaders(
+    filters: CaptureFilters,
+  ): Promise<string[]> {
+    const questionLabelsByKey = new Map<string, string>();
+    let cursor: { createdAt: Date; id: string } | undefined;
+
+    for (;;) {
+      const rows = await this.buildExportBatchQuery(
+        filters,
+        cursor,
+        CaptureService.EXPORT_BATCH_SIZE,
+      ).getRawMany<CaptureRawRow>();
+
+      if (!rows.length) break;
+
+      const { questionLabelsByKey: batchQuestionLabelsByKey } =
+        await this.resolveQuizExportData(rows.map((row) => row.id));
+      for (const [key, label] of batchQuestionLabelsByKey) {
+        if (!questionLabelsByKey.has(key)) {
+          questionLabelsByKey.set(key, label);
+        }
+      }
+
+      const lastRow = rows[rows.length - 1];
+      const lastCreatedAt =
+        lastRow.created_at instanceof Date
+          ? lastRow.created_at
+          : new Date(lastRow.created_at);
+      cursor = { createdAt: lastCreatedAt, id: lastRow.id };
+
+      if (rows.length < CaptureService.EXPORT_BATCH_SIZE) break;
+    }
+
+    return [...questionLabelsByKey.entries()]
+      .sort(([keyA], [keyB]) => keyA.localeCompare(keyB, 'pt-BR'))
+      .map(([, label]) => label);
+  }
+
   private async mapRowsToItems(
     rows: CaptureRawRow[],
     quizDetailsByCapture?: Map<string, CaptureQuizExportDetail>,
@@ -1085,7 +1623,17 @@ export class CaptureService {
       ad_name: row.ad_name,
       external_ad_id: row.external_ad_id,
       external_ad_name: row.external_ad_name,
+      activecampaign_contact_id: row.activecampaign_contact_id,
     }));
+  }
+
+  private toNumber(value: number | string | null | undefined): number {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
   }
 
   private toIsoString(value: Date | string): string {
