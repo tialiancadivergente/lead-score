@@ -5,6 +5,13 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Nao divulgar a stack da aplicacao no header de resposta.
+  // Relatorio OSINT 10/09/2026, achado 20 (X-Powered-By: Express).
+  app.getHttpAdapter().getInstance().disable('x-powered-by');
+
+  const isProduction =
+    (process.env.NODE_ENV ?? '').toLowerCase() === 'production';
+
   const corsEnabled =
     (process.env.CORS_ENABLED ?? 'true').toLowerCase() === 'true';
   if (corsEnabled) {
@@ -23,8 +30,13 @@ async function bootstrap() {
     });
   }
 
+  // A documentacao fica fechada por padrao em producao e so abre com
+  // SWAGGER_ENABLED=true explicito. Fora de producao segue aberta.
+  // Relatorio OSINT 10/09/2026, achados 07 e 13 (/docs publico).
   const swaggerEnabled =
-    (process.env.SWAGGER_ENABLED ?? 'true').toLowerCase() === 'true';
+    (
+      process.env.SWAGGER_ENABLED ?? (isProduction ? 'false' : 'true')
+    ).toLowerCase() === 'true';
   if (swaggerEnabled) {
     const swaggerPath = process.env.SWAGGER_PATH ?? 'docs';
     const config = new DocumentBuilder()
