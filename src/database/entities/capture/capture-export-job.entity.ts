@@ -38,8 +38,23 @@ export class CaptureExportJob {
   @Column({ type: 'text', name: 'file_name', nullable: true })
   file_name?: string | null;
 
+  @Column({ type: 'text', name: 'file_storage', nullable: true })
+  file_storage?: 'database' | 'local' | 'azure_blob' | null;
+
+  @Column({ type: 'text', name: 'file_path', nullable: true })
+  file_path?: string | null;
+
+  @Column({ type: 'text', name: 'content_type', nullable: true })
+  content_type?: string | null;
+
+  @Column({ type: 'bigint', name: 'file_size', nullable: true })
+  file_size?: string | null;
+
   @Column({ type: 'bytea', name: 'file_data', nullable: true })
   file_data?: Buffer | null;
+
+  @Column({ type: 'timestamptz', name: 'expires_at', nullable: true })
+  expires_at?: Date | null;
 
   @Column({ type: 'text', name: 'error_message', nullable: true })
   error_message?: string | null;

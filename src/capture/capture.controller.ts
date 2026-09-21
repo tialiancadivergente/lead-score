@@ -18,6 +18,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { pipeline } from 'stream/promises';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -197,7 +198,7 @@ export class CaptureController {
       'Content-Disposition',
       `attachment; filename="${file.fileName}"`,
     );
-    res.send(file.data);
+    await pipeline(file.stream, res);
   }
 
   @Get('activecampaign-gap')
@@ -359,6 +360,9 @@ export class CaptureController {
       processed_items: job.processed_items,
       percent: job.status === 'completed' ? 100 : percent,
       error_message: job.error_message ?? null,
+      file_name: job.file_name ?? null,
+      file_size: job.file_size ?? null,
+      expires_at: job.expires_at ? job.expires_at.toISOString() : null,
       created_at: job.created_at.toISOString(),
       started_at: job.started_at ? job.started_at.toISOString() : null,
       completed_at: job.completed_at ? job.completed_at.toISOString() : null,

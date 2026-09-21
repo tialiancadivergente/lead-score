@@ -29,6 +29,15 @@ export class CaptureExportJobResponseDto {
   @ApiPropertyOptional({ nullable: true })
   error_message!: string | null;
 
+  @ApiPropertyOptional({ nullable: true })
+  file_name!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  file_size!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  expires_at!: string | null;
+
   @ApiProperty({ example: '2026-07-17T12:00:00.000Z' })
   created_at!: string;
 

@@ -486,6 +486,7 @@ export class LeadPersistenceService {
     const cpf = this.normalizeCpf(
       typeof payloadObj.cpf === 'string' ? payloadObj.cpf : undefined,
     );
+    const leadName = this.pickNonEmptyTrimmedString(payloadObj, 'name');
 
     const identifiers: Array<{
       type: IdentifierTypeCode;
@@ -526,6 +527,7 @@ export class LeadPersistenceService {
 
     return await this.captureRepo.manager.transaction(async (manager) => {
       const captureRepository = manager.getRepository(Capture);
+      const personRepo = manager.getRepository(Person);
       const platformRepo = manager.getRepository(Platform);
       const strategyRepo = manager.getRepository(Strategy);
       const temperatureRepo = manager.getRepository(Temperature);
@@ -601,6 +603,7 @@ export class LeadPersistenceService {
       if (requestId) {
         const existing = await captureRepository
           .createQueryBuilder('capture')
+          .leftJoinAndSelect('capture.person', 'person')
           .where("capture.metadata ->> 'requestId' = :requestId", { requestId })
           .orderBy('capture.created_at', 'DESC')
           .getOne();
@@ -674,6 +677,14 @@ export class LeadPersistenceService {
           );
 
           await captureRepository.save(existing);
+          if (
+            leadName &&
+            existing.person &&
+            !existing.person.nome_consolidado
+          ) {
+            existing.person.nome_consolidado = leadName;
+            await personRepo.save(existing.person);
+          }
           return { captureId: existing.id, reused: true };
         }
       }
@@ -685,6 +696,7 @@ export class LeadPersistenceService {
         );
         const existingRecent = await captureRepository
           .createQueryBuilder('capture')
+          .leftJoinAndSelect('capture.person', 'person')
           .where("capture.metadata ->> 'leadRegistrationDedupeKey' = :key", {
             key: leadRegistrationDedupe.key,
           })
@@ -702,6 +714,14 @@ export class LeadPersistenceService {
             leadRegistrationDedupe,
           );
           await captureRepository.save(existingRecent);
+          if (
+            leadName &&
+            existingRecent.person &&
+            !existingRecent.person.nome_consolidado
+          ) {
+            existingRecent.person.nome_consolidado = leadName;
+            await personRepo.save(existingRecent.person);
+          }
           return { captureId: existingRecent.id, reused: true };
         }
       }
@@ -762,7 +782,6 @@ export class LeadPersistenceService {
       });
       const savedCapture = await captureRepository.save(capture);
 
-      const personRepo = manager.getRepository(Person);
       const personIdentifierRepo = manager.getRepository(PersonIdentifier);
       const identifierTypeRepo = manager.getRepository(IdentifierType);
       const identifierSourceRepo = manager.getRepository(IdentifierSource);
@@ -818,8 +837,14 @@ export class LeadPersistenceService {
       let person: Person;
       if (matchedPersonIdentifier?.person) {
         person = matchedPersonIdentifier.person;
+        if (leadName && !person.nome_consolidado) {
+          person.nome_consolidado = leadName;
+          person = await personRepo.save(person);
+        }
       } else {
-        person = await personRepo.save(personRepo.create({}));
+        person = await personRepo.save(
+          personRepo.create({ nome_consolidado: leadName }),
+        );
         matchedBy = DedupeMatchedBy.NONE;
         matchedHash = identifiers[0]?.hash; // para auditoria, salva o primeiro hash disponível
       }

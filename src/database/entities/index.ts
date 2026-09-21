@@ -3,6 +3,7 @@ import { Campaign } from './traffic/campaign.entity';
 import { CampaignDailyPerformance } from './traffic/campaign-daily-performance.entity';
 import { AttributionTouch } from './capture/attribution-touch.entity';
 import { Capture } from './capture/capture.entity';
+import { CaptureExportJob } from './capture/capture-export-job.entity';
 import { DedupeMatchLog } from './identity/dedupe-match-log.entity';
 import { IdentifierSource } from './identity/identifier-source.entity';
 import { IdentifierType } from './identity/identifier-type.entity';
@@ -95,6 +96,7 @@ export const ENTITIES = [
   LeadscoreResult,
 
   Capture,
+  CaptureExportJob,
   AttributionTouch,
 
   AdAccount,

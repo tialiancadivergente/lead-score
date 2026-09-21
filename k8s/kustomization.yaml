@@ -11,6 +11,7 @@ resources:
 - 07-pdb.yaml
 - 08-worker-deployment.yaml
 - 09-lead-registration-worker-deployment.yaml
+- 10-capture-export-worker-deployment.yaml
 
 # Namespace comum
 namespace: lead-score
