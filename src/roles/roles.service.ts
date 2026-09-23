@@ -6,6 +6,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import {
+  AuditLogService,
+  RecordAuditLogInput,
+} from '../audit/audit-log.service';
+import type { AuthenticatedUser } from '../auth/auth.types';
 import { Permission } from '../database/entities/system/permission.entity';
 import { Role } from '../database/entities/system/role.entity';
 import { CreateRoleDto } from './dto/create-role.dto';
@@ -18,6 +23,7 @@ export class RolesService {
     @InjectRepository(Role) private readonly roleRepo: Repository<Role>,
     @InjectRepository(Permission)
     private readonly permissionRepo: Repository<Permission>,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async list() {
@@ -32,7 +38,7 @@ export class RolesService {
     return this.mapRole(await this.getRoleOrThrow(id));
   }
 
-  async create(dto: CreateRoleDto) {
+  async create(dto: CreateRoleDto, context?: AuditActorContext) {
     const name = this.parseName(dto.name);
     const existing = await this.roleRepo.findOne({ where: { name } });
     if (existing) throw new ConflictException('Papel ja cadastrado.');
@@ -44,11 +50,17 @@ export class RolesService {
       permissions: await this.getPermissions(dto.permissionIds ?? []),
     });
 
-    return this.mapRole(await this.roleRepo.save(role));
+    const saved = await this.roleRepo.save(role);
+    const mapped = this.mapRole(saved);
+    await this.recordAudit('role_created', saved.id, context, {
+      after: mapped,
+    });
+    return mapped;
   }
 
-  async update(id: string, dto: UpdateRoleDto) {
+  async update(id: string, dto: UpdateRoleDto, context?: AuditActorContext) {
     const role = await this.getRoleOrThrow(id);
+    const before = this.mapRole(role);
     if (dto.name !== undefined) {
       const name = this.parseName(dto.name);
       const existing = await this.roleRepo.findOne({ where: { name } });
@@ -59,16 +71,30 @@ export class RolesService {
     if (dto.description !== undefined) {
       role.description = this.parseOptionalString(dto.description, 255);
     }
-    return this.mapRole(await this.roleRepo.save(role));
+    const saved = await this.roleRepo.save(role);
+    const after = this.mapRole(saved);
+    await this.recordAudit('role_updated', id, context, { before, after });
+    return after;
   }
 
-  async setPermissions(id: string, dto: UpdateRolePermissionsDto) {
+  async setPermissions(
+    id: string,
+    dto: UpdateRolePermissionsDto,
+    context?: AuditActorContext,
+  ) {
     const role = await this.getRoleOrThrow(id);
+    const before = this.mapRole(role);
     role.permissions = await this.getPermissions(dto.permissionIds);
-    return this.mapRole(await this.roleRepo.save(role));
+    const saved = await this.roleRepo.save(role);
+    const after = this.mapRole(saved);
+    await this.recordAudit('role_permissions_updated', id, context, {
+      before,
+      after,
+    });
+    return after;
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, context?: AuditActorContext): Promise<void> {
     const role = await this.getRoleOrThrow(id);
     if (role.isSystem) {
       throw new BadRequestException(
@@ -76,6 +102,9 @@ export class RolesService {
       );
     }
     await this.roleRepo.delete(id);
+    await this.recordAudit('role_deleted', id, context, {
+      before: this.mapRole(role),
+    });
   }
 
   async listPermissions() {
@@ -161,4 +190,31 @@ export class RolesService {
       throw new BadRequestException(`description excede ${max} caracteres.`);
     return normalized || null;
   }
+
+  private async recordAudit(
+    action: string,
+    resourceId: string,
+    context: AuditActorContext | undefined,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
+    const input: RecordAuditLogInput = {
+      userId: context?.actor.id,
+      action,
+      resource: 'roles',
+      resourceId,
+      ip: context?.ip,
+      metadata: {
+        actorEmail: context?.actor.email,
+        userAgent: context?.userAgent,
+        ...metadata,
+      },
+    };
+    await this.auditLogService.recordSafe(input);
+  }
+}
+
+interface AuditActorContext {
+  actor: AuthenticatedUser;
+  ip?: string;
+  userAgent?: string;
 }

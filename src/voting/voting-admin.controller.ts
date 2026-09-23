@@ -6,6 +6,8 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Ip,
+  Headers,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -16,6 +18,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { AuditLogService } from '../audit/audit-log.service';
+import type { AuthenticatedUser } from '../auth/auth.types';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
@@ -45,15 +50,28 @@ import { VotingService } from './voting.service';
 @RequirePermission('vote_campaigns', 'view')
 @Controller('v1/voting/admin')
 export class VotingAdminController {
-  constructor(private readonly votingService: VotingService) {}
+  constructor(
+    private readonly votingService: VotingService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   @Post('campaigns')
   @RequirePermission('vote_campaigns', 'create')
   @ApiOperation({ summary: 'Cria campanha de votacao' })
   @ApiBody({ type: CreateVotingCampaignDto })
   @ApiResponse({ status: 201, type: AdminVotingCampaignResponseDto })
-  async createCampaign(@Body() dto: CreateVotingCampaignDto) {
-    return await this.votingService.createCampaign(dto);
+  async createCampaign(
+    @Body() dto: CreateVotingCampaignDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    const result = await this.votingService.createCampaign(dto);
+    await this.recordVotingAudit('voting_campaign_created', actor, ip, result.id, {
+      userAgent,
+      after: result,
+    });
+    return result;
   }
 
   @Get('campaigns')
@@ -76,8 +94,19 @@ export class VotingAdminController {
     @Param('campaignId', new ParseUUIDPipe({ version: '4' }))
     campaignId: string,
     @Body() dto: UpdateVotingCampaignDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ) {
-    return await this.votingService.updateCampaign(campaignId, dto);
+    const result = await this.votingService.updateCampaign(campaignId, dto);
+    await this.recordVotingAudit(
+      'voting_campaign_updated',
+      actor,
+      ip,
+      campaignId,
+      { userAgent, payload: dto, after: result },
+    );
+    return result;
   }
 
   @Post('campaigns/:campaignId/categories')
@@ -89,8 +118,17 @@ export class VotingAdminController {
     @Param('campaignId', new ParseUUIDPipe({ version: '4' }))
     campaignId: string,
     @Body() dto: CreateVotingCategoryDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ) {
-    return await this.votingService.createCategory(campaignId, dto);
+    const result = await this.votingService.createCategory(campaignId, dto);
+    await this.recordVotingAudit('voting_category_created', actor, ip, result.id, {
+      userAgent,
+      campaignId,
+      after: result,
+    });
+    return result;
   }
 
   @Get('campaigns/:campaignId/categories')
@@ -116,8 +154,19 @@ export class VotingAdminController {
     @Param('categoryId', new ParseUUIDPipe({ version: '4' }))
     categoryId: string,
     @Body() dto: UpdateVotingCategoryDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ) {
-    return await this.votingService.updateCategory(categoryId, dto);
+    const result = await this.votingService.updateCategory(categoryId, dto);
+    await this.recordVotingAudit(
+      'voting_category_updated',
+      actor,
+      ip,
+      categoryId,
+      { userAgent, payload: dto, after: result },
+    );
+    return result;
   }
 
   @Post('campaigns/:campaignId/candidates')
@@ -129,8 +178,17 @@ export class VotingAdminController {
     @Param('campaignId', new ParseUUIDPipe({ version: '4' }))
     campaignId: string,
     @Body() dto: CreateVotingCandidateDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ) {
-    return await this.votingService.createCandidate(campaignId, dto);
+    const result = await this.votingService.createCandidate(campaignId, dto);
+    await this.recordVotingAudit('voting_candidate_created', actor, ip, result.id, {
+      userAgent,
+      campaignId,
+      after: result,
+    });
+    return result;
   }
 
   @Get('campaigns/:campaignId/candidates')
@@ -156,8 +214,19 @@ export class VotingAdminController {
     @Param('candidateId', new ParseUUIDPipe({ version: '4' }))
     candidateId: string,
     @Body() dto: UpdateVotingCandidateDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ) {
-    return await this.votingService.updateCandidate(candidateId, dto);
+    const result = await this.votingService.updateCandidate(candidateId, dto);
+    await this.recordVotingAudit(
+      'voting_candidate_updated',
+      actor,
+      ip,
+      candidateId,
+      { userAgent, payload: dto, after: result },
+    );
+    return result;
   }
 
   @Get('campaigns/:campaignId/results')
@@ -168,5 +237,25 @@ export class VotingAdminController {
     campaignId: string,
   ): Promise<VotingCampaignResultsResponseDto> {
     return await this.votingService.getCampaignResults(campaignId);
+  }
+
+  private async recordVotingAudit(
+    action: string,
+    actor: AuthenticatedUser,
+    ip: string | undefined,
+    resourceId: string,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
+    await this.auditLogService.recordSafe({
+      userId: actor.id,
+      action,
+      resource: 'vote_campaigns',
+      resourceId,
+      ip,
+      metadata: {
+        actorEmail: actor.email,
+        ...metadata,
+      },
+    });
   }
 }

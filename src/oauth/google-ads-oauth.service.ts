@@ -11,6 +11,7 @@ import { Repository } from 'typeorm';
 import { OAuthConnection } from '../database/entities/integrations/oauth-connection.entity';
 import { OAuthState } from '../database/entities/integrations/oauth-state.entity';
 import { User } from '../database/entities/system/user.entity';
+import { OAuthTokenEncryptionService } from './oauth-token-encryption.service';
 
 type GoogleTokenResponse = {
   access_token: string;
@@ -71,6 +72,7 @@ export class GoogleAdsOAuthService {
     private readonly oauthConnectionRepository: Repository<OAuthConnection>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly tokenEncryption: OAuthTokenEncryptionService,
   ) {}
 
   async createAuthorization(params: {
@@ -377,9 +379,15 @@ export class GoogleAdsOAuthService {
     connection.status = 'active';
     connection.external_user_id = userInfo.sub;
     connection.external_user_email = userInfo.email ?? null;
-    connection.access_token = tokenPayload.access_token;
-    connection.refresh_token =
-      tokenPayload.refresh_token ?? connection.refresh_token;
+    const existingRefreshToken = this.tokenEncryption.decryptToken(
+      connection.refresh_token,
+    );
+    connection.access_token = this.tokenEncryption.encryptToken(
+      tokenPayload.access_token,
+    );
+    connection.refresh_token = this.tokenEncryption.encryptToken(
+      tokenPayload.refresh_token ?? existingRefreshToken,
+    );
     connection.token_type = tokenPayload.token_type ?? null;
     connection.scopes = scopes;
     connection.expires_at = expiresAt;
@@ -518,25 +526,39 @@ export class GoogleAdsOAuthService {
   ): Promise<string> {
     const expiresAt = connection.expires_at?.getTime() ?? 0;
     const now = Date.now();
+    const accessToken = this.tokenEncryption.decryptToken(
+      connection.access_token,
+    );
+    const refreshToken = this.tokenEncryption.decryptToken(
+      connection.refresh_token,
+    );
     const hasValidAccessToken =
-      Boolean(connection.access_token) &&
+      Boolean(accessToken) &&
       (!expiresAt || expiresAt > now + 60_000);
 
-    if (hasValidAccessToken && connection.access_token) {
-      return connection.access_token;
+    if (hasValidAccessToken && accessToken) {
+      await this.encryptLegacyTokensIfNeeded(
+        connection,
+        accessToken,
+        refreshToken,
+      );
+      return accessToken;
     }
 
-    if (!connection.refresh_token) {
+    if (!refreshToken) {
       throw new BadRequestException(
         'A conexao nao possui refresh token para renovar o access token.',
       );
     }
 
-    const tokenPayload = await this.refreshAccessToken(
-      connection.refresh_token,
-    );
+    const tokenPayload = await this.refreshAccessToken(refreshToken);
     const refreshedAt = new Date();
-    connection.access_token = tokenPayload.access_token;
+    connection.access_token = this.tokenEncryption.encryptToken(
+      tokenPayload.access_token,
+    );
+    connection.refresh_token = this.tokenEncryption.encryptToken(
+      tokenPayload.refresh_token ?? refreshToken,
+    );
     connection.token_type = tokenPayload.token_type ?? connection.token_type;
     connection.last_refreshed_at = refreshedAt;
     connection.expires_at = tokenPayload.expires_in
@@ -549,7 +571,36 @@ export class GoogleAdsOAuthService {
 
     await this.oauthConnectionRepository.save(connection);
 
-    return connection.access_token;
+    return tokenPayload.access_token;
+  }
+
+  private async encryptLegacyTokensIfNeeded(
+    connection: OAuthConnection,
+    accessToken: string,
+    refreshToken: string | null,
+  ): Promise<void> {
+    let changed = false;
+
+    if (
+      connection.access_token &&
+      !this.tokenEncryption.isEncryptedToken(connection.access_token)
+    ) {
+      connection.access_token = this.tokenEncryption.encryptToken(accessToken);
+      changed = true;
+    }
+
+    if (
+      connection.refresh_token &&
+      refreshToken &&
+      !this.tokenEncryption.isEncryptedToken(connection.refresh_token)
+    ) {
+      connection.refresh_token = this.tokenEncryption.encryptToken(refreshToken);
+      changed = true;
+    }
+
+    if (changed) {
+      await this.oauthConnectionRepository.save(connection);
+    }
   }
 
   private async fetchAccessibleCustomers(

@@ -14,6 +14,7 @@ import { PageHeadline } from '../database/entities/page/page-headline.entity';
 import { PageTemperature } from '../database/entities/page/page-temperature.entity';
 import { PageVersion } from '../database/entities/page/page-version.entity';
 import { Page } from '../database/entities/page/page.entity';
+import { sanitizeRichTextHtml } from '../common/sanitization/html-sanitizer';
 import { CreatePageDto } from './dto/create-page.dto';
 import { GroupedPageByLaunchDto } from './dto/grouped-page-response.dto';
 import { ListPageQueryDto } from './dto/list-page-query.dto';
@@ -286,7 +287,7 @@ export class PageService {
         headlineRepo.create({
           page,
           abbreviation,
-          content: this.parseRequiredText(dto.content, 'content'),
+          content: this.parseRequiredHeadlineContent(dto.content),
           position,
           active: this.parseOptionalBoolean(dto.active, 'active') ?? true,
         }),
@@ -320,7 +321,7 @@ export class PageService {
       );
     }
     if (dto.content !== undefined) {
-      headline.content = this.parseRequiredText(dto.content, 'content');
+      headline.content = this.parseRequiredHeadlineContent(dto.content);
     }
     if (dto.position !== undefined) {
       headline.position = this.parseRequiredInteger(dto.position, 'position');
@@ -515,7 +516,7 @@ export class PageService {
         headlineRepo.create({
           page,
           abbreviation: `h${index + 1}`,
-          content: this.parseRequiredText(dto.content, 'content'),
+          content: this.parseRequiredHeadlineContent(dto.content),
           position:
             dto.position !== undefined
               ? this.parseRequiredInteger(dto.position, 'position')
@@ -811,6 +812,15 @@ export class PageService {
       throw new BadRequestException(`${fieldName} e obrigatorio.`);
     }
     return normalized;
+  }
+
+  private parseRequiredHeadlineContent(value: unknown): string {
+    const content = this.parseRequiredText(value, 'content');
+    const sanitized = sanitizeRichTextHtml(content);
+    if (!sanitized) {
+      throw new BadRequestException('content nao contem HTML permitido.');
+    }
+    return sanitized;
   }
 
   private parseOptionalText(value: unknown): string | undefined {

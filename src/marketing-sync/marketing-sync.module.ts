@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuditLogModule } from '../audit/audit-log.module';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { AuthModule } from '../auth/auth.module';
 import { OAuthConnection } from '../database/entities/integrations/oauth-connection.entity';
@@ -19,6 +20,7 @@ import { MarketingSyncService } from './marketing-sync.service';
 @Module({
   imports: [
     AuthModule,
+    AuditLogModule,
     TypeOrmModule.forFeature([
       OAuthConnection,
       MarketingConnectionAccount,

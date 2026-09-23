@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
+import { createHash, timingSafeEqual } from 'crypto';
 import { API_KEY_ONLY_KEY } from '../../auth/decorators/api-key-only.decorator';
 
 @Injectable()
@@ -40,11 +41,17 @@ export class ApiKeyGuard implements CanActivate {
 
     if (
       typeof providedApiKey !== 'string' ||
-      providedApiKey !== expectedApiKey
+      !this.constantTimeTokenMatches(providedApiKey, expectedApiKey)
     ) {
       throw new UnauthorizedException('API key inválida.');
     }
 
     return true;
+  }
+
+  private constantTimeTokenMatches(provided: string, expected: string): boolean {
+    const providedHash = createHash('sha256').update(provided).digest();
+    const expectedHash = createHash('sha256').update(expected).digest();
+    return timingSafeEqual(providedHash, expectedHash);
   }
 }

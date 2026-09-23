@@ -8,6 +8,8 @@ import {
   Post,
   Query,
   Res,
+  Ip,
+  Headers,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -24,6 +26,9 @@ import {
 } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
+import { AuditLogService } from '../audit/audit-log.service';
+import type { AuthenticatedUser } from '../auth/auth.types';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -41,6 +46,7 @@ export class MarketingSyncController {
   constructor(
     private readonly marketingSyncService: MarketingSyncService,
     private readonly marketingExtractProcessor: MarketingExtractProcessorService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   @ApiOperation({
@@ -72,8 +78,21 @@ export class MarketingSyncController {
   })
   @Post('configurations')
   @RequirePermission('marketing_sync_config', 'update')
-  upsertConfiguration(@Body() body: UpsertMarketingSyncConfigurationDto) {
-    return this.marketingSyncService.upsertConfiguration(body);
+  async upsertConfiguration(
+    @Body() body: UpsertMarketingSyncConfigurationDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    const result = await this.marketingSyncService.upsertConfiguration(body);
+    await this.recordMarketingAudit(
+      'marketing_sync_configuration_upserted',
+      actor,
+      ip,
+      result?.id,
+      { userAgent, payload: body, after: result },
+    );
+    return result;
   }
 
   @ApiOperation({
@@ -87,8 +106,20 @@ export class MarketingSyncController {
   @ApiOkResponse({ description: 'Contas sincronizadas com sucesso.' })
   @Post('accounts/refresh')
   @RequirePermission('marketing_sync', 'create')
-  refreshAccounts(@Query('provider') provider?: string) {
-    return this.marketingSyncService.refreshAccountsForProvider(provider);
+  async refreshAccounts(
+    @Query('provider') provider: string | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    const result =
+      await this.marketingSyncService.refreshAccountsForProvider(provider);
+    await this.recordMarketingAudit('marketing_sync_accounts_refreshed', actor, ip, undefined, {
+      userAgent,
+      provider,
+      result,
+    });
+    return result;
   }
 
   @ApiOperation({
@@ -97,8 +128,22 @@ export class MarketingSyncController {
   @ApiOkResponse({ description: 'Conexao sincronizada com sucesso.' })
   @Post('connections/:connectionId/accounts/refresh')
   @RequirePermission('marketing_sync', 'create')
-  refreshAccountsForConnection(@Param('connectionId') connectionId: string) {
-    return this.marketingSyncService.refreshAccountsForConnection(connectionId);
+  async refreshAccountsForConnection(
+    @Param('connectionId') connectionId: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    const result =
+      await this.marketingSyncService.refreshAccountsForConnection(connectionId);
+    await this.recordMarketingAudit(
+      'marketing_sync_connection_accounts_refreshed',
+      actor,
+      ip,
+      connectionId,
+      { userAgent, result },
+    );
+    return result;
   }
 
   @ApiOperation({
@@ -126,11 +171,23 @@ export class MarketingSyncController {
   setAccountSelection(
     @Param('accountId') accountId: string,
     @Body() body: { selected?: boolean },
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ) {
     return this.marketingSyncService.setAccountSelection(
       accountId,
       Boolean(body.selected),
-    );
+    ).then(async (result) => {
+      await this.recordMarketingAudit(
+        'marketing_sync_account_selection_updated',
+        actor,
+        ip,
+        accountId,
+        { userAgent, selected: Boolean(body.selected), after: result },
+      );
+      return result;
+    });
   }
 
   @ApiOperation({
@@ -145,8 +202,18 @@ export class MarketingSyncController {
       includeToday?: boolean;
       enqueue?: boolean;
     },
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ) {
-    return this.marketingSyncService.createDailyJobs(body);
+    return this.marketingSyncService.createDailyJobs(body).then(async (result) => {
+      await this.recordMarketingAudit('marketing_sync_daily_jobs_created', actor, ip, undefined, {
+        userAgent,
+        payload: body,
+        result,
+      });
+      return result;
+    });
   }
 
   @ApiOperation({
@@ -167,13 +234,24 @@ export class MarketingSyncController {
       dateTo?: string;
       enqueue?: boolean;
     },
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ) {
-    return this.marketingSyncService.createManualJobs({
+    const payload = {
       provider: body.provider,
       accountId: body.accountId,
       dateFrom: body.dateFrom ?? '',
       dateTo: body.dateTo ?? '',
       enqueue: body.enqueue,
+    };
+    return this.marketingSyncService.createManualJobs(payload).then(async (result) => {
+      await this.recordMarketingAudit('marketing_sync_manual_jobs_created', actor, ip, undefined, {
+        userAgent,
+        payload,
+        result,
+      });
+      return result;
     });
   }
 
@@ -248,6 +326,9 @@ export class MarketingSyncController {
     @Query('dateTo') dateTo: string | undefined,
     @Query('limit') limit: string | undefined,
     @Res() res: Response,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ) {
     const csv = await this.marketingSyncService.exportAdPerformanceCsv({
       provider,
@@ -261,6 +342,16 @@ export class MarketingSyncController {
     res.setHeader(
       'Content-Disposition',
       'attachment; filename="marketing-ad-performance.csv"',
+    );
+    await this.recordMarketingAudit(
+      'marketing_sync_ad_performance_exported',
+      actor,
+      ip,
+      undefined,
+      {
+        userAgent,
+        filters: { provider, accountId, dateFrom, dateTo, limit },
+      },
     );
     res.send(csv);
   }
@@ -291,15 +382,32 @@ export class MarketingSyncController {
   async importAdPerformanceCsv(
     @UploadedFile() file: any,
     @Body('provider') provider: string | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ) {
     if (!file) {
       throw new BadRequestException('Arquivo CSV nao enviado.');
     }
 
-    return this.marketingSyncService.importAdPerformanceCsv({
+    const result = await this.marketingSyncService.importAdPerformanceCsv({
       csvContent: file.buffer.toString('utf-8'),
       providerOverride: provider?.trim() || undefined,
     });
+    await this.recordMarketingAudit(
+      'marketing_sync_ad_performance_imported',
+      actor,
+      ip,
+      undefined,
+      {
+        userAgent,
+        provider,
+        fileName: file.originalname,
+        fileSize: file.size,
+        result,
+      },
+    );
+    return result;
   }
 
   @ApiOperation({
@@ -307,8 +415,24 @@ export class MarketingSyncController {
   })
   @Post('jobs/:jobId/enqueue')
   @RequirePermission('marketing_sync', 'update')
-  enqueueJob(@Param('jobId') jobId: string) {
-    return this.marketingSyncService.enqueueJob(jobId, 'http:manual');
+  enqueueJob(
+    @Param('jobId') jobId: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    return this.marketingSyncService
+      .enqueueJob(jobId, 'http:manual')
+      .then(async (result) => {
+        await this.recordMarketingAudit(
+          'marketing_sync_job_enqueued',
+          actor,
+          ip,
+          jobId,
+          { userAgent, result },
+        );
+        return result;
+      });
   }
 
   @ApiOperation({
@@ -316,7 +440,41 @@ export class MarketingSyncController {
   })
   @Post('jobs/:jobId/process')
   @RequirePermission('marketing_sync', 'update')
-  processJob(@Param('jobId') jobId: string) {
-    return this.marketingExtractProcessor.processJob(jobId);
+  processJob(
+    @Param('jobId') jobId: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    return this.marketingExtractProcessor.processJob(jobId).then(async (result) => {
+      await this.recordMarketingAudit(
+        'marketing_sync_job_processed',
+        actor,
+        ip,
+        jobId,
+        { userAgent, result },
+      );
+      return result;
+    });
+  }
+
+  private async recordMarketingAudit(
+    action: string,
+    actor: AuthenticatedUser,
+    ip: string | undefined,
+    resourceId: string | undefined,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
+    await this.auditLogService.recordSafe({
+      userId: actor.id,
+      action,
+      resource: 'marketing_sync',
+      resourceId,
+      ip,
+      metadata: {
+        actorEmail: actor.email,
+        ...metadata,
+      },
+    });
   }
 }

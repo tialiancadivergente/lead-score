@@ -10,18 +10,29 @@ import {
   Patch,
   Post,
   Query,
+  Ip,
+  Headers,
+  Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiBody,
+  ApiConsumes,
   ApiHeader,
   ApiOperation,
   ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { AuditLogService } from '../audit/audit-log.service';
+import type { AuthenticatedUser } from '../auth/auth.types';
 import { ApiKeyOnly } from '../auth/decorators/api-key-only.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
@@ -47,6 +58,7 @@ import {
 } from './dto/page-version.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
 import { PageService } from './page.service';
+import { PageTemplateImageUploadService } from './page-template-image-upload.service';
 
 @ApiTags('Page')
 @ApiHeader({
@@ -59,7 +71,11 @@ import { PageService } from './page.service';
 @RequirePermission('pages', 'view')
 @Controller('page')
 export class PageController {
-  constructor(private readonly pageService: PageService) {}
+  constructor(
+    private readonly pageService: PageService,
+    private readonly templateImageUploadService: PageTemplateImageUploadService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -140,6 +156,77 @@ export class PageController {
     return await this.pageService.findById(id);
   }
 
+  @Post('template-images')
+  @RequirePermission('pages', 'update')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 8 * 1024 * 1024 },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Faz upload seguro de imagem de template de page',
+    description:
+      'Valida extensao, assinatura real do arquivo e sanitiza SVG antes de enviar ao storage.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+      required: ['file'],
+    },
+  })
+  async uploadTemplateImage(
+    @UploadedFile() file: any,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    const result = await this.templateImageUploadService.upload(file);
+    await this.recordPageAudit(
+      'page_template_image_uploaded',
+      actor,
+      ip,
+      result.path,
+      {
+        userAgent,
+        originalName: result.originalName,
+        contentType: result.contentType,
+        size: result.size,
+        url: result.url,
+      },
+    );
+    return result;
+  }
+
+  @Get('template-images/:date/:file')
+  @RequirePermission('pages', 'view')
+  @ApiOperation({
+    summary: 'Le imagem de template de page pelo backend',
+    description:
+      'Entrega imagens privadas do storage via backend autenticado, evitando leitura publica no container.',
+  })
+  async getTemplateImage(
+    @Param('date') date: string,
+    @Param('file') file: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const image = await this.templateImageUploadService.download(
+      `${date}/${file}`,
+    );
+    res.setHeader('Content-Type', image.contentType);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    if (image.contentLength !== undefined) {
+      res.setHeader('Content-Length', String(image.contentLength));
+    }
+    image.stream.pipe(res);
+  }
+
   @Post()
   @RequirePermission('pages', 'create')
   @ApiOperation({
@@ -153,8 +240,18 @@ export class PageController {
     description: 'Page criada com sucesso.',
     type: PageResponseDto,
   })
-  async create(@Body() dto: CreatePageDto): Promise<PageResponseDto> {
-    return await this.pageService.create(dto);
+  async create(
+    @Body() dto: CreatePageDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ): Promise<PageResponseDto> {
+    const result = await this.pageService.create(dto);
+    await this.recordPageAudit('page_created', actor, ip, result.id, {
+      userAgent,
+      after: result,
+    });
+    return result;
   }
 
   @Patch(':id')
@@ -173,8 +270,17 @@ export class PageController {
   async update(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() dto: UpdatePageDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ): Promise<PageResponseDto> {
-    return await this.pageService.update(id, dto);
+    const result = await this.pageService.update(id, dto);
+    await this.recordPageAudit('page_updated', actor, ip, id, {
+      userAgent,
+      payload: dto,
+      after: result,
+    });
+    return result;
   }
 
   @Delete(':id')
@@ -188,8 +294,12 @@ export class PageController {
   @ApiResponse({ status: 204, description: 'Page removida com sucesso.' })
   async remove(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ): Promise<void> {
     await this.pageService.remove(id);
+    await this.recordPageAudit('page_deleted', actor, ip, id, { userAgent });
   }
 
   @Post(':pageId/headline')
@@ -208,8 +318,17 @@ export class PageController {
   async createHeadline(
     @Param('pageId', new ParseUUIDPipe({ version: '4' })) pageId: string,
     @Body() dto: CreatePageHeadlineDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ): Promise<PageHeadlineResponseDto> {
-    return await this.pageService.createHeadline(pageId, dto);
+    const result = await this.pageService.createHeadline(pageId, dto);
+    await this.recordPageAudit('page_headline_created', actor, ip, result.id, {
+      userAgent,
+      pageId,
+      after: result,
+    });
+    return result;
   }
 
   @Patch(':pageId/headline/:headlineId')
@@ -226,8 +345,18 @@ export class PageController {
     @Param('headlineId', new ParseUUIDPipe({ version: '4' }))
     headlineId: string,
     @Body() dto: UpdatePageHeadlineDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ): Promise<PageHeadlineResponseDto> {
-    return await this.pageService.updateHeadline(pageId, headlineId, dto);
+    const result = await this.pageService.updateHeadline(pageId, headlineId, dto);
+    await this.recordPageAudit('page_headline_updated', actor, ip, headlineId, {
+      userAgent,
+      pageId,
+      payload: dto,
+      after: result,
+    });
+    return result;
   }
 
   @Delete(':pageId/headline/:headlineId')
@@ -238,8 +367,15 @@ export class PageController {
     @Param('pageId', new ParseUUIDPipe({ version: '4' })) pageId: string,
     @Param('headlineId', new ParseUUIDPipe({ version: '4' }))
     headlineId: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ): Promise<void> {
     await this.pageService.removeHeadline(pageId, headlineId);
+    await this.recordPageAudit('page_headline_deleted', actor, ip, headlineId, {
+      userAgent,
+      pageId,
+    });
   }
 
   @Post(':pageId/temperature')
@@ -258,8 +394,17 @@ export class PageController {
   async createTemperature(
     @Param('pageId', new ParseUUIDPipe({ version: '4' })) pageId: string,
     @Body() dto: CreatePageTemperatureDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ): Promise<PageTemperatureResponseDto> {
-    return await this.pageService.createTemperature(pageId, dto);
+    const result = await this.pageService.createTemperature(pageId, dto);
+    await this.recordPageAudit('page_temperature_created', actor, ip, result.id, {
+      userAgent,
+      pageId,
+      after: result,
+    });
+    return result;
   }
 
   @Patch(':pageId/temperature/:pageTemperatureId')
@@ -276,12 +421,28 @@ export class PageController {
     @Param('pageTemperatureId', new ParseUUIDPipe({ version: '4' }))
     pageTemperatureId: string,
     @Body() dto: UpdatePageTemperatureDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ): Promise<PageTemperatureResponseDto> {
-    return await this.pageService.updateTemperature(
+    const result = await this.pageService.updateTemperature(
       pageId,
       pageTemperatureId,
       dto,
     );
+    await this.recordPageAudit(
+      'page_temperature_updated',
+      actor,
+      ip,
+      pageTemperatureId,
+      {
+        userAgent,
+        pageId,
+        payload: dto,
+        after: result,
+      },
+    );
+    return result;
   }
 
   @Delete(':pageId/temperature/:pageTemperatureId')
@@ -292,8 +453,18 @@ export class PageController {
     @Param('pageId', new ParseUUIDPipe({ version: '4' })) pageId: string,
     @Param('pageTemperatureId', new ParseUUIDPipe({ version: '4' }))
     pageTemperatureId: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ): Promise<void> {
     await this.pageService.removeTemperature(pageId, pageTemperatureId);
+    await this.recordPageAudit(
+      'page_temperature_deleted',
+      actor,
+      ip,
+      pageTemperatureId,
+      { userAgent, pageId },
+    );
   }
 
   @Post(':pageId/version')
@@ -312,8 +483,17 @@ export class PageController {
   async createVersion(
     @Param('pageId', new ParseUUIDPipe({ version: '4' })) pageId: string,
     @Body() dto: CreatePageVersionDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ): Promise<PageVersionResponseDto> {
-    return await this.pageService.createVersion(pageId, dto);
+    const result = await this.pageService.createVersion(pageId, dto);
+    await this.recordPageAudit('page_version_created', actor, ip, result.id, {
+      userAgent,
+      pageId,
+      after: result,
+    });
+    return result;
   }
 
   @Patch(':pageId/version/:versionId')
@@ -329,8 +509,18 @@ export class PageController {
     @Param('pageId', new ParseUUIDPipe({ version: '4' })) pageId: string,
     @Param('versionId', new ParseUUIDPipe({ version: '4' })) versionId: string,
     @Body() dto: UpdatePageVersionDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ): Promise<PageVersionResponseDto> {
-    return await this.pageService.updateVersion(pageId, versionId, dto);
+    const result = await this.pageService.updateVersion(pageId, versionId, dto);
+    await this.recordPageAudit('page_version_updated', actor, ip, versionId, {
+      userAgent,
+      pageId,
+      payload: dto,
+      after: result,
+    });
+    return result;
   }
 
   @Delete(':pageId/version/:versionId')
@@ -340,7 +530,34 @@ export class PageController {
   async removeVersion(
     @Param('pageId', new ParseUUIDPipe({ version: '4' })) pageId: string,
     @Param('versionId', new ParseUUIDPipe({ version: '4' })) versionId: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ): Promise<void> {
     await this.pageService.removeVersion(pageId, versionId);
+    await this.recordPageAudit('page_version_deleted', actor, ip, versionId, {
+      userAgent,
+      pageId,
+    });
+  }
+
+  private async recordPageAudit(
+    action: string,
+    actor: AuthenticatedUser,
+    ip: string | undefined,
+    resourceId: string,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
+    await this.auditLogService.recordSafe({
+      userId: actor.id,
+      action,
+      resource: 'pages',
+      resourceId,
+      ip,
+      metadata: {
+        actorEmail: actor.email,
+        ...metadata,
+      },
+    });
   }
 }

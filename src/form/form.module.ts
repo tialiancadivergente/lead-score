@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuditLogModule } from '../audit/audit-log.module';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { AuthModule } from '../auth/auth.module';
 import { Form } from '../database/entities/form/form.entity';
@@ -22,6 +23,7 @@ import { FormService } from './form.service';
 @Module({
   imports: [
     AuthModule,
+    AuditLogModule,
     TypeOrmModule.forFeature([
       Form,
       FormVersion,

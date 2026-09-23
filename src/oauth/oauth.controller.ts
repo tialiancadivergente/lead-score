@@ -4,19 +4,31 @@ import {
   Delete,
   Get,
   Header,
+  Headers,
+  Ip,
   Param,
   Post,
   Query,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
+  ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
   ApiQuery,
+  ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { AuditLogService } from '../audit/audit-log.service';
+import type { AuthenticatedUser } from '../auth/auth.types';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionGuard } from '../auth/guards/permission.guard';
+import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { GoogleAdsOAuthService } from './google-ads-oauth.service';
 import { MetaAdsOAuthService } from './meta-ads-oauth.service';
 
@@ -26,6 +38,7 @@ export class OauthController {
   constructor(
     private readonly googleAdsOAuthService: GoogleAdsOAuthService,
     private readonly metaAdsOAuthService: MetaAdsOAuthService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   @ApiOperation({
@@ -37,6 +50,10 @@ export class OauthController {
     description: 'Pagina HTML entregue com sucesso.',
   })
   @Get('google-ads/page')
+  @ApiSecurity('x-api-key')
+  @ApiBearerAuth('bearer')
+  @UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+  @RequirePermission('marketing_sync', 'view')
   @Header('Content-Type', 'text/html; charset=utf-8')
   renderGoogleAdsPage() {
     return this.renderMarketingOauthPage();
@@ -1185,6 +1202,10 @@ export class OauthController {
     description: 'userId invalido ou dados insuficientes.',
   })
   @Get('google-ads/authorize')
+  @ApiSecurity('x-api-key')
+  @ApiBearerAuth('bearer')
+  @UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+  @RequirePermission('google_ads', 'create')
   authorizeGoogleAds(
     @Query('userId') userId?: string,
     @Query('frontendRedirectUrl') frontendRedirectUrl?: string,
@@ -1218,6 +1239,10 @@ export class OauthController {
     description: 'userId invalido ou dados insuficientes.',
   })
   @Get('meta/authorize')
+  @ApiSecurity('x-api-key')
+  @ApiBearerAuth('bearer')
+  @UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+  @RequirePermission('meta_ads', 'create')
   authorizeMetaAds(
     @Query('userId') userId?: string,
     @Query('frontendRedirectUrl') frontendRedirectUrl?: string,
@@ -1247,6 +1272,10 @@ export class OauthController {
     description: 'Lista de conexoes encontradas.',
   })
   @Get('connections')
+  @ApiSecurity('x-api-key')
+  @ApiBearerAuth('bearer')
+  @UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+  @RequirePermission('marketing_sync', 'view')
   listConnections(
     @Query('provider') provider?: string,
     @Query('userId') userId?: string,
@@ -1269,6 +1298,10 @@ export class OauthController {
     description: 'Conexao sem refresh token ou credenciais invalidas.',
   })
   @Get('google-ads/connections/:connectionId/accounts')
+  @ApiSecurity('x-api-key')
+  @ApiBearerAuth('bearer')
+  @UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+  @RequirePermission('google_ads', 'view')
   listGoogleAdsAccounts(@Param('connectionId') connectionId: string) {
     return this.googleAdsOAuthService.listAvailableAccounts(connectionId);
   }
@@ -1285,6 +1318,10 @@ export class OauthController {
     description: 'Conexao invalida ou token expirado.',
   })
   @Get('meta/connections/:connectionId/accounts')
+  @ApiSecurity('x-api-key')
+  @ApiBearerAuth('bearer')
+  @UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+  @RequirePermission('meta_ads', 'view')
   listMetaAdsAccounts(@Param('connectionId') connectionId: string) {
     return this.metaAdsOAuthService.listAvailableAccounts(connectionId);
   }
@@ -1301,6 +1338,10 @@ export class OauthController {
     description: 'Conexao invalida ou customerId invalido.',
   })
   @Post('google-ads/connections/:connectionId/select-account')
+  @ApiSecurity('x-api-key')
+  @ApiBearerAuth('bearer')
+  @UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+  @RequirePermission('google_ads', 'update')
   selectGoogleAdsAccount(
     @Param('connectionId') connectionId: string,
     @Body()
@@ -1308,11 +1349,28 @@ export class OauthController {
       customerId?: string;
       customerName?: string;
     },
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ) {
     return this.googleAdsOAuthService.selectAccount({
       connectionId,
       customerId: body.customerId ?? '',
       customerName: body.customerName,
+    }).then(async (result) => {
+      await this.recordOAuthAudit(
+        'google_ads_account_selected',
+        actor,
+        ip,
+        connectionId,
+        {
+          userAgent,
+          customerId: body.customerId,
+          customerName: body.customerName,
+          result,
+        },
+      );
+      return result;
     });
   }
 
@@ -1325,8 +1383,28 @@ export class OauthController {
     description: 'Conexao desconectada com sucesso.',
   })
   @Delete('google-ads/connections/:connectionId')
-  disconnectGoogleAds(@Param('connectionId') connectionId: string) {
-    return this.googleAdsOAuthService.disconnectConnection(connectionId);
+  @ApiSecurity('x-api-key')
+  @ApiBearerAuth('bearer')
+  @UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+  @RequirePermission('google_ads', 'delete')
+  disconnectGoogleAds(
+    @Param('connectionId') connectionId: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    return this.googleAdsOAuthService
+      .disconnectConnection(connectionId)
+      .then(async (result) => {
+        await this.recordOAuthAudit(
+          'google_ads_connection_disconnected',
+          actor,
+          ip,
+          connectionId,
+          { userAgent, result },
+        );
+        return result;
+      });
   }
 
   @ApiOperation({
@@ -1341,6 +1419,10 @@ export class OauthController {
     description: 'Conexao invalida ou accountId invalido.',
   })
   @Post('meta/connections/:connectionId/select-account')
+  @ApiSecurity('x-api-key')
+  @ApiBearerAuth('bearer')
+  @UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+  @RequirePermission('meta_ads', 'update')
   selectMetaAdsAccount(
     @Param('connectionId') connectionId: string,
     @Body()
@@ -1348,11 +1430,28 @@ export class OauthController {
       accountId?: string;
       accountName?: string;
     },
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ) {
     return this.metaAdsOAuthService.selectAccount({
       connectionId,
       accountId: body.accountId ?? '',
       accountName: body.accountName,
+    }).then(async (result) => {
+      await this.recordOAuthAudit(
+        'meta_ads_account_selected',
+        actor,
+        ip,
+        connectionId,
+        {
+          userAgent,
+          accountId: body.accountId,
+          accountName: body.accountName,
+          result,
+        },
+      );
+      return result;
     });
   }
 
@@ -1365,8 +1464,48 @@ export class OauthController {
     description: 'Conexao desconectada com sucesso.',
   })
   @Delete('meta/connections/:connectionId')
-  disconnectMetaAds(@Param('connectionId') connectionId: string) {
-    return this.metaAdsOAuthService.disconnectConnection(connectionId);
+  @ApiSecurity('x-api-key')
+  @ApiBearerAuth('bearer')
+  @UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionGuard)
+  @RequirePermission('meta_ads', 'delete')
+  disconnectMetaAds(
+    @Param('connectionId') connectionId: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    return this.metaAdsOAuthService
+      .disconnectConnection(connectionId)
+      .then(async (result) => {
+        await this.recordOAuthAudit(
+          'meta_ads_connection_disconnected',
+          actor,
+          ip,
+          connectionId,
+          { userAgent, result },
+        );
+        return result;
+      });
+  }
+
+  private async recordOAuthAudit(
+    action: string,
+    actor: AuthenticatedUser,
+    ip: string | undefined,
+    resourceId: string,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
+    await this.auditLogService.recordSafe({
+      userId: actor.id,
+      action,
+      resource: 'integrations',
+      resourceId,
+      ip,
+      metadata: {
+        actorEmail: actor.email,
+        ...metadata,
+      },
+    });
   }
 
   @ApiOperation({

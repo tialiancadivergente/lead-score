@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuditLogModule } from '../audit/audit-log.module';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { AuthModule } from '../auth/auth.module';
 import { VotingCampaign } from '../database/entities/voting/voting-campaign.entity';
@@ -14,6 +15,7 @@ import { VotingService } from './voting.service';
 @Module({
   imports: [
     AuthModule,
+    AuditLogModule,
     TypeOrmModule.forFeature([
       VotingCampaign,
       VotingCategory,

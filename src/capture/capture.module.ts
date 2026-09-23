@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuditLogModule } from '../audit/audit-log.module';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { CaptureSyncApiKeyGuard } from '../common/guards/capture-sync-api-key.guard';
 import { AuthModule } from '../auth/auth.module';
@@ -19,6 +20,7 @@ import { CaptureExportConsumer } from './workers/capture-export.consumer';
 @Module({
   imports: [
     AuthModule,
+    AuditLogModule,
     ServiceBusModule,
     TypeOrmModule.forFeature([
       Capture,

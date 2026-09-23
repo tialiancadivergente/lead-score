@@ -90,6 +90,14 @@ export class LeadPersistenceService {
       : undefined;
   }
 
+  private pickLeadRegistrationMetadataInput(
+    payload: Record<string, unknown>,
+  ): Record<string, unknown> | undefined {
+    return (
+      this.pickObject(payload, 'metadados') ?? this.pickObject(payload, 'metadata')
+    );
+  }
+
   private pickMarketingString(
     payload: Record<string, unknown>,
     key: string,
@@ -125,7 +133,7 @@ export class LeadPersistenceService {
   private pickLeadRegistrationUrl(
     payload: Record<string, unknown>,
   ): string | undefined {
-    const metadados = this.pickObject(payload, 'metadados');
+    const metadados = this.pickLeadRegistrationMetadataInput(payload);
     const utms = this.pickObject(payload, 'utms');
 
     const explicitUrl =
@@ -314,10 +322,7 @@ export class LeadPersistenceService {
     payload: Record<string, unknown>,
   ): string | undefined {
     const fromRoot = this.pickNonEmptyTrimmedString(payload, 'temperature');
-    const meta =
-      payload?.metadados && typeof payload.metadados === 'object'
-        ? (payload.metadados as Record<string, unknown>)
-        : undefined;
+    const meta = this.pickLeadRegistrationMetadataInput(payload);
     const fromMeta = meta
       ? this.pickNonEmptyTrimmedString(meta, 'temperature')
       : undefined;
@@ -326,10 +331,7 @@ export class LeadPersistenceService {
 
   private pickLaunchCode(payload: Record<string, unknown>): string | undefined {
     const fromRoot = this.pickNonEmptyTrimmedString(payload, 'launch');
-    const meta =
-      payload?.metadados && typeof payload.metadados === 'object'
-        ? (payload.metadados as Record<string, unknown>)
-        : undefined;
+    const meta = this.pickLeadRegistrationMetadataInput(payload);
     const fromMeta = meta
       ? this.pickNonEmptyTrimmedString(meta, 'launch')
       : undefined;
@@ -338,10 +340,7 @@ export class LeadPersistenceService {
 
   private pickSeasonCode(payload: Record<string, unknown>): string | undefined {
     const fromRoot = this.pickNonEmptyTrimmedString(payload, 'season');
-    const meta =
-      payload?.metadados && typeof payload.metadados === 'object'
-        ? (payload.metadados as Record<string, unknown>)
-        : undefined;
+    const meta = this.pickLeadRegistrationMetadataInput(payload);
     const fromMeta = meta
       ? this.pickNonEmptyTrimmedString(meta, 'season')
       : undefined;

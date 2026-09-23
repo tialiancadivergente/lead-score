@@ -1,15 +1,22 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsBoolean, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreatePageHeadlineDto {
   @ApiProperty({
     example: "<span style='color:#ff0000'>Headline principal</span>",
   })
+  @IsString()
   content!: string;
 
   @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   position?: number;
 
   @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
   active?: boolean;
 }
 
@@ -17,12 +24,19 @@ export class UpdatePageHeadlineDto {
   @ApiPropertyOptional({
     example: "<span style='color:#00aa55'>Headline atualizada</span>",
   })
+  @IsOptional()
+  @IsString()
   content?: string;
 
   @ApiPropertyOptional({ example: 2 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   position?: number;
 
   @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
   active?: boolean;
 }
 

@@ -9,9 +9,13 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Ip,
+  Headers,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import type { AuthenticatedUser } from '../auth/auth.types';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
@@ -41,8 +45,13 @@ export class RolesController {
 
   @Post('roles')
   @RequirePermission('roles', 'create')
-  create(@Body() dto: CreateRoleDto) {
-    return this.rolesService.create(dto);
+  create(
+    @Body() dto: CreateRoleDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    return this.rolesService.create(dto, { actor, ip, userAgent });
   }
 
   @Patch('roles/:id')
@@ -50,8 +59,11 @@ export class RolesController {
   update(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() dto: UpdateRoleDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ) {
-    return this.rolesService.update(id, dto);
+    return this.rolesService.update(id, dto, { actor, ip, userAgent });
   }
 
   @Patch('roles/:id/permissions')
@@ -59,15 +71,23 @@ export class RolesController {
   setPermissions(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() dto: UpdateRolePermissionsDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ) {
-    return this.rolesService.setPermissions(id, dto);
+    return this.rolesService.setPermissions(id, dto, { actor, ip, userAgent });
   }
 
   @Delete('roles/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission('roles', 'delete')
-  remove(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
-    return this.rolesService.remove(id);
+  remove(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    return this.rolesService.remove(id, { actor, ip, userAgent });
   }
 
   @Get('permissions')

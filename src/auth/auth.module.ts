@@ -4,12 +4,14 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthController } from './auth.controller';
+import { AuthRateLimitService } from './auth-rate-limit.service';
 import { AuthService } from './auth.service';
 import { BootstrapService } from './bootstrap.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { PermissionGuard } from './guards/permission.guard';
 import { PermissionsService } from './permissions.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { AuditLog } from '../database/entities/system/audit-log.entity';
 import { PasswordReset } from '../database/entities/system/password-reset.entity';
 import { RefreshToken } from '../database/entities/system/refresh-token.entity';
 import { User } from '../database/entities/system/user.entity';
@@ -19,11 +21,12 @@ import { User } from '../database/entities/system/user.entity';
     ConfigModule,
     PassportModule,
     JwtModule.register({}),
-    TypeOrmModule.forFeature([User, RefreshToken, PasswordReset]),
+    TypeOrmModule.forFeature([User, RefreshToken, PasswordReset, AuditLog]),
   ],
   controllers: [AuthController],
   providers: [
     AuthService,
+    AuthRateLimitService,
     BootstrapService,
     PermissionsService,
     JwtStrategy,

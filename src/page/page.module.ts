@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuditLogModule } from '../audit/audit-log.module';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { AuthModule } from '../auth/auth.module';
 import { Form } from '../database/entities/form/form.entity';
@@ -13,10 +14,12 @@ import { PageVersion } from '../database/entities/page/page-version.entity';
 import { Page } from '../database/entities/page/page.entity';
 import { PageController } from './page.controller';
 import { PageService } from './page.service';
+import { PageTemplateImageUploadService } from './page-template-image-upload.service';
 
 @Module({
   imports: [
     AuthModule,
+    AuditLogModule,
     TypeOrmModule.forFeature([
       Page,
       PageHeadline,
@@ -30,6 +33,6 @@ import { PageService } from './page.service';
     ]),
   ],
   controllers: [PageController],
-  providers: [PageService, ApiKeyGuard],
+  providers: [PageService, PageTemplateImageUploadService, ApiKeyGuard],
 })
 export class PageModule {}

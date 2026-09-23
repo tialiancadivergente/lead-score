@@ -11,6 +11,7 @@ import { Repository } from 'typeorm';
 import { OAuthConnection } from '../database/entities/integrations/oauth-connection.entity';
 import { OAuthState } from '../database/entities/integrations/oauth-state.entity';
 import { User } from '../database/entities/system/user.entity';
+import { OAuthTokenEncryptionService } from './oauth-token-encryption.service';
 
 type MetaTokenResponse = {
   access_token: string;
@@ -64,6 +65,7 @@ export class MetaAdsOAuthService {
     private readonly oauthConnectionRepository: Repository<OAuthConnection>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly tokenEncryption: OAuthTokenEncryptionService,
   ) {}
 
   async createAuthorization(params: {
@@ -134,7 +136,7 @@ export class MetaAdsOAuthService {
       throw new NotFoundException('Conexao OAuth nao encontrada.');
     }
 
-    const accessToken = this.getUsableAccessToken(connection);
+    const accessToken = await this.getUsableAccessToken(connection);
     const accounts = await this.fetchAdAccounts(accessToken);
 
     return {
@@ -157,7 +159,7 @@ export class MetaAdsOAuthService {
       throw new NotFoundException('Conexao OAuth nao encontrada.');
     }
 
-    return this.getUsableAccessToken(connection);
+    return await this.getUsableAccessToken(connection);
   }
 
   getGraphBaseUrl(): string {
@@ -181,7 +183,7 @@ export class MetaAdsOAuthService {
       throw new BadRequestException('accountId e obrigatorio.');
     }
 
-    const accessToken = this.getUsableAccessToken(connection);
+    const accessToken = await this.getUsableAccessToken(connection);
     const accounts = await this.fetchAdAccounts(accessToken);
     const normalizedAccountId = this.normalizeMetaAccountId(params.accountId);
     const account =
@@ -322,7 +324,9 @@ export class MetaAdsOAuthService {
     connection.status = 'active';
     connection.external_user_id = me.id;
     connection.external_user_email = me.email ?? null;
-    connection.access_token = tokenPayload.access_token;
+    connection.access_token = this.tokenEncryption.encryptToken(
+      tokenPayload.access_token,
+    );
     connection.refresh_token = null;
     connection.token_type = tokenPayload.token_type ?? 'bearer';
     connection.scopes = oauthState.scopes ?? [];
@@ -495,8 +499,14 @@ export class MetaAdsOAuthService {
     return businesses;
   }
 
-  private getUsableAccessToken(connection: OAuthConnection): string {
-    if (!connection.access_token) {
+  private async getUsableAccessToken(
+    connection: OAuthConnection,
+  ): Promise<string> {
+    const accessToken = this.tokenEncryption.decryptToken(
+      connection.access_token,
+    );
+
+    if (!accessToken) {
       throw new BadRequestException(
         'A conexao Meta nao possui access token salvo.',
       );
@@ -511,7 +521,15 @@ export class MetaAdsOAuthService {
       );
     }
 
-    return connection.access_token;
+    if (
+      connection.access_token &&
+      !this.tokenEncryption.isEncryptedToken(connection.access_token)
+    ) {
+      connection.access_token = this.tokenEncryption.encryptToken(accessToken);
+      await this.oauthConnectionRepository.save(connection);
+    }
+
+    return accessToken;
   }
 
   private getMetaScopes(): string[] {

@@ -10,6 +10,8 @@ import {
   Patch,
   Post,
   Query,
+  Ip,
+  Headers,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -21,6 +23,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { AuditLogService } from '../audit/audit-log.service';
+import type { AuthenticatedUser } from '../auth/auth.types';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
@@ -42,7 +47,10 @@ import { FormService } from './form.service';
 @RequirePermission('forms', 'view')
 @Controller('form')
 export class FormController {
-  constructor(private readonly formService: FormService) {}
+  constructor(
+    private readonly formService: FormService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -123,8 +131,18 @@ export class FormController {
     status: 404,
     description: 'Launch ou season nao encontrado para os IDs informados.',
   })
-  async create(@Body() dto: CreateFormDto): Promise<FormResponseDto> {
-    return await this.formService.create(dto);
+  async create(
+    @Body() dto: CreateFormDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ): Promise<FormResponseDto> {
+    const result = await this.formService.create(dto);
+    await this.recordFormAudit('form_created', actor, ip, result.id, {
+      userAgent,
+      after: result,
+    });
+    return result;
   }
 
   @Patch(':id')
@@ -150,8 +168,17 @@ export class FormController {
   async update(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() dto: UpdateFormDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ): Promise<FormResponseDto> {
-    return await this.formService.update(id, dto);
+    const result = await this.formService.update(id, dto);
+    await this.recordFormAudit('form_updated', actor, ip, id, {
+      userAgent,
+      payload: dto,
+      after: result,
+    });
+    return result;
   }
 
   @Delete(':id')
@@ -175,7 +202,31 @@ export class FormController {
   })
   async remove(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ): Promise<void> {
     await this.formService.remove(id);
+    await this.recordFormAudit('form_deleted', actor, ip, id, { userAgent });
+  }
+
+  private async recordFormAudit(
+    action: string,
+    actor: AuthenticatedUser,
+    ip: string | undefined,
+    resourceId: string,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
+    await this.auditLogService.recordSafe({
+      userId: actor.id,
+      action,
+      resource: 'forms',
+      resourceId,
+      ip,
+      metadata: {
+        actorEmail: actor.email,
+        ...metadata,
+      },
+    });
   }
 }

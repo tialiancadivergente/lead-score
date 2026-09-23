@@ -1,24 +1,37 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
 
 export class CreatePageVersionDto {
   @ApiPropertyOptional({ example: 'https://cdn.example.com/page-v1.png' })
+  @IsOptional()
+  @IsString()
   template_image_url?: string;
 
   @ApiPropertyOptional({ example: 'https://figma.com/file/example' })
+  @IsOptional()
+  @IsString()
   template_url?: string;
 
   @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
   active?: boolean;
 }
 
 export class UpdatePageVersionDto {
   @ApiPropertyOptional({ example: 'https://cdn.example.com/page-v2.png' })
+  @IsOptional()
+  @IsString()
   template_image_url?: string;
 
   @ApiPropertyOptional({ example: 'https://figma.com/file/example-v2' })
+  @IsOptional()
+  @IsString()
   template_url?: string;
 
   @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
   active?: boolean;
 }
 

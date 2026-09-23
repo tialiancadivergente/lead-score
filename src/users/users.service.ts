@@ -6,6 +6,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import {
+  AuditLogService,
+  RecordAuditLogInput,
+} from '../audit/audit-log.service';
+import type { AuthenticatedUser } from '../auth/auth.types';
 import { AuthService } from '../auth/auth.service';
 import { Role } from '../database/entities/system/role.entity';
 import { User } from '../database/entities/system/user.entity';
@@ -19,6 +24,7 @@ export class UsersService {
     @InjectRepository(User) private readonly userRepo: Repository<User>,
     @InjectRepository(Role) private readonly roleRepo: Repository<Role>,
     private readonly authService: AuthService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async list(query: ListUsersQueryDto) {
@@ -70,7 +76,7 @@ export class UsersService {
     return this.mapUser(await this.getUserOrThrow(id));
   }
 
-  async create(dto: CreateUserDto) {
+  async create(dto: CreateUserDto, context?: AuditActorContext) {
     const email = this.parseEmail(dto.email);
     const existing = await this.userRepo.findOne({
       where: { email },
@@ -88,11 +94,17 @@ export class UsersService {
       roles: await this.getRoles(dto.roleIds ?? []),
     });
 
-    return this.mapUser(await this.userRepo.save(user));
+    const saved = await this.userRepo.save(user);
+    const mapped = this.mapUser(saved);
+    await this.recordAudit('user_created', saved.id, context, {
+      after: mapped,
+    });
+    return mapped;
   }
 
-  async update(id: string, dto: UpdateUserDto) {
+  async update(id: string, dto: UpdateUserDto, context?: AuditActorContext) {
     const user = await this.getUserOrThrow(id);
+    const before = this.mapUser(user);
     if (dto.name !== undefined)
       user.name = this.parseRequiredString(dto.name, 'name', 120);
     if (dto.email !== undefined) {
@@ -107,31 +119,64 @@ export class UsersService {
     }
     if (dto.isActive !== undefined)
       user.isActive = this.parseBoolean(dto.isActive, 'isActive');
-    return this.mapUser(await this.userRepo.save(user));
+    const saved = await this.userRepo.save(user);
+    const after = this.mapUser(saved);
+    await this.recordAudit('user_updated', id, context, { before, after });
+    return after;
   }
 
-  async setRoles(id: string, roleIds: string[]) {
+  async setRoles(
+    id: string,
+    roleIds: string[],
+    context?: AuditActorContext,
+  ) {
     const user = await this.getUserOrThrow(id);
+    const before = this.mapUser(user);
     user.roles = await this.getRoles(roleIds);
-    return this.mapUser(await this.userRepo.save(user));
+    const saved = await this.userRepo.save(user);
+    const after = this.mapUser(saved);
+    await this.recordAudit('user_roles_updated', id, context, {
+      before,
+      after,
+    });
+    return after;
   }
 
-  async setActive(id: string, isActive: boolean) {
+  async setActive(
+    id: string,
+    isActive: boolean,
+    context?: AuditActorContext,
+  ) {
     const user = await this.getUserOrThrow(id);
+    const before = this.mapUser(user);
     user.isActive = isActive;
-    return this.mapUser(await this.userRepo.save(user));
+    const saved = await this.userRepo.save(user);
+    const after = this.mapUser(saved);
+    await this.recordAudit(
+      isActive ? 'user_activated' : 'user_deactivated',
+      id,
+      context,
+      { before, after },
+    );
+    return after;
   }
 
-  async forcePasswordReset(id: string) {
+  async forcePasswordReset(id: string, context?: AuditActorContext) {
     const user = await this.getUserOrThrow(id);
     const resetToken = await this.authService.createPasswordResetToken(user);
+    await this.recordAudit('user_password_reset_forced', id, context, {
+      targetEmail: user.email,
+    });
     return { resetToken, expiresIn: '1h' };
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, context?: AuditActorContext): Promise<void> {
+    const user = await this.getUserOrThrow(id);
+    const before = this.mapUser(user);
     const result = await this.userRepo.softDelete(id);
     if (!result.affected)
       throw new NotFoundException('Usuario nao encontrado.');
+    await this.recordAudit('user_deleted', id, context, { before });
   }
 
   private async getUserOrThrow(id: string): Promise<User> {
@@ -214,4 +259,31 @@ export class UsersService {
     }
     throw new BadRequestException(`${field} deve ser boolean.`);
   }
+
+  private async recordAudit(
+    action: string,
+    resourceId: string,
+    context: AuditActorContext | undefined,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
+    const input: RecordAuditLogInput = {
+      userId: context?.actor.id,
+      action,
+      resource: 'users',
+      resourceId,
+      ip: context?.ip,
+      metadata: {
+        actorEmail: context?.actor.email,
+        userAgent: context?.userAgent,
+        ...metadata,
+      },
+    };
+    await this.auditLogService.recordSafe(input);
+  }
+}
+
+interface AuditActorContext {
+  actor: AuthenticatedUser;
+  ip?: string;
+  userAgent?: string;
 }

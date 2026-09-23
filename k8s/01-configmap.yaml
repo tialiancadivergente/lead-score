@@ -7,6 +7,11 @@ data:
   PORT: "3000"
   NODE_ENV: "production"
   API_KEY_ENABLED: "true"
+  CORS_ENABLED: "true"
+  CORS_CREDENTIALS: "true"
+  CORS_ORIGINS: "https://backoffice.aliancadivergente.com.br,https://alianca-backoffice.lovable.app,https://id-preview--57878875-07e9-416b-802a-787e6588c1c4.lovable.app,https://project--57878875-07e9-416b-802a-787e6588c1c4-dev.lovable.app,http://localhost:8080"
+  SWAGGER_ENABLED: "false"
+  AUTH_TRUSTED_PROXY_CIDRS: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
   
   # Database
   DB_HOST: "lead-score-db.postgres.database.azure.com"
@@ -51,6 +56,9 @@ data:
   CAPTURE_EXPORT_LOCAL_DIR: "/tmp/capture-exports"
   CAPTURE_EXPORT_FILE_TTL_HOURS: "168"
   CAPTURE_EXPORT_ALLOW_LOCAL_STORAGE: "false"
+  PAGE_TEMPLATE_IMAGE_BLOB_CONTAINER: "page-template-images"
+  PAGE_TEMPLATE_IMAGE_MAX_BYTES: "8388608"
+  PAGE_TEMPLATE_IMAGE_SERVE_PREFIX: "/leads-api/page/template-images"
   
   # ActiveCampaign
   ACTIVECAMPAIGN_BASE_URL: "https://imperio55.api-us1.com/api/3"

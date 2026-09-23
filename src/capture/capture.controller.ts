@@ -7,6 +7,8 @@ import {
   Post,
   Query,
   Res,
+  Ip,
+  Headers,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -19,6 +21,9 @@ import {
 } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { pipeline } from 'stream/promises';
+import { AuditLogService } from '../audit/audit-log.service';
+import type { AuthenticatedUser } from '../auth/auth.types';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -49,7 +54,10 @@ import { ActiveCampaignContactTagsResponseDto } from './dto/activecampaign-conta
 @RequirePermission('lead_capture', 'view')
 @Controller('capture')
 export class CaptureController {
-  constructor(private readonly captureService: CaptureService) {}
+  constructor(
+    private readonly captureService: CaptureService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   @Get('export/csv')
   @ApiOperation({
@@ -81,9 +89,20 @@ export class CaptureController {
     status: 200,
     description: 'Arquivo CSV gerado com sucesso.',
   })
-  async exportCsv(@Query() query: CaptureFilterQueryDto, @Res() res: Response) {
+  async exportCsv(
+    @Query() query: CaptureFilterQueryDto,
+    @Res() res: Response,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ) {
     const csv = await this.captureService.exportCapturesCsv(query);
     const filename = this.buildExportFileName('csv');
+    await this.recordExportAudit('capture_export_csv_downloaded', actor, ip, {
+      userAgent,
+      filename,
+      filters: query,
+    });
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -125,8 +144,16 @@ export class CaptureController {
   async exportExcel(
     @Query() query: CaptureFilterQueryDto,
     @Res() res: Response,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ) {
     const filename = this.buildExportFileName('xlsx');
+    await this.recordExportAudit('capture_export_excel_downloaded', actor, ip, {
+      userAgent,
+      filename,
+      filters: query,
+    });
 
     res.setHeader(
       'Content-Type',
@@ -154,9 +181,18 @@ export class CaptureController {
   })
   async createExportJob(
     @Body() body: CreateCaptureExportJobDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ): Promise<CaptureExportJobResponseDto> {
     const { format, ...query } = body;
     const job = await this.captureService.createExportJob(query, format);
+    await this.recordExportAudit('capture_export_job_created', actor, ip, {
+      userAgent,
+      format,
+      filters: query,
+      jobId: job.id,
+    });
     return this.toJobResponse(job);
   }
 
@@ -191,8 +227,22 @@ export class CaptureController {
   async downloadExportJob(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Res() res: Response,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
   ) {
     const file = await this.captureService.getExportJobFile(id);
+    await this.recordExportAudit(
+      'capture_export_job_downloaded',
+      actor,
+      ip,
+      {
+        userAgent,
+        jobId: id,
+        filename: file.fileName,
+        contentType: file.contentType,
+      },
+    );
     res.setHeader('Content-Type', file.contentType);
     res.setHeader(
       'Content-Disposition',
@@ -367,5 +417,25 @@ export class CaptureController {
       started_at: job.started_at ? job.started_at.toISOString() : null,
       completed_at: job.completed_at ? job.completed_at.toISOString() : null,
     };
+  }
+
+  private async recordExportAudit(
+    action: string,
+    actor: AuthenticatedUser,
+    ip: string | undefined,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
+    await this.auditLogService.recordSafe({
+      userId: actor.id,
+      action,
+      resource: 'lead_capture',
+      resourceId:
+        typeof metadata.jobId === 'string' ? metadata.jobId : undefined,
+      ip,
+      metadata: {
+        actorEmail: actor.email,
+        ...metadata,
+      },
+    });
   }
 }

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -15,10 +16,12 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { getRequiredJwtAccessSecret } from './jwt-secret';
 import { PermissionsService } from './permissions.service';
 import { PasswordReset } from '../database/entities/system/password-reset.entity';
 import { RefreshToken } from '../database/entities/system/refresh-token.entity';
 import { User } from '../database/entities/system/user.entity';
+import { AuditLog } from '../database/entities/system/audit-log.entity';
 
 interface ClientContext {
   ip?: string;
@@ -33,6 +36,7 @@ interface LoginAttempt {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private readonly failedAttempts = new Map<string, LoginAttempt>();
 
   constructor(
@@ -42,6 +46,8 @@ export class AuthService {
     private readonly refreshTokenRepo: Repository<RefreshToken>,
     @InjectRepository(PasswordReset)
     private readonly passwordResetRepo: Repository<PasswordReset>,
+    @InjectRepository(AuditLog)
+    private readonly auditLogRepo: Repository<AuditLog>,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
     private readonly permissionsService: PermissionsService,
@@ -58,7 +64,10 @@ export class AuthService {
 
     if (!user || user.deletedAt) {
       this.registerFailure(email);
-      throw new UnauthorizedException('Credenciais invalidas.');
+      this.logAuthEvent('login_failed', email, context, {
+        reason: 'invalid_credentials',
+      });
+      throw new UnauthorizedException(this.invalidCredentialsMessage());
     }
 
     const passwordMatches = await bcrypt.compare(
@@ -67,7 +76,10 @@ export class AuthService {
     );
     if (!passwordMatches) {
       this.registerFailure(email);
-      throw new UnauthorizedException('Credenciais invalidas.');
+      this.logAuthEvent('login_failed', email, context, {
+        reason: 'invalid_credentials',
+      });
+      throw new UnauthorizedException(this.invalidCredentialsMessage());
     }
 
     this.failedAttempts.delete(email);
@@ -75,13 +87,14 @@ export class AuthService {
     await this.userRepo.save(user);
 
     const tokens = await this.issueTokens(user, context);
+    this.logAuthEvent('login_success', email, context, { userId: user.id });
     return {
       ...tokens,
       user: await this.permissionsService.getAuthenticatedUser(user.id),
     };
   }
 
-  async refresh(refreshToken: string, context: ClientContext) {
+  async refresh(refreshToken: unknown, context: ClientContext) {
     const token = this.parseRequiredString(refreshToken, 'refreshToken');
     const stored = await this.refreshTokenRepo.findOne({
       where: {
@@ -93,24 +106,36 @@ export class AuthService {
     });
 
     if (!stored) {
+      this.logAuthEvent('refresh_denied', undefined, context, {
+        reason: 'invalid_or_expired',
+      });
       throw new UnauthorizedException('Refresh token invalido ou expirado.');
     }
 
     if (!stored.user.isActive || stored.user.deletedAt) {
+      this.logAuthEvent('refresh_denied', stored.user.email, context, {
+        userId: stored.userId,
+        reason: 'inactive_user',
+      });
       throw new UnauthorizedException('Usuario inativo.');
     }
 
     stored.revokedAt = new Date();
     await this.refreshTokenRepo.save(stored);
     const tokens = await this.issueTokens(stored.user, context);
+    this.logAuthEvent('refresh_success', stored.user.email, context, {
+      userId: stored.userId,
+    });
     return {
       ...tokens,
       user: await this.permissionsService.getAuthenticatedUser(stored.userId),
     };
   }
 
-  async logout(refreshToken: string): Promise<void> {
-    const token = this.parseRequiredString(refreshToken, 'refreshToken');
+  async logout(refreshToken: unknown): Promise<void> {
+    if (typeof refreshToken !== 'string' || !refreshToken.trim()) return;
+
+    const token = refreshToken.trim();
     const stored = await this.refreshTokenRepo.findOne({
       where: { tokenHash: this.hashOpaqueToken(token), revokedAt: IsNull() },
     });
@@ -118,6 +143,32 @@ export class AuthService {
     if (stored) {
       stored.revokedAt = new Date();
       await this.refreshTokenRepo.save(stored);
+      this.logAuthEvent('logout', undefined, {}, { userId: stored.userId });
+    }
+  }
+
+  async logoutByAccessToken(
+    accessToken: unknown,
+    context: ClientContext = {},
+  ): Promise<void> {
+    if (typeof accessToken !== 'string' || !accessToken.trim()) return;
+
+    try {
+      const payload = await this.jwtService.verifyAsync<JwtPayload>(
+        accessToken.trim(),
+        {
+          secret: getRequiredJwtAccessSecret(this.config),
+        },
+      );
+
+      if (!payload?.sub) return;
+      await this.revokeUserRefreshTokens(payload.sub);
+      this.logAuthEvent('logout', payload.email, context, {
+        userId: payload.sub,
+        source: 'access_token_cookie',
+      });
+    } catch {
+      return;
     }
   }
 
@@ -127,7 +178,7 @@ export class AuthService {
     return user;
   }
 
-  async forgotPassword(dto: ForgotPasswordDto) {
+  async forgotPassword(dto: ForgotPasswordDto, context: ClientContext = {}) {
     const email = this.parseEmail(dto.email);
     const user = await this.userRepo.findOne({
       where: { email, isActive: true },
@@ -139,6 +190,7 @@ export class AuthService {
         console.warn(`Password reset token for ${email}: ${token}`);
       }
     }
+    this.logAuthEvent('forgot_password_requested', email, context, {});
 
     return { message: 'Se o email existir, enviaremos instrucoes para reset.' };
   }
@@ -164,6 +216,9 @@ export class AuthService {
     await this.userRepo.save(stored.user);
     await this.passwordResetRepo.save(stored);
     await this.revokeUserRefreshTokens(stored.userId);
+    this.logAuthEvent('password_reset', stored.user.email, {}, {
+      userId: stored.userId,
+    });
     return { message: 'Senha alterada com sucesso.' };
   }
 
@@ -188,11 +243,16 @@ export class AuthService {
     user.passwordHash = await this.hashPassword(newPassword);
     await this.userRepo.save(user);
     await this.revokeUserRefreshTokens(user.id);
+    this.logAuthEvent('password_changed', user.email, {}, { userId: user.id });
     return { message: 'Senha alterada com sucesso.' };
   }
 
   async createPasswordResetToken(user: User): Promise<string> {
     const token = randomBytes(48).toString('base64url');
+    await this.passwordResetRepo.update(
+      { userId: user.id, usedAt: IsNull() },
+      { usedAt: new Date() },
+    );
     await this.passwordResetRepo.save(
       this.passwordResetRepo.create({
         userId: user.id,
@@ -210,7 +270,7 @@ export class AuthService {
   private async issueTokens(user: User, context: ClientContext) {
     const payload: JwtPayload = { sub: user.id, email: user.email };
     const accessToken = await this.jwtService.signAsync(payload, {
-      secret: this.config.get<string>('JWT_ACCESS_SECRET', 'change-me-access'),
+      secret: getRequiredJwtAccessSecret(this.config),
       expiresIn: this.config.get<string>(
         'JWT_ACCESS_EXPIRES_IN',
         '15m',
@@ -252,7 +312,7 @@ export class AuthService {
         : existing;
 
     attempt.count += 1;
-    if (attempt.count >= 5) {
+    if (attempt.count >= 10) {
       attempt.lockedUntil = now + windowMs;
     }
     this.failedAttempts.set(email, attempt);
@@ -265,9 +325,55 @@ export class AuthService {
       this.failedAttempts.delete(email);
       return;
     }
-    throw new UnauthorizedException(
-      'Muitas tentativas invalidas. Tente novamente em alguns minutos.',
+    this.logAuthEvent('account_temporarily_locked', email, {}, {});
+    throw new UnauthorizedException(this.invalidCredentialsMessage());
+  }
+
+  private invalidCredentialsMessage(): string {
+    return 'Credenciais invalidas ou conta temporariamente bloqueada.';
+  }
+
+  private logAuthEvent(
+    action: string,
+    email: string | undefined,
+    context: ClientContext,
+    metadata: Record<string, unknown>,
+  ): void {
+    this.logger.warn(
+      JSON.stringify({
+        event: 'auth_security',
+        action,
+        email,
+        ip: context.ip,
+        userAgent: context.userAgent,
+        ...metadata,
+        timestamp: new Date().toISOString(),
+      }),
     );
+
+    void this.auditLogRepo
+      .save(
+        this.auditLogRepo.create({
+          userId:
+            typeof metadata.userId === 'string' ? metadata.userId : null,
+          action,
+          resource: 'auth',
+          resourceId: typeof metadata.userId === 'string' ? metadata.userId : null,
+          ip: context.ip ?? null,
+          metadata: {
+            email,
+            userAgent: context.userAgent,
+            ...metadata,
+          },
+        }),
+      )
+      .catch((error: unknown) => {
+        this.logger.error(
+          `Failed to persist audit log: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      });
   }
 
   private parseDurationMs(value: string, fallback: number): number {
