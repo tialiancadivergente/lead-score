@@ -9,6 +9,7 @@ import {
   Res,
   Ip,
   Headers,
+  Header,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -31,6 +32,7 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import { CaptureExportJob } from '../database/entities/capture/capture-export-job.entity';
 import { CaptureService } from './capture.service';
 import { CaptureExportJobResponseDto } from './dto/capture-export-job-response.dto';
+import { CaptureExportDownloadLinkDto } from './dto/capture-export-download-link.dto';
 import { CaptureQuizAnswersResponseDto } from './dto/capture-quiz-answers-response.dto';
 import { CaptureFilterQueryDto } from './dto/capture-filter-query.dto';
 import { CreateCaptureExportJobDto } from './dto/create-capture-export-job.dto';
@@ -165,6 +167,7 @@ export class CaptureController {
   }
 
   @Post('export/jobs')
+  @Header('Cache-Control', 'private, no-store')
   @ApiOperation({
     summary: 'Cria um job assincrono de export (CSV ou Excel)',
     description:
@@ -197,6 +200,7 @@ export class CaptureController {
   }
 
   @Get('export/jobs/:id')
+  @Header('Cache-Control', 'private, no-store')
   @ApiOperation({
     summary: 'Consulta o status/progresso de um job de export',
   })
@@ -212,7 +216,32 @@ export class CaptureController {
     return this.toJobResponse(job);
   }
 
+  @Get('export/jobs/:id/download-url')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({
+    summary: 'Autoriza download direto do Blob com URL temporaria (15 minutos)',
+  })
+  @ApiResponse({ status: 200, type: CaptureExportDownloadLinkDto })
+  @ApiResponse({ status: 409, description: 'Arquivo ainda nao concluido.' })
+  @ApiResponse({ status: 410, description: 'Arquivo expirado.' })
+  async getExportDownloadUrl(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ): Promise<CaptureExportDownloadLinkDto> {
+    const link = await this.captureService.getExportDownloadLink(id);
+    await this.recordExportAudit(
+      'capture_export_download_authorized',
+      actor,
+      ip,
+      { userAgent, jobId: id },
+    );
+    return link;
+  }
+
   @Get('export/jobs/:id/download')
+  @Header('Cache-Control', 'private, no-store')
   @ApiOperation({
     summary: 'Baixa o arquivo gerado por um job de export concluido',
   })
@@ -232,17 +261,12 @@ export class CaptureController {
     @Headers('user-agent') userAgent?: string,
   ) {
     const file = await this.captureService.getExportJobFile(id);
-    await this.recordExportAudit(
-      'capture_export_job_downloaded',
-      actor,
-      ip,
-      {
-        userAgent,
-        jobId: id,
-        filename: file.fileName,
-        contentType: file.contentType,
-      },
-    );
+    await this.recordExportAudit('capture_export_job_downloaded', actor, ip, {
+      userAgent,
+      jobId: id,
+      filename: file.fileName,
+      contentType: file.contentType,
+    });
     res.setHeader('Content-Type', file.contentType);
     res.setHeader(
       'Content-Disposition',
@@ -397,7 +421,7 @@ export class CaptureController {
     const percent =
       job.total_items && job.total_items > 0
         ? Math.min(
-            100,
+            99,
             Math.round((job.processed_items / job.total_items) * 100),
           )
         : 0;
@@ -406,6 +430,9 @@ export class CaptureController {
       id: job.id,
       format: job.format,
       status: job.status,
+      phase: job.phase,
+      heartbeat_at: job.heartbeat_at ? job.heartbeat_at.toISOString() : null,
+      attempt_count: job.attempt_count,
       total_items: job.total_items ?? null,
       processed_items: job.processed_items,
       percent: job.status === 'completed' ? 100 : percent,

@@ -1,4 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
+import {
+  IsArray,
+  IsBoolean,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  ValidateNested,
+} from 'class-validator';
+import { toNumber } from './number-transform';
 
 export class LeadscoreResponseDto {
   @ApiProperty({ example: 'f94c3f1d-c1f9-4e80-9ab9-aea933d4f233' })
@@ -22,17 +33,24 @@ export class LeadscoreResponseDto {
 
 export class CreateLeadscoreDto {
   @ApiProperty({ example: 'Leadscore principal' })
+  @IsString()
   name!: string;
 
   @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
   active?: boolean;
 }
 
 export class UpdateLeadscoreDto {
   @ApiPropertyOptional({ example: 'Leadscore v2' })
+  @IsOptional()
+  @IsString()
   name?: string;
 
   @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
   active?: boolean;
 }
 
@@ -58,12 +76,16 @@ export class LeadscoreOptionPointResponseDto {
 
 export class UpsertLeadscoreOptionPointItemDto {
   @ApiProperty({ example: 'c8a029aa-e5b7-4687-951c-d8defc67c27c' })
+  @IsUUID()
   question_id!: string;
 
   @ApiProperty({ example: '81fb42e8-f942-4864-bc00-6e2e3beb9908' })
+  @IsUUID()
   option_id!: string;
 
   @ApiProperty({ example: 14.78 })
+  @Transform(toNumber)
+  @IsNumber()
   points!: number;
 }
 
@@ -72,6 +94,9 @@ export class ReplaceLeadscoreOptionPointsDto {
     type: UpsertLeadscoreOptionPointItemDto,
     isArray: true,
   })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => UpsertLeadscoreOptionPointItemDto)
   items!: UpsertLeadscoreOptionPointItemDto[];
 }
 
@@ -97,15 +122,24 @@ export class LeadscoreRangePointResponseDto {
 
 export class UpsertLeadscoreRangePointItemDto {
   @ApiProperty({ example: 'c8a029aa-e5b7-4687-951c-d8defc67c27c' })
+  @IsUUID()
   question_id!: string;
 
   @ApiPropertyOptional({ nullable: true, example: 18 })
+  @IsOptional()
+  @Transform(toNumber)
+  @IsNumber()
   min_value?: number;
 
   @ApiPropertyOptional({ nullable: true, example: 25 })
+  @IsOptional()
+  @Transform(toNumber)
+  @IsNumber()
   max_value?: number;
 
   @ApiProperty({ example: 9.4 })
+  @Transform(toNumber)
+  @IsNumber()
   points!: number;
 }
 
@@ -114,6 +148,9 @@ export class ReplaceLeadscoreRangePointsDto {
     type: UpsertLeadscoreRangePointItemDto,
     isArray: true,
   })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => UpsertLeadscoreRangePointItemDto)
   items!: UpsertLeadscoreRangePointItemDto[];
 }
 
@@ -130,17 +167,23 @@ export class LeadscoreTierResponseDto {
 
 export class CreateLeadscoreTierDto {
   @ApiProperty({ example: 'A+' })
+  @IsString()
   code!: string;
 
   @ApiProperty({ example: 'A+' })
+  @IsString()
   name!: string;
 }
 
 export class UpdateLeadscoreTierDto {
   @ApiPropertyOptional({ example: 'A+' })
+  @IsOptional()
+  @IsString()
   code?: string;
 
   @ApiPropertyOptional({ example: 'A Plus' })
+  @IsOptional()
+  @IsString()
   name?: string;
 }
 
@@ -169,12 +212,19 @@ export class LeadscoreTierRuleResponseDto {
 
 export class UpsertLeadscoreTierRuleItemDto {
   @ApiProperty({ example: '81fb42e8-f942-4864-bc00-6e2e3beb9908' })
+  @IsUUID()
   tier_id!: string;
 
   @ApiPropertyOptional({ nullable: true, example: 180.3 })
+  @IsOptional()
+  @Transform(toNumber)
+  @IsNumber()
   min_score?: number;
 
   @ApiPropertyOptional({ nullable: true, example: null })
+  @IsOptional()
+  @Transform(toNumber)
+  @IsNumber()
   max_score?: number;
 }
 
@@ -183,5 +233,8 @@ export class ReplaceLeadscoreTierRulesDto {
     type: UpsertLeadscoreTierRuleItemDto,
     isArray: true,
   })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => UpsertLeadscoreTierRuleItemDto)
   items!: UpsertLeadscoreTierRuleItemDto[];
 }

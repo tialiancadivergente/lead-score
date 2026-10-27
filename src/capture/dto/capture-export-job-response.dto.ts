@@ -20,6 +20,26 @@ export class CaptureExportJobResponseDto {
   processed_items!: number;
 
   @ApiProperty({
+    enum: [
+      'queued',
+      'counting',
+      'preparing',
+      'exporting',
+      'finalizing',
+      'uploading',
+      'completed',
+      'failed',
+    ],
+  })
+  phase!: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  heartbeat_at!: string | null;
+
+  @ApiProperty()
+  attempt_count!: number;
+
+  @ApiProperty({
     example: 26,
     description:
       'Percentual concluido (0-100). Fica em 0 enquanto total_items ainda nao foi calculado.',

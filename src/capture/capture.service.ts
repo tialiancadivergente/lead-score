@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  GoneException,
   Injectable,
   Logger,
   NotFoundException,
@@ -10,6 +11,7 @@ import ExcelJS from 'exceljs';
 import { Readable } from 'stream';
 import type { Stream, Writable } from 'stream';
 import { once } from 'events';
+import { randomUUID } from 'crypto';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Capture } from '../database/entities/capture/capture.entity';
 import {
@@ -78,6 +80,7 @@ export const CAPTURE_EXPORT_QUEUE =
   process.env.SERVICE_BUS_CAPTURE_EXPORT_QUEUE ?? 'capture-export';
 
 type CaptureRawRow = {
+  export_cursor_created_at?: string;
   id: string;
   page: string | null;
   path: string | null;
@@ -707,12 +710,14 @@ export class CaptureService {
     query: CaptureFilterQueryDto,
     stream: Stream,
     onProgress?: (processed: number) => Promise<void>,
+    onPhase?: (phase: string) => Promise<void>,
   ): Promise<void> {
     const startedAt = Date.now();
     this.logger.log('Capture Excel stream export started.');
 
     const filters = this.parseFilters(query);
     const questionHeaders = await this.collectExportQuestionHeaders(filters);
+    await onPhase?.('exporting');
     const columns = CaptureService.EXPORT_COLUMNS;
     const headers = [
       ...columns.map((column) => column.header),
@@ -735,7 +740,7 @@ export class CaptureService {
     headerRow.font = { bold: true };
     headerRow.commit();
 
-    let cursor: { createdAt: Date; id: string } | undefined;
+    let cursor: { createdAt: Date | string; id: string } | undefined;
     let processed = 0;
 
     for (;;) {
@@ -764,11 +769,15 @@ export class CaptureService {
         lastRow.created_at instanceof Date
           ? lastRow.created_at
           : new Date(lastRow.created_at);
-      cursor = { createdAt: lastCreatedAt, id: lastRow.id };
+      cursor = {
+        createdAt: lastRow.export_cursor_created_at ?? lastCreatedAt,
+        id: lastRow.id,
+      };
 
       if (rows.length < CaptureService.EXPORT_BATCH_SIZE) break;
     }
 
+    await onPhase?.('finalizing');
     await worksheet.commit();
     await workbook.commit();
 
@@ -781,12 +790,14 @@ export class CaptureService {
     query: CaptureFilterQueryDto,
     stream: Writable,
     onProgress?: (processed: number) => Promise<void>,
+    onPhase?: (phase: string) => Promise<void>,
   ): Promise<void> {
     const startedAt = Date.now();
     this.logger.log('Capture CSV stream export started.');
 
     const filters = this.parseFilters(query);
     const questionHeaders = await this.collectExportQuestionHeaders(filters);
+    await onPhase?.('exporting');
     const columns = CaptureService.EXPORT_COLUMNS;
     const headerRow = [
       ...columns.map((column) => column.header),
@@ -798,7 +809,7 @@ export class CaptureService {
       `\uFEFF${headerRow.map((value) => this.escapeCsv(value)).join(',')}\r\n`,
     );
 
-    let cursor: { createdAt: Date; id: string } | undefined;
+    let cursor: { createdAt: Date | string; id: string } | undefined;
     let processed = 0;
     let firstDataRow = true;
 
@@ -815,6 +826,7 @@ export class CaptureService {
         await this.resolveQuizExportData(rows.map((row) => row.id));
       const items = await this.mapRowsToItems(rows, detailsByCapture);
 
+      const lines: string[] = [];
       for (const item of items) {
         const baseColumns = columns.map((column) =>
           this.toExportCaptureValue(item, column.key),
@@ -826,12 +838,10 @@ export class CaptureService {
         const line = [...baseColumns, ...questionColumns]
           .map((value) => this.escapeCsv(value))
           .join(',');
-        await this.writeStreamChunk(
-          stream,
-          `${firstDataRow ? '' : '\r\n'}${line}`,
-        );
+        lines.push(`${firstDataRow ? '' : '\r\n'}${line}`);
         firstDataRow = false;
       }
+      await this.writeStreamChunk(stream, lines.join(''));
 
       processed += rows.length;
       await onProgress?.(processed);
@@ -841,7 +851,10 @@ export class CaptureService {
         lastRow.created_at instanceof Date
           ? lastRow.created_at
           : new Date(lastRow.created_at);
-      cursor = { createdAt: lastCreatedAt, id: lastRow.id };
+      cursor = {
+        createdAt: lastRow.export_cursor_created_at ?? lastCreatedAt,
+        id: lastRow.id,
+      };
 
       if (rows.length < CaptureService.EXPORT_BATCH_SIZE) break;
     }
@@ -856,12 +869,16 @@ export class CaptureService {
     format: CaptureExportFormat,
   ): Promise<CaptureExportJob> {
     this.parseFilters(query);
+    this.exportStorage.assertAvailable();
+    // Freeze the upper bound so incoming captures do not extend a running export.
+    query = { ...query, end_date: query.end_date || new Date().toISOString() };
 
     const job = await this.exportJobRepo.save(
       this.exportJobRepo.create({
         format,
         filters: { ...query },
         status: 'pending',
+        phase: 'queued',
         processed_items: 0,
       }),
     );
@@ -898,17 +915,86 @@ export class CaptureService {
     return job;
   }
 
+  async recoverExportJobs(): Promise<void> {
+    if (!this.serviceBus.isEnabled()) return;
+    const jobs = await this.exportJobRepo
+      .createQueryBuilder('job')
+      .where(
+        `(job.status = 'pending' AND job.created_at < now() - interval '1 minute')
+        OR (job.status = 'processing' AND COALESCE(job.heartbeat_at, job.started_at, job.created_at) < now() - interval '5 minutes')`,
+      )
+      .orderBy('job.created_at', 'ASC')
+      .limit(10)
+      .getMany();
+    for (const job of jobs) {
+      if (job.attempt_count >= 3) {
+        await this.exportJobRepo
+          .createQueryBuilder()
+          .update()
+          .set({
+            status: 'failed',
+            phase: 'failed',
+            error_message:
+              'Worker interrompido repetidamente. Solicite uma nova exportacao.',
+            completed_at: new Date(),
+          })
+          .where('id = :id AND status = :status', {
+            id: job.id,
+            status: job.status,
+          })
+          .andWhere(
+            `COALESCE(heartbeat_at, started_at, created_at) < now() - interval '5 minutes'`,
+          )
+          .execute();
+        continue;
+      }
+      await this.serviceBus.publish(CAPTURE_EXPORT_QUEUE, { jobId: job.id });
+    }
+  }
+
+  private assertDownloadReady(job: CaptureExportJob): void {
+    if (job.status !== 'completed')
+      throw new ConflictException(
+        `Job ${job.id} ainda nao foi concluido (status=${job.status}).`,
+      );
+    if (job.expires_at && job.expires_at.getTime() <= Date.now()) {
+      throw new GoneException(
+        'Arquivo de export expirado. Solicite uma nova exportacao.',
+      );
+    }
+  }
+
+  async getExportDownloadLink(jobId: string) {
+    const job = await this.getExportJobStatus(jobId);
+    this.assertDownloadReady(job);
+    if (job.file_storage === 'azure_blob' && job.file_path) {
+      return {
+        ...(await this.exportStorage.createDownloadUrl(
+          job.file_path,
+          job.file_name ?? `capture-export.${job.format}`,
+          job.expires_at,
+        )),
+        mode: 'direct' as const,
+        file_name: job.file_name,
+        file_size: job.file_size,
+      };
+    }
+    return {
+      mode: 'api' as const,
+      url: `/capture/export/jobs/${job.id}/download`,
+      expires_at: null,
+      file_name: job.file_name,
+      file_size: job.file_size,
+    };
+  }
+
   async getExportJobFile(jobId: string): Promise<{
     fileName: string;
     contentType: string;
     stream: Readable;
   }> {
     const job = await this.getExportJobStatus(jobId);
-    if (job.status !== 'completed') {
-      throw new ConflictException(
-        `Job ${jobId} ainda nao foi concluido (status=${job.status}).`,
-      );
-    }
+    this.assertDownloadReady(job);
 
     const contentType =
       job.content_type ??
@@ -929,14 +1015,19 @@ export class CaptureService {
       };
     }
 
-    if (!job.file_data) {
+    const legacyJob = await this.exportJobRepo
+      .createQueryBuilder('job')
+      .addSelect('job.file_data')
+      .where('job.id = :id', { id: jobId })
+      .getOne();
+    if (!legacyJob?.file_data) {
       throw new ConflictException(`Job ${jobId} nao possui arquivo gerado.`);
     }
 
     return {
       fileName: job.file_name ?? `capture-export.${job.format}`,
       contentType,
-      stream: Readable.from(job.file_data),
+      stream: Readable.from(legacyJob.file_data),
     };
   }
 
@@ -1053,16 +1144,57 @@ export class CaptureService {
   ): Promise<void> {
     const startedAt = Date.now();
     this.logger.log(`Capture export job ${jobId} started (format=${format}).`);
+    const leaseToken = randomUUID();
+    let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+    let heartbeatBusy = false;
+    let leaseLost = false;
+    let currentPhase = 'counting';
+    let phaseStartedAt = Date.now();
+    const updateOwned = async (
+      values: Partial<Omit<CaptureExportJob, 'filters'>>,
+    ) => {
+      if (leaseLost)
+        throw new Error(
+          'Export interrompido: tentativa substituida ou heartbeat indisponivel.',
+        );
+      const result = await this.exportJobRepo.update(
+        { id: jobId, lease_token: leaseToken, status: 'processing' },
+        { ...values, heartbeat_at: new Date() },
+      );
+      if (!result.affected) {
+        leaseLost = true;
+        throw new Error('Export lease perdido.');
+      }
+      if (values.phase && values.phase !== currentPhase) {
+        this.logger.log(
+          `Export ${jobId} phase=${values.phase} previous_phase=${currentPhase} duration_ms=${Date.now() - phaseStartedAt}`,
+        );
+        currentPhase = values.phase;
+        phaseStartedAt = Date.now();
+      }
+    };
 
     try {
-      const claim = await this.exportJobRepo.update(
-        { id: jobId, status: 'pending' },
-        {
+      const claim = await this.exportJobRepo
+        .createQueryBuilder()
+        .update()
+        .set({
           status: 'processing',
+          phase: 'counting',
+          lease_token: leaseToken,
+          heartbeat_at: new Date(),
+          attempt_count: () => 'attempt_count + 1',
+          processed_items: 0,
+          completed_at: null,
           started_at: new Date(),
           error_message: null,
-        },
-      );
+        })
+        .where('id = :jobId', { jobId })
+        .andWhere(
+          `(status = 'pending' OR (status = 'processing' AND COALESCE(heartbeat_at, started_at, created_at) < now() - interval '5 minutes'))`,
+        )
+        .andWhere('attempt_count < 3')
+        .execute();
 
       if (!claim.affected) {
         const current = await this.getExportJobStatus(jobId);
@@ -1072,40 +1204,54 @@ export class CaptureService {
         return;
       }
 
-      await this.exportJobRepo.update(jobId, {
-        status: 'processing',
-        started_at: new Date(),
-      });
+      heartbeatTimer = setInterval(() => {
+        if (heartbeatBusy) return;
+        heartbeatBusy = true;
+        void updateOwned({})
+          .catch((error: unknown) => {
+            leaseLost = true;
+            this.logger.error(
+              `Export ${jobId} heartbeat failed: ${String(error)}`,
+            );
+          })
+          .finally(() => {
+            heartbeatBusy = false;
+          });
+      }, 15_000);
+      heartbeatTimer.unref();
 
       const filters = this.parseFilters(query);
 
       const countQb = this.captureRepo.createQueryBuilder('capture');
       this.applyFilters(countQb, filters);
       const totalItems = await countQb.getCount();
-      await this.exportJobRepo.update(jobId, { total_items: totalItems });
+      await updateOwned({ total_items: totalItems, phase: 'preparing' });
 
-      const fileName = this.buildExportFileName(format);
+      const fileName = `capture-export-${jobId}-${leaseToken}.${format}`;
       const contentType = this.getExportContentType(format);
       const storedFile = await this.exportStorage.writeFile(
         fileName,
         contentType,
         async (stream) => {
           const onProgress = (processed: number) =>
-            this.exportJobRepo
-              .update(jobId, { processed_items: processed })
-              .then(() => undefined);
+            updateOwned({ processed_items: processed, phase: 'exporting' });
+          const onPhase = (phase: string) => updateOwned({ phase });
 
           if (format === 'xlsx') {
-            await this.streamCapturesExcel(query, stream, onProgress);
+            await this.streamCapturesExcel(query, stream, onProgress, onPhase);
             return;
           }
 
-          await this.streamCapturesCsv(query, stream, onProgress);
+          await this.streamCapturesCsv(query, stream, onProgress, onPhase);
+          await onPhase('finalizing');
         },
+        () => updateOwned({ phase: 'uploading' }),
       );
 
-      await this.exportJobRepo.update(jobId, {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      await updateOwned({
         status: 'completed',
+        phase: 'completed',
         completed_at: new Date(),
         file_name: fileName,
         file_storage: storedFile.storage,
@@ -1122,11 +1268,18 @@ export class CaptureService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Capture export job ${jobId} failed: ${message}`);
-      await this.exportJobRepo.update(jobId, {
-        status: 'failed',
-        error_message: message,
-        completed_at: new Date(),
-      });
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      await this.exportJobRepo.update(
+        { id: jobId, lease_token: leaseToken, status: 'processing' },
+        {
+          status: 'failed',
+          phase: 'failed',
+          error_message: message,
+          completed_at: new Date(),
+        },
+      );
+    } finally {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
     }
   }
 
@@ -1207,6 +1360,7 @@ export class CaptureService {
     stream: Writable,
     chunk: string | Buffer,
   ): Promise<void> {
+    if (stream.destroyed) throw new Error('Stream de exportacao encerrado.');
     if (stream.write(chunk)) return;
     await once(stream, 'drain');
   }
@@ -1532,11 +1686,16 @@ export class CaptureService {
 
   private buildExportBatchQuery(
     filters: CaptureFilters,
-    after: { createdAt: Date; id: string } | undefined,
+    after: { createdAt: Date | string; id: string } | undefined,
     limit: number,
     direction: 'asc' | 'desc' = 'desc',
   ): SelectQueryBuilder<Capture> {
     const qb = this.buildDataQuery(filters);
+    // pg converts timestamps to JS milliseconds; keep microseconds for keyset boundaries.
+    qb.addSelect(
+      `to_char(capture.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+      'export_cursor_created_at',
+    );
     const order = direction === 'asc' ? 'ASC' : 'DESC';
     qb.orderBy('capture.created_at', order).addOrderBy('capture.id', order);
 
@@ -1654,37 +1813,37 @@ export class CaptureService {
   private async collectExportQuestionHeaders(
     filters: CaptureFilters,
   ): Promise<string[]> {
-    const questionLabelsByKey = new Map<string, string>();
-    let cursor: { createdAt: Date; id: string } | undefined;
-
-    for (;;) {
-      const rows = await this.buildExportBatchQuery(
-        filters,
-        cursor,
-        CaptureService.EXPORT_BATCH_SIZE,
-      ).getRawMany<CaptureRawRow>();
-
-      if (!rows.length) break;
-
-      const { questionLabelsByKey: batchQuestionLabelsByKey } =
-        await this.resolveQuizExportData(rows.map((row) => row.id));
-      for (const [key, label] of batchQuestionLabelsByKey) {
-        if (!questionLabelsByKey.has(key)) {
-          questionLabelsByKey.set(key, label);
-        }
-      }
-
-      const lastRow = rows[rows.length - 1];
-      const lastCreatedAt =
-        lastRow.created_at instanceof Date
-          ? lastRow.created_at
-          : new Date(lastRow.created_at);
-      cursor = { createdAt: lastCreatedAt, id: lastRow.id };
-
-      if (rows.length < CaptureService.EXPORT_BATCH_SIZE) break;
+    // Match the latest response used by the data pass without loading scores or answers.
+    const qb = this.captureRepo
+      .createQueryBuilder('capture')
+      .innerJoin(
+        FormResponse,
+        'fr',
+        `fr.id = (
+        SELECT latest.id FROM form_response latest WHERE latest.capture_id = capture.id
+        ORDER BY latest.submitted_at DESC NULLS LAST, latest.created_at DESC, latest.id DESC LIMIT 1
+      )`,
+      )
+      .innerJoin(FormAnswer, 'fa', 'fa.form_response_id = fr.id')
+      .innerJoin('fa.question', 'question')
+      .select(
+        `COALESCE(question.question_key, question.question_text, 'question')`,
+        'key',
+      )
+      .addSelect(
+        `COALESCE(question.question_text, question.question_key, 'Pergunta')`,
+        'label',
+      )
+      .distinct(true);
+    this.applyFilters(qb, filters);
+    const rows = await qb.getRawMany<{ key: string; label: string }>();
+    const labels = new Map<string, string>();
+    for (const row of rows.sort((a, b) =>
+      a.label.localeCompare(b.label, 'pt-BR'),
+    )) {
+      if (!labels.has(row.key)) labels.set(row.key, row.label);
     }
-
-    return [...questionLabelsByKey.entries()]
+    return [...labels.entries()]
       .sort(([keyA], [keyB]) => keyA.localeCompare(keyB, 'pt-BR'))
       .map(([, label]) => label);
   }
@@ -1824,6 +1983,7 @@ export class CaptureService {
     for (const captureIdBatch of captureIdBatches) {
       const latestResponses = await this.formResponseRepo
         .createQueryBuilder('fr')
+        .distinctOn(['fr.capture_id'])
         .select(['fr.id AS form_response_id', 'fr.capture_id AS capture_id'])
         .where('fr.capture_id IN (:...captureIds)', {
           captureIds: captureIdBatch,
@@ -1831,6 +1991,7 @@ export class CaptureService {
         .orderBy('fr.capture_id', 'ASC')
         .addOrderBy('fr.submitted_at', 'DESC', 'NULLS LAST')
         .addOrderBy('fr.created_at', 'DESC')
+        .addOrderBy('fr.id', 'DESC')
         .getRawMany<FormResponseCaptureRawRow>();
 
       const formResponseByCapture = new Map<string, string>();
@@ -1864,6 +2025,7 @@ export class CaptureService {
       for (const formResponseIdBatch of formResponseIdBatches) {
         const leadscoreResults = await this.leadscoreResultRepo
           .createQueryBuilder('lr')
+          .distinctOn(['lr.form_response_id'])
           .leftJoin('lr.tier', 'tier')
           .select([
             'lr.form_response_id AS form_response_id',

@@ -9,10 +9,7 @@ import {
 
 export type CaptureExportFormat = 'csv' | 'xlsx';
 export type CaptureExportJobStatus =
-  | 'pending'
-  | 'processing'
-  | 'completed'
-  | 'failed';
+  'pending' | 'processing' | 'completed' | 'failed';
 
 @Entity({ name: 'capture_export_job' })
 export class CaptureExportJob {
@@ -28,6 +25,18 @@ export class CaptureExportJob {
   @Index()
   @Column({ type: 'text', name: 'status', default: 'pending' })
   status!: CaptureExportJobStatus;
+
+  @Column({ type: 'text', default: 'queued' })
+  phase!: string;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  heartbeat_at?: Date | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  lease_token?: string | null;
+
+  @Column({ type: 'int', default: 0 })
+  attempt_count!: number;
 
   @Column({ type: 'int', name: 'total_items', nullable: true })
   total_items?: number | null;
@@ -50,7 +59,7 @@ export class CaptureExportJob {
   @Column({ type: 'bigint', name: 'file_size', nullable: true })
   file_size?: string | null;
 
-  @Column({ type: 'bytea', name: 'file_data', nullable: true })
+  @Column({ type: 'bytea', name: 'file_data', nullable: true, select: false })
   file_data?: Buffer | null;
 
   @Column({ type: 'timestamptz', name: 'expires_at', nullable: true })

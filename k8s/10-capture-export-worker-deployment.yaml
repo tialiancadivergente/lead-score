@@ -48,6 +48,10 @@ spec:
           value: "true"
         - name: SERVICE_BUS_CAPTURE_EXPORT_MAX_CONCURRENCY
           value: "1"
+        - name: DB_STATEMENT_TIMEOUT_MS
+          value: "120000"
+        - name: DB_QUERY_TIMEOUT_MS
+          value: "125000"
         - name: SERVICE_BUS_LEAD_REGISTRATION_CONSUMER_ENABLED
           value: "false"
         - name: SERVICE_BUS_LEAD_SCORE_CONSUMER_ENABLED

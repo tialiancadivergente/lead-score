@@ -1,4 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { IsInt, IsOptional, IsString } from 'class-validator';
+import { toNumber } from './number-transform';
 
 export class QuestionResponseDto {
   @ApiProperty({ example: 'c8a029aa-e5b7-4687-951c-d8defc67c27c' })
@@ -25,23 +28,34 @@ export class QuestionResponseDto {
 
 export class CreateQuestionDto {
   @ApiProperty({ example: 'q1' })
+  @IsString()
   question_key!: string;
 
   @ApiPropertyOptional({ example: 'Em qual faixa etaria voce se encaixa?' })
+  @IsOptional()
+  @IsString()
   question_text?: string;
 
   @ApiPropertyOptional({ example: 'single' })
+  @IsOptional()
+  @IsString()
   input_type?: string;
 }
 
 export class UpdateQuestionDto {
   @ApiPropertyOptional({ example: 'q1' })
+  @IsOptional()
+  @IsString()
   question_key?: string;
 
   @ApiPropertyOptional({ example: 'Em qual faixa etaria voce se encaixa?' })
+  @IsOptional()
+  @IsString()
   question_text?: string;
 
   @ApiPropertyOptional({ example: 'single' })
+  @IsOptional()
+  @IsString()
   input_type?: string;
 }
 
@@ -70,22 +84,35 @@ export class QuestionOptionResponseDto {
 
 export class CreateQuestionOptionDto {
   @ApiProperty({ example: '25-35' })
+  @IsString()
   option_key!: string;
 
   @ApiPropertyOptional({ example: '25-35 anos' })
+  @IsOptional()
+  @IsString()
   option_text?: string;
 
   @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @IsInt()
+  @Transform(toNumber)
   display_order?: number;
 }
 
 export class UpdateQuestionOptionDto {
   @ApiPropertyOptional({ example: '25-35' })
+  @IsOptional()
+  @IsString()
   option_key?: string;
 
   @ApiPropertyOptional({ example: '25-35 anos' })
+  @IsOptional()
+  @IsString()
   option_text?: string;
 
   @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @IsInt()
+  @Transform(toNumber)
   display_order?: number;
 }

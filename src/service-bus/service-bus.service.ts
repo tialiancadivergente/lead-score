@@ -78,7 +78,13 @@ export class ServiceBusService implements OnApplicationShutdown {
       );
       return;
     }
-    const receiver = this.client.createReceiver(params.queueName);
+    const receiver = this.client.createReceiver(params.queueName, {
+      ...(params.maxAutoLockRenewalMs === undefined
+        ? {}
+        : {
+            maxAutoLockRenewalDurationInMs: params.maxAutoLockRenewalMs,
+          }),
+    });
     const subscription = receiver.subscribe(
       {
         processMessage: async (message) => {

@@ -39,6 +39,13 @@ fi
 echo -e "${YELLOW}Installing NGINX Ingress Controller...${NC}"
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.1/deploy/static/provider/cloud/deploy.yaml
 
+# Priorizar a entrada publica quando os recursos do cluster estiverem disputados.
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+kubectl apply -f "$SCRIPT_DIR/k8s/ingress-controller/priority-class.yaml"
+kubectl patch deployment ingress-nginx-controller -n ingress-nginx \
+    --type=merge \
+    --patch-file "$SCRIPT_DIR/k8s/ingress-controller/controller-priority-patch.yaml"
+
 # Aguardar estar pronto
 echo -e "${YELLOW}Waiting for Ingress Controller to be ready (this may take a few minutes)...${NC}"
 kubectl wait --namespace ingress-nginx \

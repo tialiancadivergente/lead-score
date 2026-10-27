@@ -1,4 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
+import {
+  IsArray,
+  IsBoolean,
+  IsInt,
+  IsOptional,
+  IsUUID,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import { toNumber } from './number-transform';
 
 export class FormVersionResponseDto {
   @ApiProperty({ example: '2f76bc57-57a2-41fd-9c2c-18a726dd4fe0' })
@@ -22,17 +33,29 @@ export class FormVersionResponseDto {
 
 export class CreateFormVersionDto {
   @ApiPropertyOptional({ example: 2 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Transform(toNumber)
   version_number?: number;
 
   @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
   active?: boolean;
 }
 
 export class UpdateFormVersionDto {
   @ApiPropertyOptional({ example: 2 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Transform(toNumber)
   version_number?: number;
 
   @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
   active?: boolean;
 }
 
@@ -61,31 +84,47 @@ export class FormVersionQuestionResponseDto {
 
 export class AddFormVersionQuestionDto {
   @ApiProperty({ example: 'c8a029aa-e5b7-4687-951c-d8defc67c27c' })
+  @IsUUID()
   question_id!: string;
 
   @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @Transform(toNumber)
+  @IsInt()
   display_order?: number;
 
   @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
   required?: boolean;
 }
 
 export class UpdateFormVersionQuestionDto {
   @ApiPropertyOptional({ example: 2 })
+  @IsOptional()
+  @Transform(toNumber)
+  @IsInt()
   display_order?: number;
 
   @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
   required?: boolean;
 }
 
 export class ReorderFormVersionQuestionItemDto {
   @ApiProperty({ example: 'c8a029aa-e5b7-4687-951c-d8defc67c27c' })
+  @IsUUID()
   question_id!: string;
 
   @ApiProperty({ example: 1 })
+  @Transform(toNumber)
+  @IsInt()
   display_order!: number;
 
   @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
   required?: boolean;
 }
 
@@ -94,5 +133,8 @@ export class ReorderFormVersionQuestionsDto {
     type: ReorderFormVersionQuestionItemDto,
     isArray: true,
   })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ReorderFormVersionQuestionItemDto)
   items!: ReorderFormVersionQuestionItemDto[];
 }

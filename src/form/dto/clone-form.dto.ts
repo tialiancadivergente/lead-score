@@ -1,17 +1,22 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { IsUUID } from 'class-validator';
 import { FormVersionResponseDto } from './form-version-management.dto';
 
 export class CloneFormPayloadDto {
   @ApiProperty({ example: '7405904f-64b9-4b2e-a067-a5fa246e1d55' })
+  @IsUUID()
   source_form_id!: string;
 
   @ApiProperty({ example: '2f76bc57-57a2-41fd-9c2c-18a726dd4fe0' })
+  @IsUUID()
   source_form_version_id!: string;
 
   @ApiProperty({ example: '658cbd7e-7779-421a-8082-2db5ef4d5e55' })
+  @IsUUID()
   target_form_id!: string;
 
   @ApiProperty({ example: '9a75c470-f7d6-4ae5-ad92-e74add87b274' })
+  @IsUUID()
   target_form_version_id!: string;
 }
 

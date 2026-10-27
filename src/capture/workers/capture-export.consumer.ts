@@ -1,12 +1,19 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ServiceBusReceivedMessage } from '@azure/service-bus';
 import { CaptureService, CAPTURE_EXPORT_QUEUE } from '../capture.service';
 import { ServiceBusService } from '../../service-bus/service-bus.service';
 
 @Injectable()
-export class CaptureExportConsumer implements OnModuleInit {
+export class CaptureExportConsumer implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CaptureExportConsumer.name);
+  private recoveryTimer?: ReturnType<typeof setInterval>;
+  private recovering = false;
 
   constructor(
     private readonly config: ConfigService,
@@ -31,6 +38,7 @@ export class CaptureExportConsumer implements OnModuleInit {
     }
 
     this.serviceBus.createQueueProcessor({
+      maxAutoLockRenewalMs: 2 * 60 * 60_000,
       queueName: this.config.get<string>(
         'SERVICE_BUS_CAPTURE_EXPORT_QUEUE',
         CAPTURE_EXPORT_QUEUE,
@@ -44,6 +52,21 @@ export class CaptureExportConsumer implements OnModuleInit {
       onMessage: (message: ServiceBusReceivedMessage) =>
         this.handleMessage(message),
     });
+    const recover = () => {
+      if (this.recovering) return;
+      this.recovering = true;
+      void this.captureService
+        .recoverExportJobs()
+        .catch((error: unknown) =>
+          this.logger.error(`Export recovery failed: ${String(error)}`),
+        )
+        .finally(() => {
+          this.recovering = false;
+        });
+    };
+    recover();
+    this.recoveryTimer = setInterval(recover, 60_000);
+    this.recoveryTimer.unref();
 
     this.logger.log(
       `CaptureExportConsumer escutando: ${this.config.get<string>(
@@ -51,6 +74,10 @@ export class CaptureExportConsumer implements OnModuleInit {
         CAPTURE_EXPORT_QUEUE,
       )}`,
     );
+  }
+
+  onModuleDestroy() {
+    if (this.recoveryTimer) clearInterval(this.recoveryTimer);
   }
 
   private async handleMessage(message: ServiceBusReceivedMessage) {

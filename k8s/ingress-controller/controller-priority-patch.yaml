@@ -1,0 +1,4 @@
+spec:
+  template:
+    spec:
+      priorityClassName: lead-score-ingress

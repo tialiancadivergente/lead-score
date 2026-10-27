@@ -204,6 +204,15 @@ export class LeadRegistrationPayloadDto {
   @IsString()
   path?: string;
 
+  @ApiPropertyOptional({
+    description:
+      'Landing page URL. Also accepted in metadados.url or utms.url.',
+    example: 'https://nad.aliancadivergente.com.br/nad/v1-exaliados-trafego/',
+  })
+  @IsOptional()
+  @IsString()
+  url?: string;
+
   @ApiPropertyOptional({ example: 'GGAds_' })
   @IsOptional()
   @IsString()
