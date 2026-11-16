@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { createHash } from 'crypto';
+// Integracao com Google Sheets temporariamente desabilitada.
+// import { GoogleSheetsOutboxService } from '../../google-sheets/google-sheets-outbox.service';
 import { Capture } from '../../database/entities/capture/capture.entity';
 import { Person } from '../../database/entities/identity/person.entity';
 import { PersonIdentifier } from '../../database/entities/identity/person-identifier.entity';
@@ -30,6 +32,7 @@ export class LeadPersistenceService {
   constructor(
     @InjectRepository(Capture)
     private readonly captureRepo: Repository<Capture>,
+    // private readonly googleSheetsOutbox: GoogleSheetsOutboxService,
   ) {}
 
   private pickString(
@@ -896,6 +899,9 @@ export class LeadPersistenceService {
           matched_value_hash: matchedHash,
         }),
       );
+
+      // Integracao com Google Sheets temporariamente desabilitada.
+      // await this.googleSheetsOutbox.enqueue(manager, savedCapture, payloadObj);
 
       return {
         captureId: savedCapture.id,

@@ -7,9 +7,14 @@ import { ActiveCampaignService } from './services/activecampaign.service';
 import { LeadPersistenceService } from './services/lead-persistence.service';
 import { LeadRegistrationConsumer } from './workers/lead-registration.consumer';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+// Integracao com Google Sheets temporariamente desabilitada.
+// import { GoogleSheetsModule } from '../google-sheets/google-sheets.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Capture])],
+  imports: [
+    TypeOrmModule.forFeature([Capture]),
+    // GoogleSheetsModule,
+  ],
   controllers: [LeadRegistrationController],
   providers: [
     LeadRegistrationService,

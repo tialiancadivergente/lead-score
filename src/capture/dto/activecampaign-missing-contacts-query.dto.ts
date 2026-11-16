@@ -1,4 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsString } from 'class-validator';
 import { ActiveCampaignGapQueryDto } from './activecampaign-gap-query.dto';
 
 export class ActiveCampaignMissingContactsQueryDto extends ActiveCampaignGapQueryDto {
@@ -7,6 +8,8 @@ export class ActiveCampaignMissingContactsQueryDto extends ActiveCampaignGapQuer
     example: '1',
     default: '1',
   })
+  @IsOptional()
+  @IsString()
   page?: string;
 
   @ApiPropertyOptional({
@@ -14,5 +17,7 @@ export class ActiveCampaignMissingContactsQueryDto extends ActiveCampaignGapQuer
     example: '50',
     default: '50',
   })
+  @IsOptional()
+  @IsString()
   per_page?: string;
 }

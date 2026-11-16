@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsString } from 'class-validator';
 
 export type ActiveCampaignContactTagStatus =
   | 'success'
@@ -13,6 +14,7 @@ export class ActiveCampaignContactTagsQueryDto {
     description: 'Tag ID da capture.',
     example: '885678',
   })
+  @IsString()
   tag_id!: string;
 
   @ApiPropertyOptional({
@@ -20,6 +22,8 @@ export class ActiveCampaignContactTagsQueryDto {
       'Inicio do periodo de created_at (ISO 8601). Aceita data (YYYY-MM-DD) ou datetime.',
     example: '2026-07-01',
   })
+  @IsOptional()
+  @IsString()
   start_date?: string;
 
   @ApiPropertyOptional({
@@ -27,6 +31,8 @@ export class ActiveCampaignContactTagsQueryDto {
       'Fim do periodo de created_at (ISO 8601). Aceita data (YYYY-MM-DD) ou datetime.',
     example: '2026-07-30',
   })
+  @IsOptional()
+  @IsString()
   end_date?: string;
 
   @ApiPropertyOptional({
@@ -42,6 +48,8 @@ export class ActiveCampaignContactTagsQueryDto {
     ],
     example: 'tag-not-found',
   })
+  @IsOptional()
+  @IsString()
   status?: ActiveCampaignContactTagStatus;
 
   @ApiPropertyOptional({
@@ -49,6 +57,8 @@ export class ActiveCampaignContactTagsQueryDto {
     example: '1',
     default: '1',
   })
+  @IsOptional()
+  @IsString()
   page?: string;
 
   @ApiPropertyOptional({
@@ -56,5 +66,7 @@ export class ActiveCampaignContactTagsQueryDto {
     example: '50',
     default: '50',
   })
+  @IsOptional()
+  @IsString()
   per_page?: string;
 }

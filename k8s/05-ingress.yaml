@@ -15,7 +15,7 @@ metadata:
     
     # Configurações de timeout
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "140"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
     
     # CORS (se necessário)

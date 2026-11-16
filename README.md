@@ -25,6 +25,17 @@
 
 API em NestJS com **PostgreSQL (TypeORM)** e **Azure Service Bus**.
 
+Consulta direta de contatos do HubSpot, sem persistencia: `GET /hubspot/leads`.
+Veja configuracao, filtros, autenticacao e contrato para o frontend em
+[docs/hubspot-leads.md](docs/hubspot-leads.md).
+
+Leads com indicador de ex-aliado por email e status de pedido:
+`GET /hubspot/leads/ally`. Veja
+[docs/hubspot-ex-aliados.md](docs/hubspot-ex-aliados.md).
+
+Pedidos do data lake via Databricks: `GET /pedidos?page=1&limit=50`, autenticado
+com `x-api-key`. Veja [docs/pedidos.md](docs/pedidos.md).
+
 ## Setup do projeto
 
 ```bash

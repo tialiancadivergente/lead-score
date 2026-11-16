@@ -27,6 +27,8 @@ import { RolesModule } from './roles/roles.module';
 import { UsersModule } from './users/users.module';
 import { CopilotModule } from './copilot/copilot.module';
 import { AuditLogModule } from './audit/audit-log.module';
+import { HubspotModule } from './hubspot/hubspot.module';
+import { PedidosModule } from './pedidos/pedidos.module';
 
 @Module({
   imports: [
@@ -64,6 +66,8 @@ import { AuditLogModule } from './audit/audit-log.module';
     PageModule,
     CopilotModule,
     AuditLogModule,
+    HubspotModule,
+    PedidosModule,
   ],
   controllers: [AppController],
   providers: [

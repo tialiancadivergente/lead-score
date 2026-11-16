@@ -1,6 +1,6 @@
 {
   "name": "lead-score",
-  "version": "1.5.0",
+  "version": "1.5.2",
   "description": "",
   "author": "",
   "private": true,
@@ -27,6 +27,7 @@
   "dependencies": {
     "@azure/service-bus": "^7.9.5",
     "@azure/storage-blob": "^12.28.0",
+    "@databricks/sql": "1.14.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
@@ -47,7 +48,8 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "swagger-ui-express": "5.0.1",
-    "typeorm": "^0.3.28"
+    "typeorm": "^0.3.28",
+    "ws": "8.22.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
